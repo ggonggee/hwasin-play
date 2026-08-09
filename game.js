@@ -3257,13 +3257,13 @@ const MODALS = {
       const grid=el('div','forge-grid');
       const items=el('div','forge-items');
       list.forEach((it,i)=>{ const cell=el('div','fitem grade-'+cur+(i===itemIdx?' sel':'')); cell.style.setProperty('--gc',G.color);
-        cell.innerHTML=eImg(it.ic,1.8); cell.title=it.n;
+        cell.innerHTML=equipImg(it.n,1.8); cell.title=it.n;
         cell.onclick=()=>{ itemIdx=i; render2(); }; items.appendChild(cell); });
       grid.appendChild(items);
       const side=el('div','forge-side');
       if(item){
         const prev=el('div','forge-preview grade-'+cur); prev.style.setProperty('--gc',G.color);
-        prev.innerHTML=`${eImg(item.ic,2.5)}<div class="tag-common">공용</div>`; side.appendChild(prev);
+        prev.innerHTML=`${equipImg(item.n,2.5)}<div class="tag-common">공용</div>`; side.appendChild(prev);
         const nm=el('div','center small',item.n); nm.style.color=G.color; side.appendChild(nm);
         side.appendChild(matChips(item.recipe));                                  // G-20: 재료 chip 2~5개 가변
         const info=el('div','small mut'); info.style.lineHeight='1.55';
@@ -3292,7 +3292,7 @@ const MODALS = {
       const c=S.craft, sec=c.sec||CRAFT[c.grade].sec;
       const left=Math.max(0,Math.ceil((c.endAt-Date.now())/1000)), done=left<=0;
       body.appendChild(el('div','hr'));
-      body.appendChild(el('div','center',`<div class="ei" style="font-size:44px">${eImg(c.ic,3)}</div><div class="big" style="color:${GRADES[c.grade].color}">${GRADES[c.grade].name} ${c.slot||'장비'} 제작 중</div>`));
+      body.appendChild(el('div','center',`<div class="ei" style="font-size:44px">${equipImg(c.slot||c.item||'',3)}</div><div class="big" style="color:${GRADES[c.grade].color}">${GRADES[c.grade].name} ${c.slot||'장비'} 제작 중</div>`));
       const pb=el('div','pbar'); pb.appendChild(el('i')); pb.firstChild.id='forgeBar';
       pb.firstChild.style.width=(clamp(1-left/sec,0,1)*100)+'%'; body.appendChild(pb);
       const lt=el('div','center mut small',done?'제작 완료 · 확정하세요':`남은 시간 ${mmss(left)}`); lt.id='forgeLeft'; body.appendChild(lt);
@@ -3322,7 +3322,7 @@ const MODALS = {
     if(!c){ b.appendChild(el('div','hint','대장간에서 아이템을 선택하세요.')); return; }
     const G=GRADES[c.grade];
     /* ★ v5.60: 아이템 아이콘을 에셋으로 통일 (이모지 폴백). */
-    b.appendChild(el('div','b2-big',eImg(c.item.ic,3)));
+    b.appendChild(el('div','b2-big',equipImg(c.item.n,3)));
     const nm=el('div','b2-name',`${G.name} ${c.item.n}`); nm.style.color=G.color; b.appendChild(nm);
     b.appendChild(el('div','b2-flavor',itemFlavor(c.item.n)));
     const matn=el('div','mat-need');
@@ -5704,7 +5704,7 @@ function resolveCraft(forceSuccess){
   // 제작 결과 팝업 (G-30: 성공 시 '제작 성공' 타이틀 + 상단 '확인' 헤더바 + 부위 아이콘 + 플레이버)
   const G=GRADES[grade]; const b=subBody(ok?'제작 성공':'제작 결과');   // ★ v5.1 대장간 위 오버레이
   b.appendChild(el('div','b2-head','확인'));
-  if(ok) b.appendChild(el('div','result-card',`<div class="rc-icon grade-${grade}" style="color:${G.color}">${eImg(ic,3)}</div><div class="rc-title win" style="color:${G.color};font-size:20px">${G.name} ${slot}</div><div class="small mut">${itemFlavor(slot)}</div><div class="small mut">인벤토리에 추가되었습니다.</div>`));
+  if(ok) b.appendChild(el('div','result-card',`<div class="rc-icon grade-${grade}" style="color:${G.color}">${equipImg(slot,3)}</div><div class="rc-title win" style="color:${G.color};font-size:20px">${G.name} ${slot}</div><div class="small mut">${itemFlavor(slot)}</div><div class="small mut">인벤토리에 추가되었습니다.</div>`));
   else b.appendChild(el('div','result-card',`<div class="rc-icon">💥</div><div class="rc-title lose">제작 실패</div><div class="small mut">재료 90% 환급 · 다시 도전하세요</div>`));
   const btn=el('button','btn gold wide','확인'); btn.style.marginTop='10px'; btn.onclick=()=>openModal('forge'); b.appendChild(btn);
   $('#modal-root').classList.add('on'); currentModal='craftResult';
@@ -5735,12 +5735,12 @@ function craftAutoCheck(){
     setModalTitle(wasSuccess ? '제작 성공!' : '제작 실패');
     const b=$('#modalBody'); b.innerHTML='';
     if(wasSuccess){
-      b.appendChild(el('div','center',`<div class="ei" style="font-size:52px">${eImg(c.ic,3)}</div>
+      b.appendChild(el('div','center',`<div class="ei" style="font-size:52px">${equipImg(c.slot,3)}</div>
         <div class="big" style="margin:8px 0;color:${GRADES[c.grade].color}">${GRADES[c.grade].name} ${c.slot}</div>
         <div class="small" style="color:var(--ok)">인벤토리에 추가되었습니다.</div>`));
       sfx('win');
     } else {
-      b.appendChild(el('div','center',`<div class="ei" style="font-size:48px;opacity:.5">${eImg(c.ic,3)}</div>
+      b.appendChild(el('div','center',`<div class="ei" style="font-size:48px;opacity:.5">${equipImg(c.slot,3)}</div>
         <div class="big" style="margin:8px 0;color:var(--bad)">제작 실패</div>
         <div class="small mut">재료 90% 환급되었습니다.</div>`));
       sfx('fail');
