@@ -1698,11 +1698,27 @@ const Battle = (()=>{
   }
   function spawnDgMob(){
     const hp=Math.max(60, dg.foeCP*0.08);
-    mobs.push({ name:dg.name, col:dg.col, shape:'skull', x:W+30, y:rnd(H*(BAND_TOP+0.02),H*BAND_BOT), vx:-rnd(16,26), hpMax:hp, hp:hp, r:ri(13,18), flash:0, atkT:rnd(0.8,1.4) });
+    /* ★ v5.85: 던전 몹도 몬스터 스프라이트 사용 — 더미 도형(skull) 제거.
+       던전 이름에서 등급을 유추하여 MON_WORDS imgs에서 랜덤 선택.
+       imgs가 없으면 기본 undead 이미지 사용. */
+    let img='undead_102'; let shape='skull';
+    const allImgs = Object.values(MON_WORDS).flatMap(w=>w.imgs);
+    if(allImgs.length) img = pick(allImgs);
+    /* 던전 이름에 등급 힌트가 있으면 해당 등급에서 선택 */
+    const dgName = dg.name||'';
+    const gradeKey = ['레전더리','전설','L'].some(k=>dgName.includes(k)) ? 'L'
+                   : ['영웅','E'].some(k=>dgName.includes(k)) ? 'E'
+                   : ['희귀','R'].some(k=>dgName.includes(k)) ? 'R' : 'N';
+    if(MON_WORDS[gradeKey] && MON_WORDS[gradeKey].imgs.length) img = pick(MON_WORDS[gradeKey].imgs);
+    mobs.push({ name:dg.name, col:dg.col, shape:'skull', img, x:W+30, y:rnd(H*(BAND_TOP+0.02),H*BAND_BOT), vx:-rnd(16,26), hpMax:hp, hp:hp, r:ri(13,18), flash:0, atkT:rnd(0.8,1.4) });
   }
   function spawnDgBoss(){
     const hp=Math.max(300, dg.foeCP*0.5);
-    mobs.push({ name:dg.name, col:dg.col, boss:true, shape:'boss', x:W+40, y:H*0.42, vx:-10, hpMax:hp, hp:hp, r:36, flash:0, atkT:rnd(0.8,1.4) });
+    /* ★ v5.85: 보스도 스프라이트 사용 */
+    let img='undead_110';
+    const bossImgs = (MON_WORDS.L && MON_WORDS.L.imgs) || ['undead_110'];
+    img = pick(bossImgs);
+    mobs.push({ name:dg.name, col:dg.col, boss:true, shape:'boss', img, x:W+40, y:H*0.42, vx:-10, hpMax:hp, hp:hp, r:36, flash:0, atkT:rnd(0.8,1.4) });
   }
   function spawnMob(boss){
     const t=tierDef();
@@ -2428,12 +2444,13 @@ const Battle = (()=>{
       /* 발(footY*sz 위치)이 그림자 표면(m.y+m.r)에 오도록:
          이미지 상단 = m.y + m.r - footY*sz  (이미지를 위로 올림) */
       const dy = m.y + m.r - footY*sz;
-      /* ★ v5.83: 몬스터 이동 방향에 따라 좌우 반전.
+      /* ★ v5.85: 몬스터 좌우 반전 — 영웅 기준 상대 위치로 판단.
          몬스터 스프라이트는 기본적으로 오른쪽(동쪽)을 향해 그려져 있음.
-         왼쪽으로 이동(vx<0)하면 좌우 반전해서 플레이어(중앙)를 향하게 함.
-         홈 모드: 몬스터가 중앙을 향해 이동 → 이동 방향 기준 반전.
-         던전 모드: 몬스터가 우→좌로 이동(vx<0) → 항상 반전. */
-      const flip = (m.vx || 0) < 0;
+         몬스터가 영웅보다 오른쪽에 있으면 왼쪽(서쪽)을 향해야 함 → 반전.
+         몬스터가 영웅보다 왼쪽에 있으면 오른쪽(동쪽)을 향해야 함 → 반전 없음.
+         (홈 모드: 영웅 중앙 기준. 던전 모드: 아군 전열 기준.) */
+      const refX = heroes.length ? (heroes[0].x || W*0.5) : W*0.5;
+      const flip = m.x > refX;
       ctx.save();
       if(m.flash>0){ ctx.globalAlpha=0.85; }
       if(flip){ ctx.translate(m.x+sz/2, 0); ctx.scale(-1,1); ctx.translate(-m.x+sz/2, 0); }
