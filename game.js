@@ -2457,6 +2457,9 @@ function refreshHUD(){
   $('#pName').textContent = S.name;
   S.titleIdx = clamp(Math.floor(S.awaken/3), 0, HERO_TITLES.length-1);
   $('#pTitle').textContent = HERO_TITLES[S.titleIdx]||'불의 견습';
+  /* ★ v5.81: 착용 중인 칭호(TITLES 시스템)를 명패에 표시 — 체감 개선 */
+  const _badge = $('#pTitleBadge');
+  if(_badge){ const _t = TITLES.find(t=>t.id===S.title); _badge.textContent = _t ? _t.n : ''; }
   const ct=$('#craftTimer');
   if(S.craft){ const left=Math.max(0,Math.ceil((S.craft.endAt-Date.now())/1000)); ct.textContent = left>0? mmss(left) : '완성!'; }
   else ct.textContent='00:00';
@@ -5065,8 +5068,20 @@ const MODALS = {
       ['🏛️','마을회관',         `Lv${S.villHall} · 골드 +${((S.villHall-1)*VILL_BUFF_PP).toFixed(2)}%`],
       ['⛺','훈련소',           `Lv${S.villTrain} · 경험치 +${((S.villTrain-1)*VILL_BUFF_PP).toFixed(2)}%`],
     ].forEach(([ic,nm,v])=>{ b.appendChild(el('div','kv',`<span>${eImg(ic,1.2)} ${nm}</span><b>${v}</b>`)); });
-    // 칭호 효과(tGoldPct·tExpPct)는 위 '최종 골드/경험치'에 이미 합산되어 있다. 별도 행은 원작에 없다(G-127).
-    b.appendChild(el('div','hint',`<div class="hr"></div>코스튬·각성·칭호(${wornTitle?wornTitle.n:'미착용'}) 효과는 캐릭터 스탯창에서, 점령지 버프는 길드 점령전에서 확인합니다.`));
+    /* ★ v5.81: 칭호 효과를 별도 행으로 명시 — 체감 개선.
+       착용 칭호명 + 골드/경험치/제작시간/제작확률 효과 표시. */
+    if(wornTitle){
+      const tworn = TITLES.find(t=>t.id===S.title);
+      const tfx = [];
+      if(titleEff('gold')) tfx.push(`골드 +${Math.round(titleEff('gold')*100)}%`);
+      if(titleEff('exp')) tfx.push(`경험치 +${Math.round(titleEff('exp')*100)}%`);
+      if(titleEff('crate')) tfx.push(`제작확률 +${Math.round(titleEff('crate')*100)}%p`);
+      if(titleEff('ctime')) tfx.push(`제작시간 ${Math.round(titleEff('ctime')*100)}%`);
+      const fxText = tfx.length ? tfx.join(' · ') : '특수 효과';
+      b.appendChild(el('div','hr',''));
+      b.appendChild(el('div','kv',`<span>${eImg('🏅',1.2)} 칭호「${wornTitle.n}」</span><b style="color:#e8a04a">${fxText}</b>`));
+    }
+    b.appendChild(el('div','hint',`<div class="hr"></div>코스튬·각성 효과는 캐릭터 스탯창에서, 점령지 버프는 길드 점령전에서 확인합니다.`));
   }},
   /* ★ N3/§7-10: '유저 소통'·'라운지'는 인게임 화면이 아니라 **게임 밖 외부 서비스로 나가는 링크**다.
      [근거] 02_홈_메인HUD/ 2장 — 소통 버튼은 외부 메신저 앱(미설치 시 앱스토어 상세)으로,
