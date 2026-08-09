@@ -939,7 +939,7 @@ const TITLES = [
      ★ N3: 원작 칭호 목록에서 이 카드는 **영웅(E)과 레전더리(L) 사이**에 끼어 있다(스크롤 13장 실측).
      등급 색상만으로는 경계가 애매했으나 등급별 개수(N5+R9+E6+GM1+L8=29) 검산으로 GM 칸임이 확정됐다.
      종전에는 목록 맨 끝(29번)에 두었는데 이는 원작 순서와 어긋나므로 여기로 옮겼다(TITLE_GORDER 도 함께 정정). */
-  { id:'gmhelper',   g:'GM', n:'화신의 안내자', fx:'몬스터 골드 획득량 +20%', e:{gold:0.20},
+  { id:'gmhelper',   g:'GM', n:'결정의 안내자', fx:'몬스터 골드 획득량 +20%', e:{gold:0.20},
     cond:'운영자(GM) 지급 전용 — 일반 플레이로는 획득 불가', have:()=>false },
   /* ---- L (8) — 원작 22~29 ---- */
   { id:'badhand',    g:'L',  n:'재앙을 부르는 손', fx:'제작 시간 -20%',   e:{ctime:-0.20},
@@ -1042,14 +1042,14 @@ const NOTICES = [
     body:'군주님들께 알립니다.<br><br>매일 오전 <b>10:00 ~ 12:00</b> 사이 서버 랭킹 정산 점검이 진행됩니다. 점검 시간 동안에는 월드보스·길드 레이드·점령전 입장이 제한되며, 진행 중이던 전투는 자동으로 종료되고 보상은 그대로 지급됩니다.<br><br>길드 랭킹은 <b>매주 월요일 오전 11시</b>에 초기화됩니다. 초기화 직전에 획득한 기여도는 정산에 반영되지 않을 수 있으니 여유를 두고 참여해 주시기 바랍니다.<br><br>점검으로 불편을 드려 죄송합니다.' },
   { cat:'[이벤트]', ic:'🎉', t:'매월 루비 2배 프로모션', d:'2026-07-20',
     body:'화로에 불을 지필 시간입니다.<br><br>기간 중 루비 상품을 구매하시면 동일한 가격으로 <b>2배의 루비</b>를 지급받습니다. 계정당 각 상품 1회씩 적용되며, 프로모션 상품은 상점 루비 탭에서 초록 테두리로 표시됩니다.<br><br>청약 철회는 구매일로부터 7일 이내 가능합니다. [일부 사용 및 환수가 안되는 시점시 불가]' },
-  { cat:'[업데이트]', ic:'📜', t:'화신 오리지널 데모 v0.1.0', d:'2026-07-15',
-    body:'대장간의 불이 처음으로 타올랐습니다.<br><br>제작·수집 방치형 RPG <b>화신</b>의 첫 데모가 공개되었습니다. 길잡이 9단계 제작 체인, 요일던전, 투기장, 길드 점령전이 포함되어 있습니다.<br><br>데모 기간 동안의 모든 진행 상황은 정식 서비스로 이관되지 않습니다. 부담 없이 즐겨 주세요.' },
+  { cat:'[업데이트]', ic:'📜', t:'결정의 시대 데모 v0.1.0', d:'2026-07-15',
+    body:'대장간의 불이 처음으로 타올랐습니다.<br><br>제작·수집 방치형 RPG <b>결정의 시대</b>의 첫 데모가 공개되었습니다. 길잡이 9단계 제작 체인, 요일던전, 투기장, 길드 점령전이 포함되어 있습니다.<br><br>데모 기간 동안의 모든 진행 상황은 정식 서비스로 이관되지 않습니다. 부담 없이 즐겨 주세요.' },
 ];
 // ★ B9/G-121: 일일 탭 날짜 헤더 라벨
 function todayLabel(){ try{ const d=new Date(); return `${d.getFullYear()}년 ${String(d.getMonth()+1).padStart(2,'0')}월 ${String(d.getDate()).padStart(2,'0')}일`; }catch(e){ return '오늘'; } }
 // 길잡이 단계별 필요 횟수 (9단계 순수 제작 체인 — 각 단계 1회 제작)
 const GUIDE_NEED = [1,1,1,1,1,1,1,1,1];
-const HERO_TITLES = ['불의 견습','달군 쇠','벼려진 자','불의 장인','화신의 대장장이'];
+const HERO_TITLES = ['불의 견습','달군 쇠','벼려진 자','불의 장인','결정의 대장장이'];
 
 /* ----------------------------- 상태 ----------------------------- */
 const SAVE_KEY = 'hwasin_save_v1';
@@ -2498,7 +2498,7 @@ const CHAT_TIERS = [
   { n:'인사쟁이',       c:'#8ee6c0' },
   { n:'견습 광부증',     c:'#7fb2e8' },
   { n:'노련한 사냥꾼',   c:'#f0cd82' },
-  { n:'화신의 안내자',   c:'#e8c040' },
+  { n:'결정의 안내자',   c:'#e8c040' },
 ];
 // 닉네임 → 라벨 고정 매핑 (같은 유저는 항상 같은 라벨)
 const CHAT_TIER_OF = {};
@@ -2865,7 +2865,7 @@ function chooseClassTrait(){
   $('#modal-root').classList.add('on'); currentModal='classTrait';
 }
 // --- 인트로 시퀀스 (대사 → 보상 팝업 스택 → 유도 튜토리얼) ---
-function runIntro(){ showDialogue(['안녕하세요, 군주님. 저는 화신의 대장장이 리안입니다.','화신의 가호로 방치만 해도 골드와 재료가 쌓입니다.','먼저 초반 보상을 받아 성장을 시작하죠!'], introRewards); }
+function runIntro(){ showDialogue(['안녕하세요, 군주님. 저는 결정의 시대의 대장장이 리안입니다.','결정의 가호로 방치만 해도 골드와 재료가 쌓입니다.','먼저 초반 보상을 받아 성장을 시작하죠!'], introRewards); }
 /* ★ B1/G-08: 3개 팝업이 서로 다른 화면이다.
    ① 랭크 보상 카드 ② 7일 출석 전체 그리드(1일차 체크) ③ 오프라인 정산 3필드 */
 function introRewards(){
@@ -2927,7 +2927,7 @@ const GUIDE_CHAIN=[
   { name:'흑철 신발',   cat:'방어구', slot:'신발',        goalIcon:'🥾', rewardIcon:'📜', rewardQty:1000,     rw:()=>{ S.craftScroll+=1000; } },
   { name:'금빛 반지',   cat:'장신구', slot:'반지',        goalIcon:'💍', rewardIcon:'🪙', rewardQty:25000000, rw:()=>{ addGold(25000000); } },
   { name:'금빛 목걸이', cat:'장신구', slot:'목걸이',      goalIcon:'📿', rewardIcon:'🔨', rewardQty:20,       rw:()=>{ S.hammers+=20; } },
-  { name:'화신의 고서', cat:'특수',   slot:'고서',        goalIcon:'📖', rewardIcon:'🎲', rewardQty:200,      rw:()=>{ S.dice+=200; } },
+  { name:'결정의 고서', cat:'특수',   slot:'고서',        goalIcon:'📖', rewardIcon:'🎲', rewardQty:200,      rw:()=>{ S.dice+=200; } },
 ];
 // 길잡이 구간 제작 수치 오버라이드 (등급 테이블 대신 적용)
 const GUIDE_RECIPE = { step:{ p0:1.0, gold:1500000, sec:30 }, final:{ p0:1.0, gold:5000000, sec:3600 } };
@@ -5186,10 +5186,10 @@ const MODALS = {
    라이브 빌드에서 화신 자체 채널 주소를 주입하면 window.open 경로가 그대로 살아난다(구조는 이미 외부 이동). */
 const EXT_LINKS = {
   social:{ ic:'💬', n:'공식 오픈채팅',  p:'으로', dest:'외부 메신저 앱',
-    d:'운영진·이용자와 실시간으로 이야기하는 화신 공식 채팅방입니다.',
+    d:'운영진·이용자와 실시간으로 이야기하는 결정의 시대 공식 채팅방입니다.',
     note:'앱이 설치돼 있지 않으면 앱 설치 페이지로 연결됩니다.', url:'' },
   lounge:{ ic:'🏆', n:'공식 커뮤니티',  p:'로',   dest:'외부 브라우저 새 탭',
-    d:'공지·게시판·영상이 모여 있는 화신 공식 커뮤니티입니다.',
+    d:'공지·게시판·영상이 모여 있는 결정의 시대 공식 커뮤니티입니다.',
     note:'가입 후 글쓰기가 가능하며, 커뮤니티에서 바로 게임으로 돌아올 수 있습니다.', url:'' },
 };
 /* 실제 이동 — 주소가 주입돼 있으면 새 창(_blank)으로 나가고, 데모(주소 없음)에서는 안내로 대체한다. */
@@ -6185,7 +6185,7 @@ function enterHome(){
   $('#home').classList.remove('hidden');
   Battle.resize(); Battle.start(); refreshHUD(); tickClock();
   for(let i=0;i<5;i++) pushChat(pick(CHAT_LINES)(), '전체');
-  sysLog('화신에 오신 것을 환영합니다, 군주여.');
+  sysLog('결정의 시대에 오신 것을 환영합니다, 군주여.');
   if(!_loopOn){ _loopOn=true; requestAnimationFrame(gameLoop); }
   updateGuideBanner();
   if(!S.seenTutorial){ setTimeout(runIntro, 500); }
