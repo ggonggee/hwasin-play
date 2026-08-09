@@ -1913,7 +1913,8 @@ const Battle = (()=>{
       if(wiped>0) wiped-=dt;
     }
     fx.forEach(f=>{
-      if(f.type==='bolt'){ f.t += dt*4; if(f.t>=1 && !f.done){ f.done=true; if(mobs.includes(f.target)) hitMob(f.target, f.dmg, f.crit, f.color); } }
+      /* ★ v5.89: bolt 적중 시 foes(적 영웅)도 체크 — 투기장 원거리 아군 공격 정상화 */
+      if(f.type==='bolt'){ f.t += dt*4; if(f.t>=1 && !f.done){ f.done=true; if(mobs.includes(f.target) || foes.includes(f.target)) hitMob(f.target, f.dmg, f.crit, f.color); } }
       else if(f.type==='spark'){ f.t+=dt*3; f.x+=f.vx*dt; f.y+=f.vy*dt; f.vy+=120*dt; }
       else if(f.type==='lvup'){ f.t += dt*2; }
       else if(f.type==='skill'){ f.t += dt*2.5; }
@@ -2502,22 +2503,20 @@ const Battle = (()=>{
     if(m.boss){ ctx.fillStyle='#ffd36a'; ctx.font="bold 11px 'Malgun Gothic'"; ctx.textAlign='center'; ctx.fillText('👑 '+m.name, m.x, m.y-m.r-14); }
   }
   function roundRectPath(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
-  /* ★ v5.84: 투기장 적 영웅 렌더링 — 아군 drawHero와 동일하되 좌우 반전 + 적색 명칭.
-     적 영웅은 왼쪽(서쪽, row3 방향)을 바라봄 — 스프라이트를 좌우 반전해서 그림. */
+  /* ★ v5.84→v5.89: 투기장 적 영웅 렌더링 — drawHero와 동일한 방식.
+     row=3(서쪽)만으로 방향 표현, 좌우 반전 제거 (이중 반전 버그 수정).
+     drawHeroSheet에 발 피봇(f.x)을 직접 전달 (좌표 붕괴 수정). */
   function drawFoe(f){
     if(!f || foes.indexOf(f)<0) return;
     const sz = 144;
-    /* 방향: 항상 왼쪽(W방향)을 바라봄 — row 3 (서쪽) */
+    /* 방향: row 3 = 서쪽(왼쪽)을 바라봄 — 반전 불필요 */
     const row = 3;
 
     if(f.dead){
       const dieFrame = Math.min(14, Math.floor((f.animFrame||0)));
-      ctx.save();
       ctx.globalAlpha = 0.6;
-      /* 좌우 반전해서 Die 그리기 */
-      ctx.translate(f.x+sz/2, 0); ctx.scale(-1,1); ctx.translate(-f.x+sz/2, 0);
-      const drew = drawHeroSheet(f, 'Die', dieFrame, row, f.x-sz/2, f.y+18, sz, 0.6);
-      ctx.restore();
+      const drew = drawHeroSheet(f, 'Die', dieFrame, row, f.x, f.y+18, sz, 0.6);
+      ctx.globalAlpha = 1;
       if(!drew){ ctx.globalAlpha=0.6; roundRectPath(f.x-14, f.y-8, 28, 30, 8); ctx.fillStyle='#3a2020'; ctx.fill(); ctx.globalAlpha=1; }
       ctx.fillStyle='#ff6a4a'; ctx.font="bold 11px 'Malgun Gothic'"; ctx.textAlign='center';
       ctx.fillText('격파', f.x, f.y-22);
@@ -2527,15 +2526,12 @@ const Battle = (()=>{
     /* 그림자 */
     ctx.fillStyle='rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(f.x, f.y+20, 16, 5, 0,0,7); ctx.fill();
 
-    /* 스프라이트 좌우 반전 — 적은 왼쪽을 바라봄 */
-    ctx.save();
-    ctx.translate(f.x+sz/2, 0); ctx.scale(-1,1); ctx.translate(-f.x+sz/2, 0);
-    /* ★ v5.87: 공격 중이면 Attack1 모션, 아니면 Idle */
+    /* ★ v5.89: 공격 중이면 Attack1/Melee 모션, 아니면 Idle.
+       drawHeroSheet에 발 피봇(f.x, f.y+20)을 직접 전달 — drawHero와 동일. */
     const isMelee = f.job && !f.job.ranged;
     const atkAnim = isMelee ? 'Melee' : 'Attack1';
     const animName = (f.atkAnimT>0) ? atkAnim : 'Idle';
-    const drew = drawHeroSheet(f, animName, f.animFrame||0, row, f.x-sz/2, f.y+20, sz, 1);
-    ctx.restore();
+    const drew = drawHeroSheet(f, animName, f.animFrame||0, row, f.x, f.y+20, sz, 1);
 
     if(!drew){
       /* 폴백 — 적색 도형 */
