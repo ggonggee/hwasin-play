@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">   <!-- ★ v5.9.1: 핀치줌 허용 (노안 접근성 최후 안전망) -->
+<title>화신 (火神) — 제작·수집 방치 RPG</title>
+<link rel="stylesheet" href="style.css?v=576">
+</head>
+<body>
+<div id="device">
+
+  <!-- ===================== 타이틀 ===================== -->
+  <section id="title" class="screen">
+    <div class="tag">불과 망치로 벼려낸, 무겁고 신성한 다크 판타지</div>
+    <button class="btn-start" id="btnStart">START</button>
+    <div class="ver">Ver 5.38 · 화신 오리지널 데모</div>
+  </section>
+
+  <!-- ===================== 로그인 목업 (G-06) ===================== -->
+  <section id="login-mock" class="screen hidden">
+    <div class="lm-wrap">
+      <div class="lm-logo">火神</div>
+      <div class="lm-sub">계정을 선택해 접속하세요</div>
+      <div class="lm-pills">
+        <button class="pill pill-guest" id="lmGuest"><span class="pi">👤</span>게스트로 시작</button>
+        <button class="pill pill-acct" id="lmAcct"><span class="pi">🔥</span>화신 계정으로 로그인</button>
+      </div>
+      <div class="lm-note">데모 로그인 목업 · 실제 인증은 수행하지 않습니다</div>
+    </div>
+    <!-- 2단계: 계정 선택 시트 -->
+    <div id="acct-sheet" class="hidden">
+      <div class="as-head">계정 선택</div>
+      <div class="as-row" data-acct="군주"><span class="as-ic">🛡️</span><div class="as-info"><b>군주</b><span>최근 접속 · 화로 1서버</span></div><span class="as-go">▶</span></div>
+      <div class="as-row" data-acct="무명의 대장장이"><span class="as-ic">⚒️</span><div class="as-info"><b>무명의 대장장이</b><span>신규 캐릭터 생성</span></div><span class="as-go">▶</span></div>
+      <div class="as-row" data-acct="잿불 순례자"><span class="as-ic">🕯️</span><div class="as-info"><b>잿불 순례자</b><span>보관 중인 계정</span></div><span class="as-go">▶</span></div>
+      <button class="as-cancel" id="asCancel">취소</button>
+    </div>
+  </section>
+
+  <!-- ===================== 서버 선택 ===================== -->
+  <section id="server-select" class="screen hidden">
+    <div class="srv-panel">
+      <div class="srv-title">서버 선택</div>
+      <div class="srv-list">
+        <label class="srv-row"><input type="radio" name="srv" checked> 화로 1서버</label>
+        <label class="srv-row"><input type="radio" name="srv"> 대장간 2서버</label>
+        <label class="srv-row"><input type="radio" name="srv"> 용광로 3서버</label>
+        <label class="srv-row srv-new"><input type="radio" name="srv"> New! 잿불 4서버</label>
+      </div>
+      <div class="srv-warn">서버를 선택한 뒤 입장하세요.<br><b>선택한 서버는 바꿀 수 없습니다.</b></div>
+      <button class="btn gold wide" id="srvEnter">입장</button>
+    </div>
+    <!-- 입장 확인 오버레이 (G-07) -->
+    <div id="server-confirm" class="hidden">
+      <div class="sc-panel">
+        <div class="sc-name" id="scName">화로 1서버</div>
+        <div class="sc-msg">입장 하시겠습니까?</div>
+        <div class="sc-warn">선택한 서버는 변경할 수 없습니다.<br>다른 서버의 캐릭터·재화는 공유되지 않습니다.</div>
+        <div class="sc-btns">
+          <button class="btn" id="scNo">아니요</button>
+          <button class="btn gold" id="scYes">예</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== 홈 HUD ===================== -->
+  <section id="home" class="screen hidden">
+
+    <!-- 상단 재화바 -->
+    <div id="topbar">
+      <!-- ★ N3/§7-9: 좌상단 명패 = 절전 진입 트리거(원클릭·확인 모달 없음). 실측 근거는 game.js startPowerSave() 주석 참조 -->
+      <div class="namecap" id="namecap" title="절전">
+        <div class="nm" id="pName">군주</div>
+        <div class="tt" id="pTitle">불의 견습</div>
+      </div>
+      <div class="curbar">
+        <div class="cur gold"><span class="ic"><img src="assets/icons/ui/res_gold.png" alt="골드"></span><span id="curGold">0</span></div>
+        <div class="cur ruby"><span class="ic"><img src="assets/icons/ui/res_gem.png" alt="젬"></span><span id="curRuby">0</span></div>
+        <div class="iconbtn" id="btnPlusRuby">＋</div>
+        <div class="iconbtn" id="btnMenuToggle">☰</div>
+      </div>
+    </div>
+
+    <!-- 전장 -->
+    <div id="stage-wrap">
+      <canvas id="battle"></canvas>
+      <div id="stage-overlay"></div>
+      <div id="onboard" class="hidden"></div>
+
+      <!-- 시계·배터리 (G-14: topbar 2단화 — 전장 좌상단으로 이동) -->
+      <div class="timepod">
+        <div id="clock">06:00</div>
+        <div class="bat">100%</div>
+      </div>
+
+      <!-- 전투 HUD 우측 원형 절전 토글 (B5/G-79) — 절전 중에도 전투는 계속된다 -->
+      <div id="pwToggle" class="pw-toggle" title="절전"><span class="pt-p">＋</span><span class="pt-t">절전</span></div>
+
+      <!-- 부활 안내 (G-13) -->
+      <div id="revive-box" class="hidden">
+        <div class="rv-title">부활</div>
+        <div class="rv-desc">부활시 몬스터 (표적)가 소환됩니다</div>
+        <div class="rv-count" id="rvCount">8</div>
+        <div class="rv-foot">초 후 자동 재소환 됩니다</div>
+      </div>
+
+      <!-- 가이드 NPC 대사 레이어 (강제 튜토리얼) -->
+      <div id="npc-layer" class="hidden">
+        <div class="npc-portrait">🧝‍♀️</div>
+        <div class="npc-box">
+          <div class="npc-name">리안</div>
+          <div class="npc-text" id="npcText"></div>
+          <div class="npc-next" id="npcNext">▶</div>
+        </div>
+      </div>
+
+      <!-- 길잡이 배너 -->
+      <div id="guide-banner" class="hidden">
+        <span class="gb-goal" id="gbGoal">🧭</span><span class="gb-txt" id="gbTxt">길잡이 퀘스트</span>
+        <span class="gb-rw"><span class="gb-rw-ic" id="gbRwIc">🎟️</span><span class="gb-rw-qty" id="gbRwQty">X20</span></span>
+        <button class="gb-go" id="gbGo">바로가기</button>
+      </div>
+
+      <!-- 우측 세로 플로팅 버튼 (공략·커뮤니티) -->
+      <div id="side-float">
+        <div class="fb" data-modal="strategy"><span class="gi"><img src="assets/icons/ui/side_guide.png" alt="공략"></span><span>공략</span></div>
+        <div class="fb" data-modal="social"><span class="gi"><img src="assets/icons/ui/side_social.png" alt="소통"></span><span>소통</span></div>
+      </div>
+
+      <!-- 우측 메뉴 패널 -->
+      <!-- G-16: 4 / 3 / 3 / 3 (13개) — 각 행 4열 그리드, 2~4행은 빈 스페이서 1칸 -->
+      <div id="sidemenu" class="hidden">
+        <div class="smrow">
+          <div class="smi" data-modal="mail"><span class="gi"><img src="assets/icons/ui/sm_mail.png" alt="우편"></span><span>우편</span></div>
+          <div class="smi" data-modal="buff"><span class="gi"><img src="assets/icons/ui/sm_buff.png" alt="버프"></span><span>버프</span></div>
+          <div class="smi" data-modal="setfx"><span class="gi"><img src="assets/icons/ui/sm_setfx.png" alt="세트효과"></span><span>세트효과</span></div>
+          <div class="smi" data-modal="social"><span class="gi"><img src="assets/icons/ui/sm_chat.png" alt="유저소통"></span><span>유저소통</span></div>
+        </div>
+        <div class="smrow">
+          <div class="smi" data-modal="lounge"><span class="gi"><img src="assets/icons/ui/sm_lounge.png" alt="라운지"></span><span>라운지</span></div>
+          <div class="smi" data-modal="notice"><span class="gi"><img src="assets/icons/ui/sm_notice.png" alt="공지"></span><span>공지</span></div>
+          <div class="smi" data-modal="power"><span class="gi"><img src="assets/icons/ui/sm_power.png" alt="절전"></span><span>절전</span></div>
+          <div class="smsp"></div>
+        </div>
+        <div class="smrow">
+          <div class="smi" data-modal="settings"><span class="gi"><img src="assets/icons/ui/sm_settings.png" alt="설정"></span><span>설정</span></div>
+          <div class="smi" data-modal="codex"><span class="gi"><img src="assets/icons/ui/sm_codex.png" alt="도감"></span><span>도감</span></div>
+          <div class="smi" data-modal="titles"><span class="gi"><img src="assets/icons/ui/sm_titles.png" alt="칭호"></span><span>칭호</span></div>
+          <div class="smsp"></div>
+        </div>
+        <div class="smrow">
+          <div class="smi" data-modal="help"><span class="gi"><img src="assets/icons/ui/sm_help.png" alt="도움말"></span><span>도움말</span></div>
+          <div class="smi" data-modal="strategy"><span class="gi"><img src="assets/icons/ui/sm_strategy.png" alt="공략"></span><span>공략</span></div>
+          <div class="smi" data-modal="attend"><span class="gi"><img src="assets/icons/ui/sm_attend.png" alt="7일출석"></span><span>7일출석</span></div>
+          <div class="smsp"></div>
+        </div>
+      </div>
+
+      <!-- 콘텐츠 아이콘열 (G-03: 1줄 7 + 2줄 4 = 11개 · '업적'은 퀘스트 3번째 탭으로 흡수) -->
+      <!-- ★ v4.9: 원작은 콘텐츠 아이콘열이 상시 노출이 아니다 — ☰ 를 눌러 사이드메뉴가 펼쳐질 때
+           함께 나타난다(02_홈_메인HUD 햄버거 미클릭 캡처 다수에서 전장이 채팅까지 비어 있음).
+           상시 노출이라 전장 하단 1/5 을 계속 가리고 있었다. -->
+      <div id="content-rail" class="hidden">
+        <div class="row r7">
+          <div class="ci" data-modal="quest"><span class="gi"><img src="assets/icons/ui/ci_quest.png" alt="퀘스트"></span><span>퀘스트</span></div>
+          <div class="ci" data-modal="guild"><span class="gi"><img src="assets/icons/ui/ci_guild.png" alt="길드"></span><span>길드</span></div>
+          <div class="ci" data-modal="village"><span class="gi"><img src="assets/icons/ui/ci_village.png" alt="마을"></span><span>마을</span></div>
+          <div class="ci" data-modal="dailydungeon"><span class="gi"><img src="assets/icons/ui/ci_dailydungeon.png" alt="요일던전"></span><span>요일던전</span></div>
+          <div class="ci" data-modal="boss"><span class="gi"><img src="assets/icons/ui/ci_boss.png" alt="보스"></span><span>보스</span></div>
+          <div class="ci" data-modal="golddungeon"><span class="gi"><img src="assets/icons/ui/ci_golddungeon.png" alt="골드던전"></span><span>골드던전</span></div>
+          <div class="ci" data-modal="raid"><span class="gi"><img src="assets/icons/ui/ci_raid.png" alt="약탈"></span><span>약탈</span></div>
+        </div>
+        <div class="row r4">
+          <div class="ci" data-modal="worldboss"><span class="gi">🐉</span><span>월드보스</span></div>
+          <div class="ci" data-modal="costume"><span class="gi"><img src="assets/icons/ui/side_costume.png" alt="코스튬"></span><span>코스튬</span></div>
+          <div class="ci" data-modal="tower"><span class="gi"><img src="assets/icons/ui/side_tower.png" alt="시련의탑"></span><span>시련의탑</span></div>
+          <div class="ci" data-modal="package"><span class="gi"><img src="assets/icons/ui/side_package.png" alt="패키지"></span><span>패키지</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 채팅 -->
+    <div id="chat">
+      <div class="tabs">
+        <div class="ctab on">전체</div>
+        <div class="ctab">서버</div>
+        <div class="ctab">길드</div>
+        <div class="ctab">시스템</div>
+        <!-- G-13: 자동전투 토글 (.skills 앞) -->
+        <div class="autobat" id="autoBat">자동전투 <b id="autoBatV">Off</b></div>
+        <div class="skills">
+          <div class="sk"><img src="assets/icons/ui/skill_flame.png" alt="화염"></div><div class="sk"><img src="assets/icons/ui/skill_frost.png" alt="빙결"></div><div class="sk"><img src="assets/icons/ui/skill_earth.png" alt="대지"></div><div class="sk"><img src="assets/icons/ui/skill_wind.png" alt="질풍"></div>
+        </div>
+      </div>
+      <!-- G-15: 로그 글자 크기 조절은 입력줄이 아니라 .skills 아래 .logtools 로 -->
+      <div class="logtools"><div class="iconbtn">＋</div><div class="iconbtn">－</div></div>
+      <div class="log" id="chatLog"></div>
+      <div class="inputrow">
+        <input type="text" placeholder="메시지 입력..." id="chatInput">
+      </div>
+    </div>
+
+    <!-- 하단 고정 7메뉴 -->
+    <div id="navbar">
+      <div class="nav" data-modal="monster"><span class="gi"><img src="assets/icons/ui/nav_monster.png" alt="몬스터"></span><span>몬스터</span></div>
+      <div class="nav" data-modal="hero"><span class="gi"><img src="assets/icons/ui/nav_hero.png" alt="영웅"></span><span>영웅</span></div>
+      <div class="nav" data-modal="inventory"><span class="gi"><img src="assets/icons/ui/nav_inventory.png" alt="인벤토리"></span><span>인벤토리</span></div>
+      <div class="nav center" data-modal="forge">
+        <div class="anvil"><span class="gi"><img src="assets/icons/ui/nav_forge.png" alt="제작"></span><div class="craft-timer" id="craftTimer">00:00</div></div>
+        <span>제작</span>
+      </div>
+      <div class="nav" data-modal="summon"><span class="gi"><img src="assets/icons/ui/nav_summon.png" alt="소환"></span><span>소환</span></div>
+      <div class="nav" data-modal="arena"><span class="gi"><img src="assets/icons/ui/nav_arena.png" alt="투기장"></span><span>투기장</span></div>
+      <div class="nav" data-modal="shop"><span class="gi"><img src="assets/icons/ui/nav_shop.png" alt="상점"></span><span>상점</span></div>
+    </div>
+
+  </section>
+
+  <!-- ===================== 모달 루트 ===================== -->
+  <div id="modal-root">
+    <div class="scrim" id="scrim"></div>
+    <div class="modal" id="modal">
+      <div class="mhead" id="modalTitle">제목
+        <div class="mclose" id="modalClose">✕</div>
+      </div>
+      <div class="mbody" id="modalBody"></div>
+    </div>
+  </div>
+
+  <!-- 소환 연출 -->
+  <div id="summon-fx"><div class="rune-circle" id="runeCircle">✨</div></div>
+
+  <!-- 토스트 -->
+  <div id="toast"></div>
+
+</div>
+<script src="game.js"></script>
+</body>
+</html>
