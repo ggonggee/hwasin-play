@@ -1677,7 +1677,7 @@ const Battle = (()=>{
         hid:fh.hid, job:fh.job, name:fh.name, grade:fh.grade, lvl:fh.lvl,
         x: W*0.80 + (i%2)*20, y: H*(BAND_TOP+0.06) + i*(H*0.14),
         baseX: W*0.80 + (i%2)*20, baseY: H*(BAND_TOP+0.06) + i*(H*0.14),
-        atkT: rnd(0.5,1.5), lungeT:0, animFrame:0, animT:0, skillAnim:null, skillAnimT:0,
+        atkT: rnd(0.5,1.5), lungeT:0, animFrame:0, animT:0, atkAnimT:0, skillAnim:null, skillAnimT:0,
         hpMax: Math.max(100, dg.foeCP*0.12), hp: Math.max(100, dg.foeCP*0.12),
         color:'#c8324b', face: fh.job.emoji, dead:false, respT:0, dmgDone:0,
         skillCD:[0,0,0,0], _lockTarget:null, _lockUntil:0, _row:3,
@@ -1979,14 +1979,24 @@ const Battle = (()=>{
           f.atkT -= dt;
           f.animT = (f.animT||0) + dt;
           if(f.animT > 0.15){ f.animT = 0; f.animFrame = (f.animFrame||0) + 1; }
+          /* ★ v5.87: 공격 애니메이션 타이머 감소 */
+          if(f.atkAnimT>0) f.atkAnimT -= dt;
           if(f.atkT <= 0){
             f.atkT = rnd(0.8, 1.5);
+            f.atkAnimT = 0.3;   /* ★ 공격 모션 0.3초 */
             /* 아군 중 살아있는 가장 가까운 영웅 공격 */
             const aliveHeroes = heroes.filter(h=>!h.dead);
             if(aliveHeroes.length){
               const tgt = aliveHeroes.reduce((a,b)=> Math.hypot(b.x-f.x,b.y-f.y)<Math.hypot(a.x-f.x,a.y-f.y)?b:a);
               const dmg = Math.max(1, dg.foeCP*0.003 * (dg.dmgMul||1));
               tgt.hp = Math.max(0, (tgt.hp||1) - dmg/Math.max(1,tgt.cp||100)*0.3);
+              /* ★ v5.87: 적 발사체 이펙트 — 원거리 직업은 bolt, 근접은 spark */
+              if(f.job && f.job.ranged){
+                fx.push({ type:'bolt', x:f.x-14, y:f.y, tx:tgt.x, ty:tgt.y, t:0, color:'#c8324b', dmg:0, crit:false, target:null });
+              } else {
+                spark(tgt.x+8, tgt.y, '#e2504a');
+              }
+              dmgText(tgt.x+10, tgt.y-14, '-'+Math.max(1,Math.round(dmg/Math.max(1,tgt.cp||100)*30)), false, '#ff7a6a');
               if(tgt.hp <= 0.15 && !tgt.dead){
                 tgt.dead = true; tgt.respT = 3; tgt.dieAnimT = 0;
               }
@@ -2503,8 +2513,11 @@ const Battle = (()=>{
     /* 스프라이트 좌우 반전 — 적은 왼쪽을 바라봄 */
     ctx.save();
     ctx.translate(f.x+sz/2, 0); ctx.scale(-1,1); ctx.translate(-f.x+sz/2, 0);
-    const animName = f.skillAnim || 'Idle';
-    const drew = drawHeroSheet(f, 'Idle', f.animFrame||0, row, f.x-sz/2, f.y+20, sz, 1);
+    /* ★ v5.87: 공격 중이면 Attack1 모션, 아니면 Idle */
+    const isMelee = f.job && !f.job.ranged;
+    const atkAnim = isMelee ? 'Melee' : 'Attack1';
+    const animName = (f.atkAnimT>0) ? atkAnim : 'Idle';
+    const drew = drawHeroSheet(f, animName, f.animFrame||0, row, f.x-sz/2, f.y+20, sz, 1);
     ctx.restore();
 
     if(!drew){
@@ -4205,6 +4218,18 @@ const MODALS = {
             const btn=el('button','btn sm sc-buy'+(ok?' gold':''),'구매'); if(!ok) btn.disabled=true;
             btn.onclick=()=>{
               if(S.ruby<t.cost){ toast('루비가 부족합니다.'); return; }   // 차감 전 재확인 (재화 안전장치)
+              /* ★ v5.87: 상위 등급(R/E/L) 조각 구매 시 선행 조건 안내.
+                 같은 직업의 하위 등급 영웅을 보유해야 합성 가능. */
+              if(GORDER.indexOf(r.grade)>0){
+                const prereqOk = heroFusePrereq(r.hero_id);
+                if(!prereqOk){
+                  const lowerGrade = GORDER[Math.max(0, GORDER.indexOf(r.grade)-1)];
+                  const lowerHero = rosterOf(r.class_id).find(x=>x.grade===lowerGrade);
+                  const needName = lowerGrade==='N' ? '일반(N)' : GRADES[lowerGrade] ? GRADES[lowerGrade].name : lowerGrade;
+                  const lowerName = lowerHero ? lowerHero.name : needName+' 영웅';
+                  toast(`⚠ ${needName} 등급 "${lowerName}" 보유 후 합성 가능 — 조각은 저장됩니다`);
+                }
+              }
               S.ruby-=t.cost;
               heroShardAdd(r.hero_id, t.qty);
               /* ★ B4/G-50 연계 — 기존 해금 동선 유지:
