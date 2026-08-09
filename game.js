@@ -1443,9 +1443,8 @@ function party(){
   const rest=owned.filter(h=>uniq.indexOf(h)<0).sort((a,b)=>heroPower(b)-heroPower(a));
   return uniq.concat(rest).slice(0,3);
 }
-/* ★ B6/G-81: 투기장 전용 4인 편성.
-   party() 는 타 콘텐츠용 3인을 그대로 유지하고, 투기장만 PVP 진영(4슬롯)을 읽어 4인을 반환한다.
-   전투 중에는 Battle.setPartySource(arenaParty) 로 교체되므로 기여도 패널도 자동으로 4인이 된다. */
+/* ★ B6/G-81→v5.84: 투기장 전용 3인 편성 (원작 기준 3v3).
+   party() 는 타 콘텐츠용 3인을 그대로 유지하고, 투기장만 PVP 진영(3슬롯)을 읽어 3인을 반환한다. */
 function arenaParty(){
   const owned=ownedHeroes();
   const byId=id=>{ const h=heroResolve(id); return (h && h.own) ? owned.find(o=>o.hero_id===h.hero_id) : null; };
@@ -1455,7 +1454,7 @@ function arenaParty(){
   if(!formed.length) formed=Object.values(S.formation||{}).map(byId).filter(Boolean);
   const uniq=[]; formed.forEach(h=>{ if(uniq.indexOf(h)<0) uniq.push(h); });
   const rest=owned.filter(h=>uniq.indexOf(h)<0).sort((a,b)=>heroPower(b)-heroPower(a));
-  return uniq.concat(rest).slice(0,4);
+  return uniq.concat(rest).slice(0,3);
 }
 
 /* ============================================================
@@ -1628,6 +1627,7 @@ const Battle = (()=>{
     layoutHeroes();
   }
   let partyCP=1, wiped=0, mode='hunt', dg=null; // mode: 'hunt'(홈 파밍) | 'dungeon'(던전 입장 전투)
+  let foes=[];  /* ★ v5.84: 투기장 적 영웅 배열 (좌우 대치용) */
   /* ★ B6/G-81: 편성 소스 훅 — null 이면 기존과 100% 동일하게 party()(3인)를 쓴다.
      투기장 입장 시에만 arenaParty(4인)로 교체되고, 결과창에서 다시 null 로 되돌린다. */
   let partySrc = null;
@@ -1668,7 +1668,21 @@ const Battle = (()=>{
          total:cfg.count||10, spawned:0, killed:0, timeLeft:cfg.dur||30, onEnd:cfg.onEnd, done:false, bossSpawned:false,
          /* ★ N2: 던전별 데미지 배율(양방향). 투기장만 0.5 를 넘겨 원작 '모든 데미지 50% 감소'를 재현한다.
             지정하지 않은 콘텐츠는 1 이라 기존 전투 루프에 영향이 없다. */
-         dmgMul:(cfg.dmgMul>0 ? cfg.dmgMul : 1) };
+         dmgMul:(cfg.dmgMul>0 ? cfg.dmgMul : 1),
+         foeHeroes:cfg.foeHeroes||null };   /* ★ v5.84: 투기장 적 영웅 스프라이트 정보 */
+    /* ★ v5.84: 투기장(kind:'arena') — 적 영웅 3명을 우측에 배치.
+       일반 몹 스폰 대신 적 영웅을 foes[] 배열에 생성하여 좌우 대치 전투를 구현. */
+    if(dg.kind==='arena' && dg.foeHeroes){
+      foes = dg.foeHeroes.map((fh,i)=>({
+        hid:fh.hid, job:fh.job, name:fh.name, grade:fh.grade, lvl:fh.lvl,
+        x: W*0.80 + (i%2)*20, y: H*(BAND_TOP+0.06) + i*(H*0.14),
+        baseX: W*0.80 + (i%2)*20, baseY: H*(BAND_TOP+0.06) + i*(H*0.14),
+        atkT: rnd(0.5,1.5), lungeT:0, animFrame:0, animT:0, skillAnim:null, skillAnimT:0,
+        hpMax: Math.max(100, dg.foeCP*0.12), hp: Math.max(100, dg.foeCP*0.12),
+        color:'#c8324b', face: fh.job.emoji, dead:false, respT:0, dmgDone:0,
+        skillCD:[0,0,0,0], _lockTarget:null, _lockUntil:0, _row:3,
+      }));
+    } else { foes=[]; }
     // ★ B5/G-77: kind:'wave' — 웨이브 서바이벌 전용 상태.
     //   몹 '그룹'을 전부 처치하면 waveNo 가 오르고 제한시간(기본 60초)이 리셋된다.
     //   기존 kind:'mobs' 처럼 처치 수를 웨이브로 환산하지 않는다.
@@ -1678,7 +1692,7 @@ const Battle = (()=>{
   function endDungeon(win){
     if(!dg || dg.done) return; dg.done=true;
     const cb=dg.onEnd, dmg=heroes.reduce((a,h)=>a+h.dmgDone,0), kills=dg.killed, wv=dg.waveNo||0;
-    mode='hunt'; dg=null; mobs=[]; spawnT=0.4;
+    mode='hunt'; dg=null; mobs=[]; foes=[]; spawnT=0.4;   /* ★ v5.84: foes도 초기화 */
     heroes.forEach(h=>{ h.dead=false; h.hp=1; h.respT=0; });
     if(cb) cb(win, {dmg, kills, wave:wv});
   }
@@ -1847,10 +1861,14 @@ const Battle = (()=>{
             fx.push({ type:'aoe', x:h.x, y:h.y, r:aoeR, t:0, color:h.color });
           }
         } else {
-          /* 파티 콘텐츠(던전/투기장) — 종전대로 단일 타겟 (가장 가까운/왼쪽 몹) */
-          const target = mobs.reduce((a,b)=> (b.x<a.x?b:a), mobs[0]);
-          if(h.ranged) fx.push({ type:'bolt', x:h.x+14, y:h.y, tx:target.x, ty:target.y, t:0, color:h.color, dmg:finalDmg, crit, target });
-          else { h.lungeT = 0.18; hitMob(target, finalDmg, crit, h.color); }
+          /* 파티 콘텐츠(던전/투기장) — 종전대로 단일 타겟 (가장 가까운/왼쪽 몹).
+             ★ v5.84: 투기장(kind:'arena')에서는 mobs 대신 foes(적 영웅)를 타겟. */
+          const targets = (dg && dg.kind==='arena' && foes.length) ? foes.filter(f=>!f.dead) : mobs;
+          if(targets.length){
+            const target = targets.reduce((a,b)=> (b.x<a.x?b:a), targets[0]);
+            if(h.ranged) fx.push({ type:'bolt', x:h.x+14, y:h.y, tx:target.x, ty:target.y, t:0, color:h.color, dmg:finalDmg, crit, target });
+            else { h.lungeT = 0.18; hitMob(target, finalDmg, crit, h.color); }
+          }
         }
       }
       if(h.lungeT>0) h.lungeT -= dt;
@@ -1928,8 +1946,36 @@ const Battle = (()=>{
     spawnT -= dt;
     if(mode==='dungeon' && dg){
       dg.timeLeft-=dt;
-      // 승리 판정을 타임아웃보다 먼저 — 마지막 처치와 시간초과가 같은 프레임에 겹쳐도 승리 우선
-      if(dg.kind==='mobs'){
+      // ★ v5.84: 투기장(kind:'arena') — 적 영웅(foes) 전멸 시 승리, 시간초과 시 패배.
+      //   일반 몹 스폰 없음. 적 영웅은 foes[]에서 관리.
+      if(dg.kind==='arena'){
+        const aliveFoes = foes.filter(f=>!f.dead);
+        if(aliveFoes.length===0){ endDungeon(true); return; }
+        if(dg.timeLeft<=0){ endDungeon(false); return; }
+        /* 적 영웅 공격 로직 — 가장 가까운 아군 영웅 공격 */
+        foes.forEach(f=>{
+          if(f.dead) return;
+          f.atkT -= dt;
+          f.animT = (f.animT||0) + dt;
+          if(f.animT > 0.15){ f.animT = 0; f.animFrame = (f.animFrame||0) + 1; }
+          if(f.atkT <= 0){
+            f.atkT = rnd(0.8, 1.5);
+            /* 아군 중 살아있는 가장 가까운 영웅 공격 */
+            const aliveHeroes = heroes.filter(h=>!h.dead);
+            if(aliveHeroes.length){
+              const tgt = aliveHeroes.reduce((a,b)=> Math.hypot(b.x-f.x,b.y-f.y)<Math.hypot(a.x-f.x,a.y-f.y)?b:a);
+              const dmg = Math.max(1, dg.foeCP*0.003 * (dg.dmgMul||1));
+              tgt.hp = Math.max(0, (tgt.hp||1) - dmg/Math.max(1,tgt.cp||100)*0.3);
+              if(tgt.hp <= 0.15 && !tgt.dead){
+                tgt.dead = true; tgt.respT = 3; tgt.dieAnimT = 0;
+                /* 전멸 체크 */
+                if(heroes.every(h=>h.dead)){ wiped=1; }
+              }
+            }
+          }
+        });
+        /* 아군 영웅의 공격은 기존 전투 로직이 처리 (foes를 타겟으로) */
+      } else if(dg.kind==='mobs'){
         if(dg.killed>=dg.total){ endDungeon(true); return; }
         if(dg.timeLeft<=0){ endDungeon(false); return; }
         if(spawnT<=0 && dg.spawned<dg.total && mobs.length<5){ spawnDgMob(); dg.spawned++; spawnT=rnd(0.4,0.9); }
@@ -1963,11 +2009,24 @@ const Battle = (()=>{
     drops = drops.filter(d=> d.t<1);
   }
   function hitMob(m, dmg, crit, color){
+    /* ★ v5.84: foes(투기장 적 영웅)가 타겟이면 hitFoe로 위임 */
+    if(foes.includes(m)){ hitFoe(m, dmg, crit, color); return; }
     if(!mobs.includes(m)) return;
     m.hp -= dmg; dmgText(m.x, m.y-m.r-4, dmg, crit, color); m.flash = 0.12;
     if(crit){ shake=0.14; spark(m.x,m.y,color); }
     if(m.hp<=0){ const mx=m.x,my=m.y,boss=m.boss; mobs = mobs.filter(x=>x!==m); spark(mx,my,boss?'#ffd36a':'#ff8a3c');
       if(boss){ shake=0.3; for(let i=0;i<12;i++) spark(mx+rnd(-22,22),my+rnd(-22,22),'#ffd36a'); } onKill(m,mx,my,boss); }
+  }
+  /* ★ v5.84: 투기장 적 영웅 피격 처리 — mobs가 아닌 foes에서 관리. */
+  function hitFoe(f, dmg, crit, color){
+    if(!foes.includes(f) || f.dead) return;
+    f.hp -= dmg; dmgText(f.x, f.y-30, dmg, crit, color);
+    if(crit){ shake=0.14; spark(f.x,f.y,color); }
+    if(f.hp<=0){
+      f.dead=true; f.respT=3; f.dieAnimT=0;
+      spark(f.x,f.y,'#ff8a3c'); sfx('craft');
+      dg.killed++;   /* 전투 진행도 카운트 */
+    }
   }
   function doWipe(){
     wiped=2.6; mobs=[]; sfx('fail');
@@ -2060,6 +2119,8 @@ const Battle = (()=>{
     drops.forEach(d=>{ ctx.globalAlpha=clamp(1-d.t*0.6,0,1); ctx.font='16px serif'; ctx.textAlign='center'; ctx.fillText(d.kind==='gold'?'🪙':'📦', d.x, d.y); ctx.globalAlpha=1; });
     mobs.forEach(drawMob);
     heroes.forEach(drawHero);
+    /* ★ v5.84: 투기장 적 영웅 우측 렌더링 */
+    foes.forEach(drawFoe);
     fx.forEach(f=>{
       if(f.type==='bolt'){ const x=f.x+(f.tx-f.x)*Math.min(f.t,1), y=f.y+(f.ty-f.y)*Math.min(f.t,1);
         ctx.fillStyle=f.color; ctx.globalAlpha=.9; ctx.beginPath(); ctx.arc(x,y,4,0,7); ctx.fill();
@@ -2393,6 +2454,55 @@ const Battle = (()=>{
     if(m.boss){ ctx.fillStyle='#ffd36a'; ctx.font="bold 11px 'Malgun Gothic'"; ctx.textAlign='center'; ctx.fillText('👑 '+m.name, m.x, m.y-m.r-14); }
   }
   function roundRectPath(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+  /* ★ v5.84: 투기장 적 영웅 렌더링 — 아군 drawHero와 동일하되 좌우 반전 + 적색 명칭.
+     적 영웅은 왼쪽(서쪽, row3 방향)을 바라봄 — 스프라이트를 좌우 반전해서 그림. */
+  function drawFoe(f){
+    if(!f || foes.indexOf(f)<0) return;
+    const sz = 144;
+    /* 방향: 항상 왼쪽(W방향)을 바라봄 — row 3 (서쪽) */
+    const row = 3;
+
+    if(f.dead){
+      const dieFrame = Math.min(14, Math.floor((f.animFrame||0)));
+      ctx.save();
+      ctx.globalAlpha = 0.6;
+      /* 좌우 반전해서 Die 그리기 */
+      ctx.translate(f.x+sz/2, 0); ctx.scale(-1,1); ctx.translate(-f.x+sz/2, 0);
+      const drew = drawHeroSheet(f, 'Die', dieFrame, row, f.x-sz/2, f.y+18, sz, 0.6);
+      ctx.restore();
+      if(!drew){ ctx.globalAlpha=0.6; roundRectPath(f.x-14, f.y-8, 28, 30, 8); ctx.fillStyle='#3a2020'; ctx.fill(); ctx.globalAlpha=1; }
+      ctx.fillStyle='#ff6a4a'; ctx.font="bold 11px 'Malgun Gothic'"; ctx.textAlign='center';
+      ctx.fillText('격파', f.x, f.y-22);
+      return;
+    }
+
+    /* 그림자 */
+    ctx.fillStyle='rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(f.x, f.y+20, 16, 5, 0,0,7); ctx.fill();
+
+    /* 스프라이트 좌우 반전 — 적은 왼쪽을 바라봄 */
+    ctx.save();
+    ctx.translate(f.x+sz/2, 0); ctx.scale(-1,1); ctx.translate(-f.x+sz/2, 0);
+    const animName = f.skillAnim || 'Idle';
+    const drew = drawHeroSheet(f, 'Idle', f.animFrame||0, row, f.x-sz/2, f.y+20, sz, 1);
+    ctx.restore();
+
+    if(!drew){
+      /* 폴백 — 적색 도형 */
+      const a = ctx.createRadialGradient(f.x,f.y,2,f.x,f.y,26);
+      a.addColorStop(0,'#c8324b99'); a.addColorStop(1,'#c8324b00');
+      ctx.fillStyle=a; ctx.beginPath(); ctx.arc(f.x,f.y,26,0,7); ctx.fill();
+      roundRectPath(f.x-12, f.y-6, 24, 26, 8); ctx.fillStyle='#c8324b'; ctx.fill();
+      ctx.strokeStyle='rgba(0,0,0,.4)'; ctx.stroke();
+      ctx.font='20px serif'; ctx.textAlign='center'; ctx.fillText(f.face, f.x, f.y-6);
+    }
+
+    /* 적 이름 + HP바 (적색) */
+    ctx.font="9px 'Malgun Gothic'"; ctx.fillStyle='#ff8080'; ctx.textAlign='center';
+    ctx.fillText(f.name, f.x, f.y-48);
+    const hw=30, hx=f.x-hw/2, hy=f.y-45;
+    ctx.fillStyle='#3a0d0d'; ctx.fillRect(hx,hy,hw,3);
+    ctx.fillStyle='#c8324b'; ctx.fillRect(hx,hy,hw*clamp(f.hp/f.hpMax,0,1),3);
+  }
 
   // 파티 3인 기여도% 오버레이 (DOM #stage-overlay)
   // ★ 홈(1인 서바이벌)에서는 기여도 패널을 숨긴다 — 원작 실측: 홈에는 기여도·웨이브·제한시간 표시 없음.
@@ -3917,12 +4027,12 @@ const MODALS = {
         <div><span>연승</span><b>${S.arenaStreak}</b></div>
         <div><span>순위 골드버프</span><b>+${arenaGoldBuffPct()}%</b></div>`;
       info.appendChild(kv);
-      // ★ G-81: 실제 출전하는 4인(PVP 진영)을 읽기 전용 요약으로 보여준다. 편성은 formation 모달에서만.
-      info.appendChild(el('div','center small mut','PVP 편성 (4인)'));
-      const labels=['전방','측면','후방','예비'];
+      /* ★ v5.84: 3v3 투기장 — 출전 3인 요약 */
+      info.appendChild(el('div','center small mut','PVP 편성 (3인)'));
+      const labels=['전방','측면','후방'];
       const openForm=()=>{ if(MODALS.formation) MODALS.formation._tab='pvp'; openModal('formation'); };
       const form=el('div','formation'); const p=arenaParty();
-      for(let i=0;i<4;i++){ const he=p[i]||null;
+      for(let i=0;i<3;i++){ const he=p[i]||null;
         const s=el('div','fslot');
         s.innerHTML = he ? `<div class="ei">${jobIcon(he.job.id)}</div><div class="fn">${he.name}</div><div class="fpos">${labels[i]}</div>`
                          : `<div class="ei" style="opacity:.3">＋</div><div class="fpos">${labels[i]}</div>`;
@@ -5968,12 +6078,22 @@ function arenaFight(){
   const myCP=p.length ? Math.max(1, p.reduce((a,h)=>a+heroPower(h),0)) : totalCP();
   const foeCP=Math.round(myCP*rnd(0.7,1.25)); const foeName=pick(CHAT_NAMES);
   const foeTier=TIERS[clamp(S.arenaTier+ri(-1,1),0,TIERS.length-1)];   // 매칭은 ±1단차 이내
+  /* ★ v5.84: 3v3 — 적 영웅 3명 스프라이트 정보 생성 (좌우 대치용).
+     적은 랜덤 직업 3종, hero_id를 HERO_ROSTER에서 무작위 선택.
+     스프라이트 시트는 기존 HERO_SPRITE_DIR 재사용. */
+  const foeHeroIds=[];
+  const roster=HERO_ROSTER.filter(r=>r.grade==='N'||r.grade==='R');
+  for(let i=0;i<3;i++) foeHeroIds.push(pick(roster).hero_id);
+  const foeHeroes=foeHeroIds.map((hid,i)=>{
+    const r=HERO_BY_ID[hid];
+    const job = JOBS.find(j=>j.id===r.class_id) || JOBS[0];
+    return { hid, job, grade:r.grade, name:r.name, lvl:Math.max(1,Math.round((foeCP/3)*0.01)) };
+  });
   closeModal(); sysLog(`투기장 매칭 · vs ${foeName}`);
-  if(Battle.setPartySource) Battle.setPartySource(arenaParty);   // ★ G-81: 투기장만 4인 출전
-  /* ★ N2: dmgMul — 원작 ⓘ '투기장에선 모든 데미지가 50% 감소 됩니다.'
-     양쪽 피해량만 절반이 되고 제한시간·몹 수·승패 판정(±100점)은 그대로다. */
-  Battle.startDungeon({ name:`투기장 · vs ${foeName}`, col:'#c8324b', foeCP, kind:'mobs', count:4, dur:ARENA_DUR,
-    dmgMul:ARENA_DMG_MUL,
+  if(Battle.setPartySource) Battle.setPartySource(arenaParty);   // 투기장 3인 출전
+  /* ★ N2: dmgMul — 원작 '투기장에선 모든 데미지가 50% 감소 됩니다.' */
+  Battle.startDungeon({ name:`투기장 · vs ${foeName}`, col:'#c8324b', foeCP, kind:'arena', count:3, dur:ARENA_DUR,
+    dmgMul:ARENA_DMG_MUL, foeHeroes,
     onEnd:(win)=>arenaResult(win, foeName, foeCP, foeTier) });
   arenaHeadShow(foeName, foeTier);
 }
