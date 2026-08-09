@@ -2445,12 +2445,12 @@ const Battle = (()=>{
          이미지 상단 = m.y + m.r - footY*sz  (이미지를 위로 올림) */
       const dy = m.y + m.r - footY*sz;
       /* ★ v5.85: 몬스터 좌우 반전 — 영웅 기준 상대 위치로 판단.
-         몬스터 스프라이트는 기본적으로 오른쪽(동쪽)을 향해 그려져 있음.
-         몬스터가 영웅보다 오른쪽에 있으면 왼쪽(서쪽)을 향해야 함 → 반전.
-         몬스터가 영웅보다 왼쪽에 있으면 오른쪽(동쪽)을 향해야 함 → 반전 없음.
+         몬스터 스프라이트는 기본적으로 왼쪽(서쪽)을 향해 그려져 있음.
+         몬스터가 영웅보다 왼쪽에 있으면 오른쪽(동쪽)을 향해야 함 → 반전.
+         몬스터가 영웅보다 오른쪽에 있으면 왼쪽(서쪽)을 향해야 함 → 반전 없음.
          (홈 모드: 영웅 중앙 기준. 던전 모드: 아군 전열 기준.) */
       const refX = heroes.length ? (heroes[0].x || W*0.5) : W*0.5;
-      const flip = m.x > refX;
+      const flip = m.x < refX;
       ctx.save();
       if(m.flash>0){ ctx.globalAlpha=0.85; }
       if(flip){ ctx.translate(m.x+sz/2, 0); ctx.scale(-1,1); ctx.translate(-m.x+sz/2, 0); }
