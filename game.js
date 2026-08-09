@@ -1573,7 +1573,9 @@ const Battle = (()=>{
   function heroAnimName(h){
     if(h.dead) return 'Die';
     if(h.skillAnim) return h.skillAnim;
-    if(mobs.length > 0){
+    /* ★ v5.88: arena 모드에서는 foes도 전투 대상으로 인식 */
+    const hasTargets = mobs.length > 0 || (mode==='dungeon' && dg && dg.kind==='arena' && foes.some(f=>!f.dead));
+    if(hasTargets){
       return MELEE_HEROS.indexOf(h.hid)>=0 ? 'Melee' : 'Attack1';
     }
     return 'Idle';
@@ -1816,7 +1818,9 @@ const Battle = (()=>{
       /* 일반 애니메이션 프레임 진행 */
       h.animT = (h.animT||0) + dt;
       if(h.animT > 0.08){ h.animT = 0; h.animFrame = ((h.animFrame||0)+1) % 15; }  /* ~12fps */
-      if(h.atkT<=0 && mobs.length){
+      /* ★ v5.88: arena 모드에서는 foes를, 일반에서는 mobs를 공격 대상으로 */
+      const arenaTargets = (mode==='dungeon'&&dg&&dg.kind==='arena') ? foes.filter(f=>!f.dead) : null;
+      if(h.atkT<=0 && (mobs.length || (arenaTargets && arenaTargets.length))){
         h.atkT = rnd(0.7,1.1);
         const crit = Math.random()<0.22;
         const dgMul = (mode==='dungeon'&&dg) ? (dg.dmgMul||1) : 1;
@@ -1981,6 +1985,19 @@ const Battle = (()=>{
           if(f.animT > 0.15){ f.animT = 0; f.animFrame = (f.animFrame||0) + 1; }
           /* ★ v5.87: 공격 애니메이션 타이머 감소 */
           if(f.atkAnimT>0) f.atkAnimT -= dt;
+          /* ★ v5.88: 적 영웅 이동 — 아군 전열을 향해 돌진 후 공격 거리에서 정지.
+             lungeT로 돌진 모션 표현. */
+          const aliveH = heroes.filter(h=>!h.dead);
+          if(aliveH.length){
+            const nearestH = aliveH.reduce((a,b)=> Math.hypot(b.x-f.x,b.y-f.y)<Math.hypot(a.x-f.x,a.y-f.y)?b:a);
+            const dist = Math.hypot(nearestH.x-f.x, nearestH.y-f.y);
+            if(dist > 90){
+              /* 공격 거리(90px) 밖이면 이동 */
+              const dx = nearestH.x-f.x, dy = nearestH.y-f.y, dl = Math.max(1,Math.hypot(dx,dy));
+              const sp = 40;
+              f.x += (dx/dl)*sp*dt; f.y += (dy/dl)*sp*dt;
+            }
+          }
           if(f.atkT <= 0){
             f.atkT = rnd(0.8, 1.5);
             f.atkAnimT = 0.3;   /* ★ 공격 모션 0.3초 */
