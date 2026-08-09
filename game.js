@@ -170,6 +170,13 @@ const EM_ICON_MAP = {
   '🛠️':'Gear_Weapons_Saw_01',        // 점검 (톱)
   '🔒':'UI_Common_Lock_01_Silver',   // 잠금 (자물쇠)
   '❄️':'Misc_Snowflake_01',          // 빙결 (눈송이) — DOM 표시용
+  /* ★ v5.83: 보스/몬스터 이모지 매핑 추가 */
+  '💀':'Boss_Skull',                 // 백골군주
+  '🐺':'Boss_Wolf',                  // 광란야수
+  '🗿':'Boss_Golem',                 // 석귀
+  '🌑':'Boss_Shadow',                // 그림자 사신
+  '🦇':'Boss_Bat',                   // 몽마
+  '🐉':'Boss_Dragon',                // 월드보스/용의 비늘
 };
 function emSlug(e){ return e.replace(/[\uFE0F\u200D]/g,'').codePointAt(0).toString(16); }
 function eImg(e, size){

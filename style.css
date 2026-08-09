@@ -436,8 +436,11 @@ body{
 /* 손가락 포인터 하이라이트 (튜토리얼 강제 유도) */
 .tut-highlight{ position:relative; z-index:11 !important; box-shadow:0 0 0 3px var(--g-legend), 0 0 16px rgba(242,178,58,.7) !important; border-radius:8px; animation:tutPulse 1s ease-in-out infinite; }
 @keyframes tutPulse{ 50%{ box-shadow:0 0 0 4px var(--g-legend), 0 0 24px rgba(242,178,58,.95) !important; } }
-.tut-finger{ position:absolute; z-index:13; font-size:26px; pointer-events:none; animation:fingerBob .9s ease-in-out infinite; filter:drop-shadow(0 2px 3px #000); }
-@keyframes fingerBob{ 50%{ transform:translateY(5px); } }
+/* ★ v5.83: 손가락 연출 강화 — 더 크고 눈에 띄게, 골든 글로우 */
+.tut-finger{ position:absolute; z-index:13; font-size:36px; pointer-events:none;
+  animation:fingerBob .7s ease-in-out infinite;
+  filter:drop-shadow(0 0 8px rgba(242,178,58,.9)) drop-shadow(0 2px 4px #000); }
+@keyframes fingerBob{ 0%,100%{ transform:translateY(0) scale(1); } 50%{ transform:translateY(8px) scale(1.1); } }
 
 /* 던전 전투 오버레이 */
 .combat-scene{ padding:6px 2px; }
