@@ -1208,12 +1208,17 @@ function migrateHeroes(){
   if(!HERO_ROSTER.some(r=>S.heroes[r.hero_id] && S.heroes[r.hero_id].own)){
     S.heroes.HERO_006={ level:1, own:true }; S.heroes.HERO_002={ level:1, own:true };
   }
-  /* ★ v5.68: 장비 equipped 필드 정규화 — 구세이브/오염값 방지.
-     equipped가 boolean이 아니면 false로 강제. 제작만으로 전투력이 오르는 자동 착용 버그 근원 차단. */
+  /* ★ v5.68→v5.81: 장비 equipped/heroId 필드 정규화 — 구세이브/오염값 방지.
+     equipped가 boolean이 아니면 false로 강제. 제작만으로 전투력이 오르는 자동 착용 버그 근원 차단.
+     ★ v5.81: heroId가 존재하지 않는(삭제된) 영웅을 가리키면 착용 해제 —
+     heroPower에서 매칭 실패로 착용 효과가 조용히 사라지는 버그 방지. */
   if(Array.isArray(S.equips)){
+    const validHeroIds = new Set(HERO_ROSTER.map(h=>h.hero_id));
     S.equips = S.equips.filter(e=>e && typeof e==='object');
     S.equips.forEach(e=>{ if(typeof e.equipped!=='boolean') e.equipped=false;
-                          if(typeof e.enh!=='number') e.enh=0; });
+                          if(typeof e.enh!=='number') e.enh=0;
+                          /* heroId가 유효하지 않은 영웅이면 귀속 해제 */
+                          if(e.heroId && !validHeroIds.has(e.heroId)) e.heroId=null; });
   } else { S.equips=[]; }
 }
 /* ★ F3: 명칭 IP 세탁으로 바뀐 id 를 구세이브에서 신 id 로 옮긴다(진행도 손실 0).
@@ -3621,7 +3626,7 @@ const MODALS = {
        종전엔 equipped/heroId 체크 없이 첫 매칭 장비를 표시 → 모든 장비가 착용된 것처럼 보임. */
     const findEq=names=>S.equips.find(e=>e.equipped && (!e.heroId || e.heroId===cur.hero_id) && names.some(n=>e.slot.indexOf(n)>=0));
     const mkSlot=(label,names)=>{ const eq=findEq(names); const s=el('div','eq-slot'+(eq?' grade-'+eq.grade:' empty'));
-      if(eq){ s.style.setProperty('--gc',GRADES[eq.grade].color); s.innerHTML=`${eImg(equipIcon(eq.slot),2)}<div class="sl">+${eq.enh}</div>`; s.onclick=()=>itemDetail(eq); }
+      if(eq){ s.style.setProperty('--gc',GRADES[eq.grade].color); s.innerHTML=`${eImg(equipIcon(eq.slot),2)}<div class="sl">+${eq.enh}</div>`; s.onclick=()=>itemDetail(eq, cur.hero_id); }
       else { s.innerHTML=label; s.onclick=()=>toast(`${label} 부위가 비어 있습니다`); }
       return s; };
     const doll=el('div','paperdoll'); const colL=el('div','eq-col'); const colR=el('div','eq-col');
@@ -4161,7 +4166,7 @@ const MODALS = {
       if(!arr.length){ list.appendChild(el('div','hint',`${S.invTab} 탭에 미장착 장비가 없습니다.`)); return; }
       arr.slice(0,16).forEach(e=>{ const c=el('div','cell gframe grade-'+e.grade); c.style.position='relative'; c.style.setProperty('--gc',GRADES[e.grade].color);
         c.innerHTML=`<div class="gtag">${GRADES[e.grade].name}</div><div class="ei">${eImg(equipIcon(e.slot),2)}</div><div class="cn">${e.slot}</div>${e.enh?`<div class="lvl">+${e.enh}</div>`:''}`;
-        c.onclick=()=>itemDetail(e); list.appendChild(c); });
+        c.onclick=()=>itemDetail(e, cur && cur.hero_id); list.appendChild(c); });
     }
     TABS.forEach(([k,label])=>{ const t=el('div','inv-tab'+(S.invTab===k?' on':''),label);
       t.onclick=()=>{ S.invTab=k; tb.querySelectorAll('.inv-tab').forEach(x=>x.classList.remove('on')); t.classList.add('on'); drawList(); }; tb.appendChild(t); });
@@ -5556,14 +5561,20 @@ function itemDetail(e, heroId){ _itemDetailHeroId=heroId||null;
   const row=el('div','btnrow'); row.style.marginTop='8px';
   const eq=el('button','btn gold wide', e.equipped?'장착됨':'장착');
   eq.onclick=()=>{ if(e.equipped){ toast('이미 장착됨'); return; }
+    /* ★ v5.81: 영웅 귀속 없는 착용 방지 — 인벤토리에서 heroId 없이 착용하면
+       모든 영웅에게 적용되는 버그. 영웅 선택창(equip 모달)을 먼저 열도록 유도. */
+    if(!_itemDetailHeroId){ toast('영웅 착용창에서 장비를 장착해 주세요'); openModal('equip'); return; }
     showConfirmDialog({ title:'장착', warn:'*장착시 기존 아이템이 파괴됩니다.*', msg:'장착 하시겠습니까?', yes:'장착', no:'취소',
       onYes:()=>{
-        /* ★ v5.71: 원작처럼 착용 시 같은 부위 기존 장비는 파괴(삭제).
-           종전엔 equipped=false만 설정해서 인벤토리에 남았음. */
+        /* ★ v5.71→v5.81: 원작처럼 착용 시 같은 부위 기존 장비는 파괴(삭제).
+           ★ v5.81: 부위 매칭을 slotSchema(부위 추출) 기준으로 통일.
+           종전엔 x.slot===e.slot 정확매칭이라 '흑철 대검'↔'용암 소드'가
+           같은 무기 부위인데도 파괴되지 않았음. findEq의 부분매칭과 통일. */
+        const newPart = slotSchema(e.slot).part;
         const before = S.equips.length;
         S.equips = S.equips.filter(x=>{
           if(x===e) return true;  /* 새로 착용할 장비는 유지 */
-          if(x.equipped && (!x.heroId || x.heroId===_itemDetailHeroId) && x.slot===e.slot){
+          if(x.equipped && (!x.heroId || x.heroId===_itemDetailHeroId) && slotSchema(x.slot).part===newPart){
             return false;  /* 같은 영웅 같은 부위 착용 중 → 파괴 */
           }
           return true;
