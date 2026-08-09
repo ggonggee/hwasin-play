@@ -1392,9 +1392,9 @@ function shardTotal(){
   const a=Object.values(S.shards||{}).reduce((x,c)=>x+(c||0),0);
   const b=Object.values(S.heroShards||{}).reduce((x,c)=>x+(c||0),0);
   return a+b; }
-// 합성 선행조건: 같은 직업의 더 낮은 등급 영웅을 1명 이상 보유(N등급은 조건 없음)
+// 합성 선행조건: 같은 직업의 더 낮은 등급 영웅을 1명 이상 보유(N등급은 합성 불가 — 소환으로만 획득)
 function heroFusePrereq(hid){ const r=HERO_BY_ID[hid]; if(!r) return false;
-  const gi=GORDER.indexOf(r.grade); if(gi<=0) return true;
+  const gi=GORDER.indexOf(r.grade); if(gi<=0) return false;   /* ★ v5.86: N 등급은 합성 불가 */
   return rosterOf(r.class_id).some(x=>GORDER.indexOf(x.grade)<gi && heroOwned(x.hero_id)); }
 function heroFuseReady(hid){ const r=HERO_BY_ID[hid]; if(!r||heroOwned(hid)) return false;
   return heroFusePrereq(hid) && heroShardAvail(hid) >= heroFuseNeed(hid); }
@@ -1968,9 +1968,14 @@ const Battle = (()=>{
         const aliveFoes = foes.filter(f=>!f.dead);
         if(aliveFoes.length===0){ endDungeon(true); return; }
         if(dg.timeLeft<=0){ endDungeon(false); return; }
-        /* 적 영웅 공격 로직 — 가장 가까운 아군 영웅 공격 */
+        /* ★ v5.86: 적 영웅도 부활 (아군과 동일하게 5초 후 재기).
+           종전엔 아군만 부활해서 투기장 승률이 시간이 지날수록 100%로 수렴. */
         foes.forEach(f=>{
-          if(f.dead) return;
+          if(f.dead){
+            f.respT -= dt;
+            if(f.respT<=0){ f.dead=false; f.hp=f.hpMax; f.dieAnimT=0; }
+            return;
+          }
           f.atkT -= dt;
           f.animT = (f.animT||0) + dt;
           if(f.animT > 0.15){ f.animT = 0; f.animFrame = (f.animFrame||0) + 1; }
@@ -1984,13 +1989,12 @@ const Battle = (()=>{
               tgt.hp = Math.max(0, (tgt.hp||1) - dmg/Math.max(1,tgt.cp||100)*0.3);
               if(tgt.hp <= 0.15 && !tgt.dead){
                 tgt.dead = true; tgt.respT = 3; tgt.dieAnimT = 0;
-                /* 전멸 체크 */
-                if(heroes.every(h=>h.dead)){ wiped=1; }
               }
             }
           }
         });
-        /* 아군 영웅의 공격은 기존 전투 로직이 처리 (foes를 타겟으로) */
+        /* ★ v5.86: 아군 전멸 시 명확히 패배 처리 (종전엔 wiped만 설정하고 종료 안 함) */
+        if(heroes.every(h=>h.dead)){ endDungeon(false); return; }
       } else if(dg.kind==='mobs'){
         if(dg.killed>=dg.total){ endDungeon(true); return; }
         if(dg.timeLeft<=0){ endDungeon(false); return; }
@@ -3578,7 +3582,7 @@ const MODALS = {
     const grid=el('div','grid c2 hero-grid'); grid.style.marginTop='10px';
     const activeKey=S.formActive||'1';
     const form=(S.formations&&S.formations[activeKey])||{};
-    const slotCap=(activeKey==='pvp')?4:3;
+    const slotCap=3;   /* ★ v5.86: PVP도 3슬롯 (3v3 통일) */
     const inForm=hid=>Object.keys(form).some(k=>form[k]===hid);
     HERO_ROSTER.forEach(r=>{
       const e=heroEntry(r.hero_id); const G=GRADES[r.grade];
@@ -3661,8 +3665,8 @@ const MODALS = {
         MODALS.formation._tab=k; openModal('formation'); };
       tabrow.appendChild(t); });
     b.appendChild(tabrow);
-    b.appendChild(el('div','hint',`${tab==='pvp'?'PVP 진영 (4칸)':'일반 콘텐츠 진영 (3칸)'} — 슬롯을 눌러 비우고, 우측 목록에서 영웅을 눌러 배치합니다.`));
-    const cap = tab==='pvp' ? 4 : 3;
+    b.appendChild(el('div','hint',`${tab==='pvp'?'PVP 진영 (3칸)':'일반 콘텐츠 진영 (3칸)'} — 슬롯을 눌러 비우고, 우측 목록에서 영웅을 눌러 배치합니다.`));
+    const cap = 3;   /* ★ v5.86: PVP 3v3 통일 */
     const grid=el('div','form-grid');
     const listBox=el('div','form-list');
     const paint=()=>{
