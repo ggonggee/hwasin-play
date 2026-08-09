@@ -1186,8 +1186,10 @@ function load(){
   }
   S = freshState();
   S.lastSeen = Date.now();
-  // ★ B4/G-50: 시작 보유 = 희귀 화염검사(HERO_006) + 일반 빙결술사(HERO_002) — 구버전 지급과 동등
-  S.heroes.HERO_006 = { level:1, own:true };
+  // ★ v5.83: 원작(불칸) 기준 — 시작 보유는 일반(N) 영웅만.
+  //   R 등급은 합성(진화)으로 획득해야 함. 종전엔 HERO_006(R)을 지급했으나 원작과 다름.
+  //   화염 N(도르카) + 빙결 N(리엔) 시작 보유.
+  S.heroes.HERO_001 = { level:1, own:true };
   S.heroes.HERO_002 = { level:1, own:true };
 }
 /* ★ B4/G-50: 구세이브 마이그레이션 — S.heroes 의 직업키({grade,level,own})를 hero_id 키로 변환한다.
@@ -1224,7 +1226,7 @@ function migrateHeroes(){
   if(S.formActive!=='1' && S.formActive!=='2' && S.formActive!=='pvp') S.formActive='1';
   // 전멸 방지 — 보유 영웅이 하나도 없으면 시작 영웅을 복구한다
   if(!HERO_ROSTER.some(r=>S.heroes[r.hero_id] && S.heroes[r.hero_id].own)){
-    S.heroes.HERO_006={ level:1, own:true }; S.heroes.HERO_002={ level:1, own:true };
+    S.heroes.HERO_001={ level:1, own:true }; S.heroes.HERO_002={ level:1, own:true };
   }
   /* ★ v5.68→v5.81: 장비 equipped/heroId 필드 정규화 — 구세이브/오염값 방지.
      equipped가 boolean이 아니면 false로 강제. 제작만으로 전투력이 오르는 자동 착용 버그 근원 차단.
