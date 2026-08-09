@@ -2360,8 +2360,15 @@ const Battle = (()=>{
       /* 발(footY*sz 위치)이 그림자 표면(m.y+m.r)에 오도록:
          이미지 상단 = m.y + m.r - footY*sz  (이미지를 위로 올림) */
       const dy = m.y + m.r - footY*sz;
+      /* ★ v5.83: 몬스터 이동 방향에 따라 좌우 반전.
+         몬스터 스프라이트는 기본적으로 오른쪽(동쪽)을 향해 그려져 있음.
+         왼쪽으로 이동(vx<0)하면 좌우 반전해서 플레이어(중앙)를 향하게 함.
+         홈 모드: 몬스터가 중앙을 향해 이동 → 이동 방향 기준 반전.
+         던전 모드: 몬스터가 우→좌로 이동(vx<0) → 항상 반전. */
+      const flip = (m.vx || 0) < 0;
       ctx.save();
       if(m.flash>0){ ctx.globalAlpha=0.85; }
+      if(flip){ ctx.translate(m.x+sz/2, 0); ctx.scale(-1,1); ctx.translate(-m.x+sz/2, 0); }
       ctx.drawImage(spr, m.x-sz/2, dy, sz, sz);
       if(m.flash>0){ ctx.globalCompositeOperation='source-atop'; ctx.fillStyle='rgba(255,80,80,.5)'; ctx.fillRect(m.x-sz/2,dy,sz,sz); }
       ctx.restore();
