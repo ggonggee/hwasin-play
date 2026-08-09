@@ -6278,7 +6278,12 @@ function wire(){
   document.querySelectorAll('[data-modal]').forEach(elm=>{ elm.addEventListener('click',()=>{ sfx('tap'); $('#sidemenu').classList.add('hidden'); openModal(elm.dataset.modal); }); });
   const ci=$('#chatInput'); ci.addEventListener('keydown',e=>{ if(e.key==='Enter'&&ci.value.trim()){
     const said=ci.value.trim();
-    pushChat(`<span class="who" style="color:#f0cd82">${S.name}</span>: ${said.replace(/</g,'&lt;')}`, chatFilter==='전체'?'전체':chatFilter);
+    /* ★ v5.81: 내 채팅에도 칭호 표시 — 봇 메시지와 동일한 형식.
+       봇은 chatWho()로 '칭호[순위] 닉네임' 형태. 내 메시지도 착용 칭호 + 순위 표시. */
+    const _myTitle = TITLES.find(t=>t.id===S.title);
+    const _myTitleName = _myTitle ? _myTitle.n : '신참 대장장이';
+    const _myTitleColor = _myTitle ? titleGradeColor(_myTitle.g) : '#8ee6c0';
+    pushChat(`<span class="tier" style="color:${_myTitleColor}">${_myTitleName}</span><span class="rank">[1위]</span> <span class="who" style="color:#f0cd82">${S.name}</span>: ${said.replace(/</g,'&lt;')}`, chatFilter==='전체'?'전체':chatFilter);
     ci.value='';
     chatTitleCheck(said);   // ★ F2: 월드챗 문구 칭호 4종(다정한 대장장이·인사쟁이·마을 사람·고양이 집사)
   } });
