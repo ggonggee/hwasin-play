@@ -1958,20 +1958,32 @@ const SLOT_STAT_SCHEMA = [
   { part:'특수',   match:['고서','정수','물약','곡괭이','나침반','부적'],        stats:['hp','atk'] },
 ];
 const SLOT_STAT_FALLBACK = { part:'공용', stats:['hp','atk','def'] };
-/* ★ v5.63: 장비 슬롯명 → 아이콘 이모지 매핑 (인벤토리/착용창/제조결과 공용). */
+/* ★ v5.63→v5.82: 장비 슬롯명 → 판타지 아이콘 매핑 (6000FantasyIcons 에셋).
+   종전 캐주얼 이모지 → 판타지 일러스트 PNG로 전면 교체.
+   슬롯명(부분문자열 매칭) → assets/icons/equip/<키>.png 경로 반환. */
 const EQUIP_ICONS = [
-  ['단검','🗡️'],['대검','⚔️'],['도끼','🪓'],['지팡이','🪄'],['장궁','🏹'],['강궁','🏹'],
-  ['쌍검','🗡️'],['전곤','🔨'],['사슬낫','⛓️'],['창','🔱'],['낫','🪒'],['완드','🪄'],['소드','⚔️'],['검','🗡️'],
-  ['방패','🛡️'],['투구','⛑️'],['상의','🥼'],['하의','👖'],['신발','🥾'],
-  ['견갑','🎽'],['각반','🦵'],['완갑','🧤'],['망토','🧣'],['벨트','🎗️'],
-  ['면갑','😷'],['흉갑','🦺'],['정강이받이','🦿'],['손목보호대','🧵'],['어깨받이','🎽'],
-  ['반지','💍'],['목걸이','📿'],['귀걸이','🧿'],['팔찌','⌚'],['인장','🔖'],['귀고리','🪬'],['부적','🧿'],
-  ['고서','📖'],['정수','🔮'],['물약','🧪'],['곡괭이','⛏️'],['나침반','🧭'],['소환 부적','🎴'],
+  /* 무기 */
+  ['단검','dagger'],['대검','sword'],['도끼','axe'],['지팡이','staff'],['장궁','bow'],['강궁','bow'],
+  ['쌍검','sword'],['전곤','hammer_w'],['사슬낫','scythe'],['창','spear'],['낫','scythe'],['완드','wand'],['소드','sword'],['검','dagger'],
+  /* 방어구 */
+  ['방패','shield'],['투구','helm'],['상의','chest'],['하의','pants'],['신발','boots'],
+  ['견갑','shoulder'],['각반','pants'],['완갑','gloves'],['망토','cape'],['벨트','belt'],
+  ['면갑','helm'],['흉갑','chest'],['정강이받이','boots'],['손목보호대','bracer'],['어깨받이','shoulder'],
+  /* 장신구 */
+  ['반지','ring'],['목걸이','necklace'],['귀걸이','necklace'],['팔찌','bracelet'],['인장','ring'],['귀고리','bracelet'],['부적','necklace'],
+  /* 특수 */
+  ['고서','book'],['정수','essence'],['물약','potion'],['곡괭이','anvil'],['나침반','essence'],['소환 부적','book'],
 ];
 function equipIcon(slotName){
   const n=slotName||'';
   for(const [k,ic] of EQUIP_ICONS){ if(n.indexOf(k)>=0) return ic; }
-  return '⚔️';
+  return 'sword';
+}
+/* ★ v5.82: equipIcon이 PNG 파일명을 반환하므로, <img>로 렌더링하는 헬퍼. */
+function equipImg(slotName, size){
+  const ic = equipIcon(slotName);
+  const s = size||1.3;
+  return `<img src="assets/icons/equip/${ic}.png" style="width:${s}em;height:${s}em;vertical-align:middle;object-fit:contain" alt="${slotName||''}">`;
 }
 function slotSchema(name){
   const n=name||'';
@@ -5198,7 +5210,7 @@ const MODALS = {
        종전엔 equipped/heroId 체크 없이 첫 매칭 장비를 표시 → 모든 장비가 착용된 것처럼 보임. */
     const findEq=names=>S.equips.find(e=>e.equipped && (!e.heroId || e.heroId===cur.hero_id) && names.some(n=>e.slot.indexOf(n)>=0));
     const mkSlot=(label,names)=>{ const eq=findEq(names); const s=el('div','eq-slot'+(eq?' grade-'+eq.grade:' empty'));
-      if(eq){ s.style.setProperty('--gc',GRADES[eq.grade].color); s.innerHTML=`${eImg(equipIcon(eq.slot),2)}<div class="sl">+${eq.enh}</div>`; s.onclick=()=>itemDetail(eq, cur.hero_id); }
+      if(eq){ s.style.setProperty('--gc',GRADES[eq.grade].color); s.innerHTML=`${equipImg(eq.slot,2)}<div class="sl">+${eq.enh}</div>`; s.onclick=()=>itemDetail(eq, cur.hero_id); }
       else { s.innerHTML=label; s.onclick=()=>toast(`${label} 부위가 비어 있습니다`); }
       return s; };
     const doll=el('div','paperdoll'); const colL=el('div','eq-col'); const colR=el('div','eq-col');
@@ -5223,7 +5235,7 @@ const MODALS = {
     const tray=el('div','grid c5'); tray.style.marginTop='6px';
     if(!S.equips.length) tray.appendChild(el('div','hint','아직 장비가 없습니다. 대장간(⚒️)에서 제작하세요.'));
     S.equips.slice(0,15).forEach(e=>{ const c=el('div','cell gframe grade-'+e.grade); c.style.setProperty('--gc',GRADES[e.grade].color);
-      c.innerHTML=`<div class="ei" style="font-size:22px">${eImg(equipIcon(e.slot),2)}</div><div class="cn">${e.slot}</div>${e.enh?`<div class="lvl">+${e.enh}</div>`:''}`; c.onclick=()=>itemDetail(e, cur.hero_id); tray.appendChild(c); });
+      c.innerHTML=`<div class="ei" style="font-size:22px">${equipImg(e.slot,2)}</div><div class="cn">${e.slot}</div>${e.enh?`<div class="lvl">+${e.enh}</div>`:''}`; c.onclick=()=>itemDetail(e, cur.hero_id); tray.appendChild(c); });
     b.appendChild(tray);
   }},
 
@@ -5737,7 +5749,7 @@ const MODALS = {
       const arr=S.equips.filter(e=>!e.equipped).filter(e=> S.invTab==='무기' ? isWeapon(e.slot) : !isWeapon(e.slot));
       if(!arr.length){ list.appendChild(el('div','hint',`${S.invTab} 탭에 미장착 장비가 없습니다.`)); return; }
       arr.slice(0,16).forEach(e=>{ const c=el('div','cell gframe grade-'+e.grade); c.style.position='relative'; c.style.setProperty('--gc',GRADES[e.grade].color);
-        c.innerHTML=`<div class="gtag">${GRADES[e.grade].name}</div><div class="ei">${eImg(equipIcon(e.slot),2)}</div><div class="cn">${e.slot}</div>${e.enh?`<div class="lvl">+${e.enh}</div>`:''}`;
+        c.innerHTML=`<div class="gtag">${GRADES[e.grade].name}</div><div class="ei">${equipImg(e.slot,2)}</div><div class="cn">${e.slot}</div>${e.enh?`<div class="lvl">+${e.enh}</div>`:''}`;
         c.onclick=()=>itemDetail(e, cur && cur.hero_id); list.appendChild(c); });
     }
     TABS.forEach(([k,label])=>{ const t=el('div','inv-tab'+(S.invTab===k?' on':''),label);
@@ -7135,7 +7147,7 @@ function itemDetail(e, heroId){ _itemDetailHeroId=heroId||null;
   const sc=slotSchema(e.slot);
   const opts=sc.stats.map(k=>statLine(k,e.enh,G.mult)).filter(Boolean);
   const card=el('div','item-card grade-'+e.grade); card.style.setProperty('--gc',G.color);
-  card.innerHTML=`<div class="ic-head"><div class="ic-ico grade-${e.grade}" style="--gc:${G.color}">${eImg(equipIcon(e.slot),2)}</div>
+  card.innerHTML=`<div class="ic-head"><div class="ic-ico grade-${e.grade}" style="--gc:${G.color}">${equipImg(e.slot,2)}</div>
     <div><div style="color:${G.color};font-weight:800">${G.name} ${e.slot} +${e.enh}</div><div class="small mut">부위: ${sc.part}${e.equipped?' · 장착 중':''}</div></div></div>`
     + opts.map(o=>`<div class="ic-opt opt-row"><span>${o.n}</span><span class="v">${o.v}</span></div>`).join('')
     + (sc.special?`<div class="ic-opt opt-sp">${sc.special}</div>`:'');
@@ -7179,7 +7191,7 @@ function itemDetail(e, heroId){ _itemDetailHeroId=heroId||null;
    ★ B3/G-41: 파괴 보호 비용 등급 분기 — N 일반망치5 / R 일반망치10 / E 전설망치5 / L 전설망치10 */
 function openEnhance(e){
   const b=subBody('강화');   // ★ v5.1 착용창 위 오버레이
-  b.appendChild(el('div','center',`<div class="ei" style="font-size:52px">${eImg(equipIcon(e.slot),2)}</div><div class="big" style="color:${GRADES[e.grade].color}">${GRADES[e.grade].name} ${e.slot} +${e.enh}</div>`));
+  b.appendChild(el('div','center',`<div class="ei" style="font-size:52px">${equipImg(e.slot,2.5)}</div><div class="big" style="color:${GRADES[e.grade].color}">${GRADES[e.grade].name} ${e.slot} +${e.enh}</div>`));
   const p = e.enh<5?0.95:e.enh<10?0.82:e.enh<15?0.63:0.44;
   const cost = [50000,300000,1500000,6000000][Math.min(3,Math.floor(e.enh/5))];
   const stoneCost = 1+Math.floor(e.enh/5);
