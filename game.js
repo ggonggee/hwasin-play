@@ -1849,10 +1849,10 @@ const Battle = (()=>{
         else if(f.type==='spark'){ f.t+=dt*3; f.x+=f.vx*dt; f.y+=f.vy*dt; f.vy+=120*dt; }
         else if(f.type==='lvup') f.t += dt*2;
         else if(f.type==='skill') f.t += dt*2.5;
-        else if(f.type==='skillfx'){ f.t += dt*1.2; f.frame = Math.floor(f.t * 15) % 15; }  /* ★ v5.104: 수명 연장 */
+        else if(f.type==='skillfx'){ f.t += dt*2; f.frame = Math.floor(f.t * 15) % 15; }
         else f.t += dt;
       });
-      fx = fx.filter(f=> f.type==='bolt' ? f.t<1.05 : (f.type==='aoe' ? f.t<0.4 : (f.type==='lvup' ? f.t<1.2 : (f.type==='skill' ? f.t<1.0 : (f.type==='skillfx' ? f.t<1.2 : f.t<1)))));
+      fx = fx.filter(f=> f.type==='bolt' ? f.t<1.05 : (f.type==='aoe' ? f.t<0.4 : (f.type==='lvup' ? f.t<1.2 : (f.type==='skill' ? f.t<1.0 : (f.type==='skillfx' ? f.t<1.0 : f.t<1)))));
       drops.forEach(d=>{ d.t+=dt*1.1; const e=clamp(d.t,0,1); d.x=d.sx+(d.tx-d.sx)*Math.pow(e,1.6); d.y=d.sy+(d.ty-d.sy)*Math.pow(e,1.6); });
       drops = drops.filter(d=> d.t<1);
       if(shake>0) shake-=dt;
@@ -2029,7 +2029,7 @@ const Battle = (()=>{
       else if(f.type==='spark'){ f.t+=dt*3; f.x+=f.vx*dt; f.y+=f.vy*dt; f.vy+=120*dt; }
       else if(f.type==='lvup'){ f.t += dt*2; }
       else if(f.type==='skill'){ f.t += dt*2.5; }
-      else if(f.type==='skillfx'){ f.t += dt*1.2; f.frame = Math.floor(f.t * 15) % 15; }  /* ★ v5.104: 수명 연장 */
+      else if(f.type==='skillfx'){ f.t += dt*2; f.frame = Math.floor(f.t * 15) % 15; }  /* ★ v5.43: 발사체 애니메이션 */
       else f.t += dt;
     });
     fx = fx.filter(f=> f.type==='bolt' ? f.t<1.05 : (f.type==='aoe' ? f.t<0.4 : (f.type==='lvup' ? f.t<1.2 : (f.type==='skill' ? f.t<1.0 : (f.type==='skillfx' ? f.t<1.0 : f.t<1)))));
@@ -2367,7 +2367,7 @@ const Battle = (()=>{
           ctx.globalAlpha = 1;
         }
       }
-      /* ★ v5.43→v5.104: 스킬 발사체 이펙트 — 크기 대폭 확대 + 수명 연장. */
+      /* ★ v5.43→v5.102: 스킬 발사체 이펙트 — HERO_FX_NAMES로 영웅별 커스텀 이름 지원. */
       else if(f.type==='skillfx'){
         const fxNames = (f.hid && HERO_FX_NAMES[f.hid]) ? HERO_FX_NAMES[f.hid] : SKILL_FX_MAP[f.jobId];
         const fxName = fxNames ? fxNames[Math.min(f.idx||0, fxNames.length-1)] : null;
@@ -2375,14 +2375,13 @@ const Battle = (()=>{
         const spr = fxName ? skillFxSpriteByName(fxDir, fxName, f.frame||0) : null;
         if(spr && spr.complete && spr.naturalWidth>0){
           const e = f.t / 1.0;
-          ctx.globalAlpha = clamp(1-e, 0, 1) * 0.95;
-          /* ★ v5.104: 크기 4배 확대 — 20px는 너무 작아서 안 보임.
-             1차: 60px, 2차: 72px, 3차: 120px, 궁극: 180px */
-          const sizes = [60, 72, 120, 180];
+          ctx.globalAlpha = clamp(1-e, 0, 1) * 0.9;
+          const sizes = [20, 24, 48, 80];
           const sz = sizes[Math.min(f.idx||0, 3)];
-          const drawSz = sz * (1 + e * 0.3);
-          const fx_x = (f.ox||f.x);
-          const fx_y = (f.oy||f.y);
+          const drawSz = sz * (1 + e * 0.5);
+          /* ★ v5.44: 발사체가 정면(아래)으로 퍼져나감 — 시작점에서 점진적 확장. */
+          const fx_x = (f.ox||f.x) + (Math.random()-0.5) * e * 8;
+          const fx_y = (f.oy||f.y) + e * 15;  /* 아래로 약간 이동하며 확산 */
           ctx.drawImage(spr, fx_x - drawSz/2, fx_y - drawSz/2, drawSz, drawSz);
           ctx.globalAlpha = 1;
         }
