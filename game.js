@@ -1578,6 +1578,8 @@ const Battle = (()=>{
     if(hasTargets){
       return MELEE_HEROS.indexOf(h.hid)>=0 ? 'Melee' : 'Attack1';
     }
+    /* ★ v5.91: 이동 중이면 Run 애니메이션 */
+    if(h._moving) return 'Run';
     return 'Idle';
   }
   /* ★ v5.49: 5직업 전체 스킬 발사체 매핑. */
@@ -1618,6 +1620,11 @@ const Battle = (()=>{
   /* ★ v4.9: 종전 0.62 는 '상시 노출되던 content-rail 을 피하려고' 좁혀둔 값이었다.
      아이콘열이 원작대로 ☰ 토글로 바뀌어 전장을 가리지 않으므로, 원작처럼 채팅 패널 직전까지 쓴다. */
   const BAND_TOP=0.20, BAND_BOT=0.70;
+  /* ★ v5.91: 자연스러운 이동+공격 시스템 — 사거리/이동속도 상수.
+     근접 영웅은 70px, 원거리 영웅은 200px에서 공격.
+     사거리 밖이면 대상을 향해 이동, 사거리 내면 공격.
+     홈 모드(solo)는 이동 없이 말뚝딜. 던전/투기장은 이동 활성화. */
+  const MELEE_RANGE=70, RANGED_RANGE=200, HERO_SPEED=55;
 
   function resize(){
     cv = $('#battle'); if(!cv) return;
@@ -1672,7 +1679,8 @@ const Battle = (()=>{
          /* ★ N2: 던전별 데미지 배율(양방향). 투기장만 0.5 를 넘겨 원작 '모든 데미지 50% 감소'를 재현한다.
             지정하지 않은 콘텐츠는 1 이라 기존 전투 루프에 영향이 없다. */
          dmgMul:(cfg.dmgMul>0 ? cfg.dmgMul : 1),
-         foeHeroes:cfg.foeHeroes||null };   /* ★ v5.84: 투기장 적 영웅 스프라이트 정보 */
+         foeHeroes:cfg.foeHeroes||null,   /* ★ v5.84: 투기장 적 영웅 스프라이트 정보 */
+         moveEnabled: cfg.moveEnabled!==false };   /* ★ v5.91: 이동 활성화 (기본 true, 홈은 제외) */
     /* ★ v5.84→v5.90: 투기장(kind:'arena') — 적 영웅 3명을 아군과 대칭되는 능력치로 생성.
        아군 영웅은 cp(전투력) + hp(0~1 비율) 구조. 적도 동일하게 cp 기반 공격력·HP.
        foeCP(매칭 전투력)를 3명에게 균등 분배 → 비슷한 능력치대의 유저와 싸우는 느낌. */
@@ -1890,14 +1898,47 @@ const Battle = (()=>{
           }
         } else {
           /* 파티 콘텐츠(던전/투기장) — 종전대로 단일 타겟 (가장 가까운/왼쪽 몹).
-             ★ v5.84: 투기장(kind:'arena')에서는 mobs 대신 foes(적 영웅)를 타겟. */
+             ★ v5.84: 투기장(kind:'arena')에서는 mobs 대신 foes(적 영웅)를 타겟.
+             ★ v5.91: 사거리 게이트 — 사거리 내 적만 타격, 밖이면 이동. */
           const targets = (dg && dg.kind==='arena' && foes.length) ? foes.filter(f=>!f.dead) : mobs;
           if(targets.length){
-            const target = targets.reduce((a,b)=> (b.x<a.x?b:a), targets[0]);
-            if(h.ranged) fx.push({ type:'bolt', x:h.x+14, y:h.y, tx:target.x, ty:target.y, t:0, color:h.color, dmg:finalDmg, crit, target });
-            else { h.lungeT = 0.18; hitMob(target, finalDmg, crit, h.color); }
+            const target = targets.reduce((a,b)=> Math.hypot(b.x-h.x,b.y-h.y)<Math.hypot(a.x-h.x,a.y-h.y)?b:a, targets[0]);
+            const range = h.ranged ? RANGED_RANGE : MELEE_RANGE;
+            const distToTarget = Math.hypot(target.x-h.x, target.y-h.y);
+            if(distToTarget <= range){
+              /* 사거리 내 — 공격 */
+              if(h.ranged) fx.push({ type:'bolt', x:h.x+14, y:h.y, tx:target.x, ty:target.y, t:0, color:h.color, dmg:finalDmg, crit, target });
+              else { h.lungeT = 0.18; hitMob(target, finalDmg, crit, h.color); }
+            }
+            /* 사거리 밖이면 공격 안 함 (이동 로직이 대상에게 다가감) */
           }
         }
+      }
+      /* ★ v5.91: 자연스러운 이동 시스템 — 홈(solo)은 제외, 던전/투기장에서 활성화.
+         대상이 사거리 밖이면 다가가고, 없으면 baseX/baseY로 복귀.
+         이동 중에는 Run 애니메이션, 정지 시 Idle/Attack. */
+      if(!solo && dg && dg.moveEnabled){
+        const allTargets = (dg.kind==='arena' && foes.length) ? foes.filter(f=>!f.dead) : mobs.filter(m=>!m.dead);
+        const range = h.ranged ? RANGED_RANGE : MELEE_RANGE;
+        if(allTargets.length){
+          const nearest = allTargets.reduce((a,b)=> Math.hypot(b.x-h.x,b.y-h.y)<Math.hypot(a.x-h.x,a.y-h.y)?b:a, allTargets[0]);
+          const d = Math.hypot(nearest.x-h.x, nearest.y-h.y);
+          if(d > range){
+            /* 사거리 밖 — 대상에게 이동 */
+            const dx=nearest.x-h.x, dy=nearest.y-h.y, dl=Math.max(1,Math.hypot(dx,dy));
+            h.x += (dx/dl)*HERO_SPEED*dt;
+            h.y += (dy/dl)*HERO_SPEED*dt;
+            h._moving = true;
+          } else { h._moving = false; }
+        } else {
+          /* 대상 없음 — baseX/baseY로 복귀 */
+          const dx=h.baseX-h.x, dy=h.baseY-h.y, dl=Math.hypot(dx,dy);
+          if(dl > 3){ h.x += (dx/dl)*HERO_SPEED*dt; h.y += (dy/dl)*HERO_SPEED*dt; h._moving = true; }
+          else { h._moving = false; }
+        }
+        /* 화면 경계 클램프 */
+        h.x = clamp(h.x, W*0.05, W*0.95);
+        h.y = clamp(h.y, H*BAND_TOP, H*BAND_BOT);
       }
       if(h.lungeT>0) h.lungeT -= dt;
     });
@@ -1994,18 +2035,19 @@ const Battle = (()=>{
           if(f.animT > 0.15){ f.animT = 0; f.animFrame = (f.animFrame||0) + 1; }
           /* ★ v5.87: 공격 애니메이션 타이머 감소 */
           if(f.atkAnimT>0) f.atkAnimT -= dt;
-          /* ★ v5.88: 적 영웅 이동 — 아군 전열을 향해 돌진 후 공격 거리에서 정지.
-             lungeT로 돌진 모션 표현. */
+          /* ★ v5.88→v5.91: 적 영웅 이동 — 근접/원거리 사거리 분기.
+             근접: 70px까지 접근, 원거리: 200px에서 정지. */
           const aliveH = heroes.filter(h=>!h.dead);
           if(aliveH.length){
             const nearestH = aliveH.reduce((a,b)=> Math.hypot(b.x-f.x,b.y-f.y)<Math.hypot(a.x-f.x,a.y-f.y)?b:a);
             const dist = Math.hypot(nearestH.x-f.x, nearestH.y-f.y);
-            if(dist > 90){
-              /* 공격 거리(90px) 밖이면 이동 */
+            const fRange = f.ranged ? RANGED_RANGE : MELEE_RANGE;
+            if(dist > fRange){
+              /* 사거리 밖 — 이동 */
               const dx = nearestH.x-f.x, dy = nearestH.y-f.y, dl = Math.max(1,Math.hypot(dx,dy));
-              const sp = 40;
-              f.x += (dx/dl)*sp*dt; f.y += (dy/dl)*sp*dt;
-            }
+              f.x += (dx/dl)*HERO_SPEED*dt; f.y += (dy/dl)*HERO_SPEED*dt;
+              f._moving = true;
+            } else { f._moving = false; }
           }
           if(f.atkT <= 0){
             f.atkT = rnd(0.8, 1.5);
@@ -2358,7 +2400,16 @@ const Battle = (()=>{
        공격 애니메이션(skillAnim) 중에는 방향 고정 — 모션이 끊기지 않게. */
     let row = 5;  /* 기본 남쪽(정면) */
     const AOE_R = 95;
-    if(mobs.length > 0){
+    /* ★ v5.91: 이동 중이면 이동 방향으로 row 계산, 아니면 타겟 락온 방향. */
+    if(h._moving && h._lastX!=null){
+      const mdx = h.x - h._lastX, mdy = h.y - h._lastY;
+      if(Math.hypot(mdx,mdy) > 0.5){
+        row = angleToRow(Math.atan2(mdy, mdx));
+        h._row = row;
+      }
+    }
+    h._lastX = h.x; h._lastY = h.y;
+    if(!h._moving && mobs.length > 0){   /* ★ v5.91: 이동 중이 아닐 때만 타겟 락온 */
       const now = performance.now();
       /* 기존 락온 타겟이 유효한지 확인 */
       let tgt = h._lockTarget || null;
@@ -2524,8 +2575,13 @@ const Battle = (()=>{
   function drawFoe(f){
     if(!f || foes.indexOf(f)<0) return;
     const sz = 144;
-    /* 방향: row 3 = 서쪽(왼쪽)을 바라봄 — 반전 불필요 */
-    const row = 3;
+    /* ★ v5.91: 적 영웅도 8방향 — 이동 중이면 이동 방향, 아니면 아군 방향(서쪽 row3). */
+    let row = 3;
+    if(f._moving && f._lastX!=null){
+      const mdx=f.x-f._lastX, mdy=f.y-f._lastY;
+      if(Math.hypot(mdx,mdy)>0.5) row = angleToRow(Math.atan2(mdy,mdx));
+    }
+    f._lastX = f.x; f._lastY = f.y;
 
     if(f.dead){
       const dieFrame = Math.min(14, Math.floor((f.animFrame||0)));
@@ -6150,7 +6206,12 @@ function arenaFight(){
      편성이 비어 있는 예외 상황에서만 종전대로 totalCP() 를 쓴다. */
   const p=arenaParty();
   const myCP=p.length ? Math.max(1, p.reduce((a,h)=>a+heroPower(h),0)) : totalCP();
-  const foeCP=Math.round(myCP*rnd(0.7,1.25)); const foeName=pick(CHAT_NAMES);
+  /* ★ v5.91: 매칭 밸런스 — 연승할수록 적이 강해짐.
+     연승 1회당 +8% → 5연승 시 적이 +40% 강해짐 → 자연스러운 패배 유도.
+     연패 중이면 적이 약해져서 승리 가능. */
+  const streak = S.arenaStreak || 0;
+  const streakMul = streak > 0 ? 1 + streak * 0.08 : 1;
+  const foeCP=Math.round(myCP*rnd(0.85,1.15)*streakMul); const foeName=pick(CHAT_NAMES);
   const foeTier=TIERS[clamp(S.arenaTier+ri(-1,1),0,TIERS.length-1)];   // 매칭은 ±1단차 이내
   /* ★ v5.84: 3v3 — 적 영웅 3명 스프라이트 정보 생성 (좌우 대치용).
      적은 랜덤 직업 3종, hero_id를 HERO_ROSTER에서 무작위 선택.
