@@ -2400,7 +2400,10 @@ const Battle = (()=>{
        공격 애니메이션(skillAnim) 중에는 방향 고정 — 모션이 끊기지 않게. */
     let row = 5;  /* 기본 남쪽(정면) */
     const AOE_R = 95;
-    /* ★ v5.91: 이동 중이면 이동 방향으로 row 계산, 아니면 타겟 락온 방향. */
+    /* ★ v5.91→v5.92: 이동 중이면 이동 방향, 정지 중이면 가장 가까운 적 방향.
+       투기장(arena)에서는 foes도 타겟에 포함. */
+    const allFoes = (mode==='dungeon'&&dg&&dg.kind==='arena') ? foes.filter(f=>!f.dead) : [];
+    const allTargets = mobs.concat(allFoes);
     if(h._moving && h._lastX!=null){
       const mdx = h.x - h._lastX, mdy = h.y - h._lastY;
       if(Math.hypot(mdx,mdy) > 0.5){
@@ -2409,43 +2412,14 @@ const Battle = (()=>{
       }
     }
     h._lastX = h.x; h._lastY = h.y;
-    if(!h._moving && mobs.length > 0){   /* ★ v5.91: 이동 중이 아닐 때만 타겟 락온 */
-      const now = performance.now();
-      /* 기존 락온 타겟이 유효한지 확인 */
-      let tgt = h._lockTarget || null;
-      if(tgt){
-        /* 죽었거나 사라졌거나 너무 멀어지면 해제 */
-        if(!mobs.includes(tgt)){
-          tgt = null;
-        } else {
-          const td = Math.hypot(tgt.x-h.x, tgt.y-h.y);
-          if(td > AOE_R * 1.3) tgt = null;  /* 30% 여유 → 벗어나면 재선택 */
-        }
-      }
-      /* 락온 만료 or 타겟 없음 → 새 타겟 선택 */
-      if(!tgt || (h._lockUntil && now > h._lockUntil)){
-        let nearest = null, minD = Infinity;
-        for(const m of mobs){
-          const d = (m.x-h.x)*(m.x-h.x) + (m.y-h.y)*(m.y-h.y);
-          if(d <= AOE_R*AOE_R && d < minD){ minD = d; nearest = m; }
-        }
-        /* AoE 안에 없으면 전체에서 최근접 */
-        if(!nearest){
-          for(const m of mobs){
-            const d = (m.x-h.x)*(m.x-h.x) + (m.y-h.y)*(m.y-h.y);
-            if(d < minD){ minD = d; nearest = m; }
-          }
-        }
-        tgt = nearest;
-        h._lockTarget = tgt;
-        h._lockUntil = now + 400;  /* 0.4초 락온 유지 */
-      }
-      if(tgt){
-        const ang = Math.atan2(tgt.y - h.y, tgt.x - h.x);
-        row = angleToRow(ang);
-      }
-    } else {
-      h._lockTarget = null;  /* 몹 없으면 락온 해제 */
+    /* ★ v5.92: 정지 중일 때 가장 가까운 적(foes 포함)을 향해 방향 설정.
+       이동 중이 아닐 때 + 적이 있을 때 → 적 방향 바라봄 (row 7=동향=적 진영). */
+    if(!h._moving && allTargets.length > 0){
+      /* ★ v5.92: 정지 중 + 적 있음 → 가장 가까운 적 방향으로 8방향 설정.
+         기존 복잡한 락온 시스템을 단순화 — 매 프레임 최근접 적 방향. */
+      const nearest = allTargets.reduce((a,b)=> Math.hypot(b.x-h.x,b.y-h.y)<Math.hypot(a.x-h.x,a.y-h.y)?b:a, allTargets[0]);
+      const ang = Math.atan2(nearest.y - h.y, nearest.x - h.x);
+      row = angleToRow(ang);
     }
     h._row = row;
 
