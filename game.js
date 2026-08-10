@@ -1573,13 +1573,13 @@ const Battle = (()=>{
   function heroAnimName(h){
     if(h.dead) return 'Die';
     if(h.skillAnim) return h.skillAnim;
-    /* ★ v5.88: arena 모드에서는 foes도 전투 대상으로 인식 */
+    /* ★ v5.95: 이동 중이면 항상 Run — 적이 있어도 걸어갈 때는 걷는 모션. */
+    if(h._moving) return 'Run';
+    /* 사거리 내에 적이 있고 멈췄을 때만 공격 모션 */
     const hasTargets = mobs.length > 0 || (mode==='dungeon' && dg && dg.kind==='arena' && foes.some(f=>!f.dead));
     if(hasTargets){
       return MELEE_HEROS.indexOf(h.hid)>=0 ? 'Melee' : 'Attack1';
     }
-    /* ★ v5.91: 이동 중이면 Run 애니메이션 */
-    if(h._moving) return 'Run';
     return 'Idle';
   }
   /* ★ v5.49: 5직업 전체 스킬 발사체 매핑. */
@@ -1834,9 +1834,10 @@ const Battle = (()=>{
       /* 일반 애니메이션 프레임 진행 */
       h.animT = (h.animT||0) + dt;
       if(h.animT > 0.08){ h.animT = 0; h.animFrame = ((h.animFrame||0)+1) % 15; }  /* ~12fps */
-      /* ★ v5.88: arena 모드에서는 foes를, 일반에서는 mobs를 공격 대상으로 */
+      /* ★ v5.88→v5.95: arena 모드에서는 foes를, 일반에서는 mobs를 공격 대상으로.
+         ★ v5.95: 이동 중(h._moving)에는 공격 불가 — 멈춰야 공격. */
       const arenaTargets = (mode==='dungeon'&&dg&&dg.kind==='arena') ? foes.filter(f=>!f.dead) : null;
-      if(h.atkT<=0 && (mobs.length || (arenaTargets && arenaTargets.length))){
+      if(h.atkT<=0 && !h._moving && (mobs.length || (arenaTargets && arenaTargets.length))){
         h.atkT = rnd(0.7,1.1);
         const crit = Math.random()<0.22;
         const dgMul = (mode==='dungeon'&&dg) ? (dg.dmgMul||1) : 1;
@@ -2049,7 +2050,8 @@ const Battle = (()=>{
               f._moving = true;
             } else { f._moving = false; }
           }
-          if(f.atkT <= 0){
+          /* ★ v5.95: 적도 이동 중에는 공격 불가 — 멈춰야 공격 */
+          if(f.atkT <= 0 && !f._moving){
             f.atkT = rnd(0.8, 1.5);
             f.atkAnimT = 0.3;   /* ★ 공격 모션 0.3초 */
             /* 아군 중 살아있는 가장 가까운 영웅 공격 */
@@ -2583,11 +2585,10 @@ const Battle = (()=>{
     /* 그림자 */
     ctx.fillStyle='rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(f.x, f.y+20, 16, 5, 0,0,7); ctx.fill();
 
-    /* ★ v5.89: 공격 중이면 Attack1/Melee 모션, 아니면 Idle.
-       drawHeroSheet에 발 피봇(f.x, f.y+20)을 직접 전달 — drawHero와 동일. */
+    /* ★ v5.89→v5.95: 이동 중이면 Run, 공격 중이면 Attack1/Melee, 아니면 Idle. */
     const isMelee = f.job && !f.job.ranged;
     const atkAnim = isMelee ? 'Melee' : 'Attack1';
-    const animName = (f.atkAnimT>0) ? atkAnim : 'Idle';
+    const animName = f._moving ? 'Run' : ((f.atkAnimT>0) ? atkAnim : 'Idle');
     const drew = drawHeroSheet(f, animName, f.animFrame||0, row, f.x, f.y+20, sz, 1);
     /* ★ v5.93: 시트 로드 전 폴백 도형 제거 — 더미 안 보이게. 지연 로드만. */
     if(!drew){
