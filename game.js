@@ -1655,7 +1655,7 @@ const Battle = (()=>{
     const src = solo ? [p[0]] : p;               // 홈은 대표 영웅 1명만 (party()[0])
     heroes = src.map((h,i)=>{
       const cx = solo ? W*HERO_CENTER_X : (W*0.17 + (i%2)*26);
-      const cy = solo ? H*HERO_CENTER_Y : (H*(BAND_TOP+0.12) + i*(H*0.14));
+      const cy = solo ? H*HERO_CENTER_Y : (H*(BAND_TOP+0.20) + i*(H*0.14));
       return {
         hid:h.hero_id, job:h.job, cp:heroPower(h), dmgDone:0, lvl:h.level, grade:h.grade, name:h.name||h.job.name,
         x:cx, y:cy, baseX:cx, baseY:cy,
@@ -1688,8 +1688,8 @@ const Battle = (()=>{
       const foeCPperHero = Math.max(50, Math.round(dg.foeCP / 3));
       foes = dg.foeHeroes.map((fh,i)=>({
         hid:fh.hid, job:fh.job, name:fh.name, grade:fh.grade, lvl:fh.lvl,
-        x: W*0.80 + (i%2)*20, y: H*(BAND_TOP+0.12) + i*(H*0.14),
-        baseX: W*0.80 + (i%2)*20, baseY: H*(BAND_TOP+0.12) + i*(H*0.14),
+        x: W*0.80 + (i%2)*20, y: H*(BAND_TOP+0.20) + i*(H*0.14),
+        baseX: W*0.80 + (i%2)*20, baseY: H*(BAND_TOP+0.20) + i*(H*0.14),
         atkT: rnd(0.5,1.5), lungeT:0, animFrame:0, animT:0, atkAnimT:0, skillAnim:null, skillAnimT:0,
         /* ★ v5.90: 아군과 동일한 cp + hp(비율) 구조 */
         cp: foeCPperHero * rnd(0.85, 1.15),   /* 개별 편차 ±15% */
@@ -1938,7 +1938,7 @@ const Battle = (()=>{
         }
         /* 화면 경계 클램프 */
         h.x = clamp(h.x, W*0.05, W*0.95);
-        h.y = clamp(h.y, H*(BAND_TOP+0.05), H*BAND_BOT);
+        h.y = clamp(h.y, H*(BAND_TOP+0.10), H*BAND_BOT);
       }
       if(h.lungeT>0) h.lungeT -= dt;
     });
