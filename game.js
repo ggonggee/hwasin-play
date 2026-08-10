@@ -1882,6 +1882,12 @@ const Battle = (()=>{
         }
         const finalDmg = Math.round(dmg * skillMul);
         if(solo){
+          /* ★ v5.96: 홈 모드에서도 원거리 영웅은 발사체 연출 추가.
+             기존엔 AoE 타격만 있고 발사체 스프라이트가 안 나와서 시각적 연출 부족. */
+          if(h.ranged && mobs.length){
+            const tgt = mobs.reduce((a,b)=> Math.hypot(b.x-h.x,b.y-h.y)<Math.hypot(a.x-h.x,a.y-h.y)?b:a, mobs[0]);
+            fx.push({ type:'bolt', x:h.x+14, y:h.y, tx:tgt.x, ty:tgt.y, t:0, color:h.color, dmg:0, crit:false, target:tgt });
+          }
           if(isSingle){
             /* 단일 스킬 — 가장 강한(HP 높은) 몹 1체에 집중 타격 */
             const tgt = mobs.reduce((a,b)=> b.hp>a.hp?b:a, mobs[0]);
