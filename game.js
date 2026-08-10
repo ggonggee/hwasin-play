@@ -2440,11 +2440,17 @@ const Battle = (()=>{
        투기장(arena)에서는 foes도 타겟에 포함. */
     const allFoes = (mode==='dungeon'&&dg&&dg.kind==='arena') ? foes.filter(f=>!f.dead) : [];
     const allTargets = mobs.concat(allFoes);
+    /* ★ v5.98: 아군도 방향 락온 — 이동 벡터 미세 변동으로 row 흔들림 방지. */
     if(h._moving && h._lastX!=null){
       const mdx = h.x - h._lastX, mdy = h.y - h._lastY;
-      if(Math.hypot(mdx,mdy) > 0.5){
+      const moveAmt = Math.hypot(mdx,mdy);
+      const now = performance.now();
+      if(moveAmt > 1.0 && (!h._rowLockUntil || now > h._rowLockUntil)){
         row = angleToRow(Math.atan2(mdy, mdx));
-        h._row = row;
+        h._lockedRow = row;
+        h._rowLockUntil = now + 300;   /* 0.3초 락온 */
+      } else if(h._lockedRow!=null){
+        row = h._lockedRow;
       }
     }
     h._lastX = h.x; h._lastY = h.y;
@@ -2594,11 +2600,28 @@ const Battle = (()=>{
     if(!f || foes.indexOf(f)<0) return;
     ctx.globalAlpha = 1;   /* ★ v5.94: 이전 foe의 alpha 잔류 방지 */
     const sz = 144;
-    /* ★ v5.91: 적 영웅도 8방향 — 이동 중이면 이동 방향, 아니면 아군 방향(서쪽 row3). */
-    let row = 3;
+    /* ★ v5.91→v5.98: 적 영웅 8방향 — 방향 락온으로 미세 흔들림 방지.
+       이동 벡터가 매 프레임 미세 변동 → row가 SE↔S↔SW로 흔들리는 문제 해결.
+       한 번 정한 방향은 0.3초간 유지. */
+    let row = f._lockedRow || 3;
     if(f._moving && f._lastX!=null){
       const mdx=f.x-f._lastX, mdy=f.y-f._lastY;
-      if(Math.hypot(mdx,mdy)>0.5) row = angleToRow(Math.atan2(mdy,mdx));
+      const moveAmt = Math.hypot(mdx,mdy);
+      const now = performance.now();
+      if(moveAmt > 1.0 && (!f._rowLockUntil || now > f._rowLockUntil)){
+        /* 충분한 이동량 + 락온 만료 시에만 방향 갱신 */
+        row = angleToRow(Math.atan2(mdy,mdx));
+        f._lockedRow = row;
+        f._rowLockUntil = now + 300;   /* 0.3초 락온 */
+      }
+    } else if(!f._moving){
+      /* 정지 중이면 아군 방향(서쪽 row3)으로 */
+      const aliveH = heroes.filter(h=>!h.dead);
+      if(aliveH.length){
+        const nearest = aliveH.reduce((a,b)=> Math.hypot(b.x-f.x,b.y-f.y)<Math.hypot(a.x-f.x,a.y-f.y)?b:a, aliveH[0]);
+        row = angleToRow(Math.atan2(nearest.y-f.y, nearest.x-f.x));
+        f._lockedRow = row;
+      }
     }
     f._lastX = f.x; f._lastY = f.y;
 
