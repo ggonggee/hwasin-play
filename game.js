@@ -2188,12 +2188,17 @@ const Battle = (()=>{
   /* ★ v5.84: 투기장 적 영웅 피격 처리 — mobs가 아닌 foes에서 관리. */
   function hitFoe(f, dmg, crit, color){
     if(!foes.includes(f) || f.dead) return;
-    f.hp -= dmg; dmgText(f.x, f.y-30, dmg, crit, color);
+    /* ★ v5.105: 적 HP 감소를 아군과 동일한 비율 방식으로 수정.
+       기존엔 절대 데미지(dmg 수만)를 0~1 비율 HP에서 빼서 1방에 사망했음.
+       아군 공격력(f.cp 기반)과 적 전투력(f.cp)의 비율로 HP 감소량 산출. */
+    const hpDmg = dmg / Math.max(1, f.cp) * 0.08;
+    f.hp = Math.max(0, f.hp - hpDmg);
+    dmgText(f.x, f.y-30, dmg, crit, color);
     if(crit){ shake=0.14; spark(f.x,f.y,color); }
     if(f.hp<=0){
       f.dead=true; f.respT=3; f.dieAnimT=0;
       spark(f.x,f.y,'#ff8a3c'); sfx('craft');
-      dg.killed++;   /* 전투 진행도 카운트 */
+      dg.killed++;
     }
   }
   function doWipe(){
