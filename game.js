@@ -1630,6 +1630,7 @@ const Battle = (()=>{
   }
   let partyCP=1, wiped=0, mode='hunt', dg=null; // mode: 'hunt'(홈 파밍) | 'dungeon'(던전 입장 전투)
   let foes=[];  /* ★ v5.84: 투기장 적 영웅 배열 (좌우 대치용) */
+  let foePartyCP=0;  /* ★ v5.90: 적 전체 전투력 (아군 partyCP와 대칭) */
   /* ★ B6/G-81: 편성 소스 훅 — null 이면 기존과 100% 동일하게 party()(3인)를 쓴다.
      투기장 입장 시에만 arenaParty(4인)로 교체되고, 결과창에서 다시 null 로 되돌린다. */
   let partySrc = null;
@@ -1672,19 +1673,26 @@ const Battle = (()=>{
             지정하지 않은 콘텐츠는 1 이라 기존 전투 루프에 영향이 없다. */
          dmgMul:(cfg.dmgMul>0 ? cfg.dmgMul : 1),
          foeHeroes:cfg.foeHeroes||null };   /* ★ v5.84: 투기장 적 영웅 스프라이트 정보 */
-    /* ★ v5.84: 투기장(kind:'arena') — 적 영웅 3명을 우측에 배치.
-       일반 몹 스폰 대신 적 영웅을 foes[] 배열에 생성하여 좌우 대치 전투를 구현. */
+    /* ★ v5.84→v5.90: 투기장(kind:'arena') — 적 영웅 3명을 아군과 대칭되는 능력치로 생성.
+       아군 영웅은 cp(전투력) + hp(0~1 비율) 구조. 적도 동일하게 cp 기반 공격력·HP.
+       foeCP(매칭 전투력)를 3명에게 균등 분배 → 비슷한 능력치대의 유저와 싸우는 느낌. */
     if(dg.kind==='arena' && dg.foeHeroes){
+      const foeCPperHero = Math.max(50, Math.round(dg.foeCP / 3));
       foes = dg.foeHeroes.map((fh,i)=>({
         hid:fh.hid, job:fh.job, name:fh.name, grade:fh.grade, lvl:fh.lvl,
         x: W*0.80 + (i%2)*20, y: H*(BAND_TOP+0.06) + i*(H*0.14),
         baseX: W*0.80 + (i%2)*20, baseY: H*(BAND_TOP+0.06) + i*(H*0.14),
         atkT: rnd(0.5,1.5), lungeT:0, animFrame:0, animT:0, atkAnimT:0, skillAnim:null, skillAnimT:0,
-        hpMax: Math.max(100, dg.foeCP*0.12), hp: Math.max(100, dg.foeCP*0.12),
+        /* ★ v5.90: 아군과 동일한 cp + hp(비율) 구조 */
+        cp: foeCPperHero * rnd(0.85, 1.15),   /* 개별 편차 ±15% */
+        hp: 1, hpMax: 1,   /* 0~1 비율 (아군과 동일) */
         color:'#c8324b', face: fh.job.emoji, dead:false, respT:0, dmgDone:0,
         skillCD:[0,0,0,0], _lockTarget:null, _lockUntil:0, _row:3,
+        ranged: !!(fh.job && fh.job.ranged),
       }));
-    } else { foes=[]; }
+      /* 적 전체 전투력 (아군 partyCP와 대칭) */
+      foePartyCP = foes.reduce((a,f)=>a+f.cp, 0);
+    } else { foes=[]; foePartyCP=0; }
     // ★ B5/G-77: kind:'wave' — 웨이브 서바이벌 전용 상태.
     //   몹 '그룹'을 전부 처치하면 waveNo 가 오르고 제한시간(기본 60초)이 리셋된다.
     //   기존 kind:'mobs' 처럼 처치 수를 웨이브로 환산하지 않는다.
@@ -2006,15 +2014,22 @@ const Battle = (()=>{
             const aliveHeroes = heroes.filter(h=>!h.dead);
             if(aliveHeroes.length){
               const tgt = aliveHeroes.reduce((a,b)=> Math.hypot(b.x-f.x,b.y-f.y)<Math.hypot(a.x-f.x,a.y-f.y)?b:a);
-              const dmg = Math.max(1, dg.foeCP*0.003 * (dg.dmgMul||1));
-              tgt.hp = Math.max(0, (tgt.hp||1) - dmg/Math.max(1,tgt.cp||100)*0.3);
+              /* ★ v5.90: 아군과 동일한 공격 공식 — f.cp 기반 데미지.
+                 아군: partyCP*0.08 → 적의 cp로 동일하게. dmgMul(0.5) 적용. */
+              const crit = Math.random()<0.22;
+              const dmgMul = (dg.dmgMul||1);
+              const dmg = Math.max(1, Math.round(Math.max(10, f.cp*0.08)*(crit?1.8:1)*rnd(0.85,1.15)*dmgMul));
+              /* 아군 HP(0~1) 감소 — 아군의 cp로 정규화 */
+              const hpDmg = dmg / Math.max(1, tgt.cp) * 0.08;
+              tgt.hp = Math.max(0, (tgt.hp||1) - hpDmg);
+              f.dmgDone += dmg;
               /* ★ v5.87: 적 발사체 이펙트 — 원거리 직업은 bolt, 근접은 spark */
-              if(f.job && f.job.ranged){
+              if(f.ranged){
                 fx.push({ type:'bolt', x:f.x-14, y:f.y, tx:tgt.x, ty:tgt.y, t:0, color:'#c8324b', dmg:0, crit:false, target:null });
               } else {
                 spark(tgt.x+8, tgt.y, '#e2504a');
               }
-              dmgText(tgt.x+10, tgt.y-14, '-'+Math.max(1,Math.round(dmg/Math.max(1,tgt.cp||100)*30)), false, '#ff7a6a');
+              dmgText(tgt.x+10, tgt.y-14, '-'+dmg, crit, '#ff7a6a');
               if(tgt.hp <= 0.15 && !tgt.dead){
                 tgt.dead = true; tgt.respT = 3; tgt.dieAnimT = 0;
               }
