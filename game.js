@@ -2384,13 +2384,16 @@ const Battle = (()=>{
     const scale = sz / CELL;  /* 128→sz 스케일 */
     const ox = dx - p.fx * scale;
     const oy = dy - p.fy * scale;
+    /* ★ v5.94: globalAlpha를 save/restore로 보호 — false 반환 시 누락 방지 */
+    ctx.save();
     ctx.globalAlpha = alpha||1;
     ctx.drawImage(sheet, sx, sy, CELL, CELL, ox, oy, sz, sz);
-    ctx.globalAlpha = 1;
+    ctx.restore();   /* ★ v5.94: save/restore로 globalAlpha 완전 복구 */
     return true;
   }
 
   function drawHero(h){
+    ctx.globalAlpha = 1;   /* ★ v5.94: 이전 hero/foe의 alpha 잔류 방지 */
     const lx = h.lungeT>0 ? 10 : 0;
     const sz = 144;
 
@@ -2556,6 +2559,7 @@ const Battle = (()=>{
      drawHeroSheet에 발 피봇(f.x)을 직접 전달 (좌표 붕괴 수정). */
   function drawFoe(f){
     if(!f || foes.indexOf(f)<0) return;
+    ctx.globalAlpha = 1;   /* ★ v5.94: 이전 foe의 alpha 잔류 방지 */
     const sz = 144;
     /* ★ v5.91: 적 영웅도 8방향 — 이동 중이면 이동 방향, 아니면 아군 방향(서쪽 row3). */
     let row = 3;
