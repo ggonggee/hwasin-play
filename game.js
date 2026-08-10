@@ -1579,16 +1579,20 @@ const Battle = (()=>{
       }
     }
   }
-  /* 8방향 → row 매핑 (Unity 애니메이션 클립 역추적으로 확정).
-     Unity 매핑: E→row7, NE→row0, N→row1, NW→row2, W→row3, SW→row4, S→row5, SE→row6
+  /* ★ v5.100: 8방향 → row 매핑 (대표 직접 확인으로 정정).
+     실제 스프라이트 방향 (대표가 Idle 시트로 확인):
+       row0 = E  (동 →)       row4 = W  (서 ←)
+       row1 = SE (남동 ↘)     row5 = NW (북서 ↖)
+       row2 = S  (남 ↓)       row6 = N  (북 ↑)
+       row3 = SW (남서 ↙)     row7 = NE (북동 ↗)
      캔버스 좌표계: y 증가 = 아래(남), x 증가 = 오른쪽(동)
-     atan2(dy, dx): dx>0=동, dy>0=남(아래) */
+     atan2(dy, dx): dx>0=동, dy>0=남(아래)
+     dir8 순서: 0=E, 1=SE, 2=S, 3=SW, 4=W, 5=NW, 6=N, 7=NE
+     각각의 row: E=0, SE=1, S=2, SW=3, W=4, NW=5, N=6, NE=7 */
   function angleToRow(angle){
     const deg = (angle * 180 / Math.PI + 360) % 360;
     const dir8 = Math.round(deg / 45) % 8;
-    /* dir8 순서: 0=E, 1=SE, 2=S, 3=SW, 4=W, 5=NW, 6=N, 7=NE
-       각각의 Unity row: E=7, SE=6, S=5, SW=4, W=3, NW=2, N=1, NE=0 */
-    return [7,6,5,4,3,2,1,0][dir8];
+    return [0,1,2,3,4,5,6,7][dir8];
   }
   function heroAnimName(h){
     if(h.dead) return 'Die';
@@ -2434,7 +2438,7 @@ const Battle = (()=>{
        문제: 30마리가 둘러싸면 매 프레임 최근접 몹이 바뀌어 방향이 요동침.
        해결: 한 번 타겟을 잠그면 0.4초간 유지. 타겟이 죽거나 AoE 범위를 벗어나면 즉시 재선택.
        공격 애니메이션(skillAnim) 중에는 방향 고정 — 모션이 끊기지 않게. */
-    let row = h._lockedRow || 7;  /* ★ v5.99: 기본 동쪽(적 진영 방향) — 남쪽(뒷모신) 제거 */
+    let row = h._lockedRow || 0;  /* ★ v5.100: 기본 동쪽(E=row0, 적 진영 방향) */
     const AOE_R = 95;
     /* ★ v5.91→v5.92: 이동 중이면 이동 방향, 정지 중이면 가장 가까운 적 방향.
        투기장(arena)에서는 foes도 타겟에 포함. */
@@ -2603,7 +2607,7 @@ const Battle = (()=>{
     /* ★ v5.91→v5.98: 적 영웅 8방향 — 방향 락온으로 미세 흔들림 방지.
        이동 벡터가 매 프레임 미세 변동 → row가 SE↔S↔SW로 흔들리는 문제 해결.
        한 번 정한 방향은 0.3초간 유지. */
-    let row = f._lockedRow || 3;
+    let row = f._lockedRow || 4;  /* ★ v5.100: 기본 서쪽(W=row4, 아군 진영 방향) */
     if(f._moving && f._lastX!=null){
       const mdx=f.x-f._lastX, mdy=f.y-f._lastY;
       const moveAmt = Math.hypot(mdx,mdy);
