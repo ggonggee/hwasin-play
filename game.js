@@ -9,7 +9,11 @@
 
 /* ----------------------------- 데이터 ----------------------------- */
 const JOBS = [
-  { id:'flame',  name:'화염검사',   el:'불',     emoji:'🔥', role:'근접 딜러', pos:'전방', stat:'STR', color:'#ff6a3d', ranged:false },
+  /* ★ v5.97: ranged 속성을 스킨(유니티 에셋)에 맞게 수정.
+     flame(3Wizard/6Mage)은 마법사 스킨 → 원거리 마법.
+     shadow_r(2Archer)는 궁수 스킨이지만 직업은 shadow 유지 →
+     영웅별 ranged는 HERO_RANGED로 별도 관리. */
+  { id:'flame',  name:'화염술사',   el:'불',     emoji:'🔥', role:'마법 딜러', pos:'후방', stat:'INT', color:'#ff6a3d', ranged:true  },
   { id:'frost',  name:'빙결술사',   el:'얼음',   emoji:'❄️', role:'마법 딜러', pos:'후방', stat:'INT', color:'#4db6e8', ranged:true  },
   { id:'earth',  name:'대지수호성', el:'대지',   emoji:'🪨', role:'탱커',      pos:'전방', stat:'VIT', color:'#8bd45a', ranged:false },
   { id:'shadow', name:'야습자',     el:'그림자', emoji:'🌑', role:'암살',      pos:'측면', stat:'AGI', color:'#a86bd0', ranged:false },
@@ -1532,7 +1536,23 @@ const Battle = (()=>{
        표시 크기(sz)가 달라도 drawHeroSheet에서 scale로 보정하므로 셀 기준값 반환. */
     return {fx:64, fy:86};
   }
+  /* ★ v5.97: 근접 영웅을 스킨 기준으로 재정의.
+     earth(4Paladin/1Knight) + shadow_n(7DeathKnight) = 근접 검/방패.
+     flame(3Wizard/6Mage)은 마법사 → 원거리 제외.
+     shadow_r(2Archer)은 궁수 → 원거리 제외.
+     HERO_RANGED: 스킨이 원거리인 영웅을 명시적으로 관리. */
   const MELEE_HEROS = ['HERO_003','HERO_008','HERO_004'];
+  /* 영웅별 원거리 여부 — 직업 ranged와 별개로 스킨 기준.
+     기본은 JOBS[].ranged를 따르되, 스킨이 다른 영웅은 여기서 오버라이드. */
+  const HERO_RANGED = {
+    'HERO_001':true,  /* 3Wizard — 마법사 스킨 */
+    'HERO_006':true,  /* 6Mage — 마법사 스킨 */
+    'HERO_002':true,  /* 8DarkLord — 원거리 마법계 */
+    'HERO_007':true,  /* 5CamoArcher — 궁수 스킨 */
+    'HERO_009':true,  /* 2Archer — 궁수 스킨 (shadow 직업이지만 스킨은 궁수) */
+    'HERO_005':true,  /* 9Longbow — 궁수 스킨 */
+  };
+  function heroRanged(hid){ return HERO_RANGED[hid] || false; }
   const RANGED_SKILL_ANIMS = ['Attack2','Attack3','Special2','CastSpell'];
   const MELEE_SKILL_ANIMS = ['Melee2','MeleeSpin','Special2','CastSpell'];
   /* ★ v5.76: 스프라이트시트 시스템 — 1920×1024 시트를 통째로 로드.
@@ -1589,6 +1609,11 @@ const Battle = (()=>{
     earth:  ['SwordAoE_0', 'SwordAoE_1', 'SwordAoE_2', 'SwordAoE_3'],
     shadow: ['DeathSpell_0','DeathSpell_1','DeathAoE_2','DeathAoE_3'],
     wind:   ['Arrow_0', 'FireArrow_1', 'Arrow_2', 'ArcSpell_3'],
+  };
+  /* ★ v5.97: 영웅별 이펙트 오버라이드 — 스킨이 직업과 다를 경우.
+     HERO_009(shadow_r = 2Archer 궁수 스킨)은 wind의 활 이펙트 사용. */
+  const HERO_FX_OVERRIDE = {
+    'HERO_009': 'wind',   /* 궁수 스킨 → 활 이펙트 */
   };
   const SKILL_FX_CACHE = {};
   function skillFxSprite(jobId, skillIdx, frame){
@@ -1659,7 +1684,7 @@ const Battle = (()=>{
       return {
         hid:h.hero_id, job:h.job, cp:heroPower(h), dmgDone:0, lvl:h.level, grade:h.grade, name:h.name||h.job.name,
         x:cx, y:cy, baseX:cx, baseY:cy,
-        atkT: rnd(0,0.6), face:h.job.emoji, color:h.job.color, ranged:h.job.ranged, lungeT:0,
+        atkT: rnd(0,0.6), face:h.job.emoji, color:h.job.color, ranged:heroRanged(h.hero_id), lungeT:0,
         hp:1, dead:false, respT:0,
         skillCD:[0,0,0,0],
         animFrame:0, animT:0, skillAnim:null, skillAnimT:0,  /* ★ v5.36: 스프라이트 애니메이션 */
@@ -1696,7 +1721,7 @@ const Battle = (()=>{
         hp: 1, hpMax: 1,   /* 0~1 비율 (아군과 동일) */
         color:'#c8324b', face: fh.job.emoji, dead:false, respT:0, dmgDone:0,
         skillCD:[0,0,0,0], _lockTarget:null, _lockUntil:0, _row:3,
-        ranged: !!(fh.job && fh.job.ranged),
+        ranged: heroRanged(fh.hid),   /* ★ v5.97: 스킨 기준 ranged */
       }));
       /* 적 전체 전투력 (아군 partyCP와 대칭) */
       foePartyCP = foes.reduce((a,f)=>a+f.cp, 0);
@@ -1874,7 +1899,7 @@ const Battle = (()=>{
             name:sk[0], r:aoeR||50, ult:isUltimate });
           /* ★ v5.44: 발사체 이펙트 — 영웅 정면(아래)에서 발사되어 확장. */
           fx.push({ type:'skillfx', x:h.x, y:h.y+10, t:0, color:h.color, idx:useSkill,
-            jobId:h.job.id, frame:0, ox:h.x, oy:h.y+10 });
+            jobId:HERO_FX_OVERRIDE[h.hid]||h.job.id, frame:0, ox:h.x, oy:h.y+10 });   /* ★ v5.97: 스킨 기준 이펙트 */
           if(isUltimate){
             shake = Math.max(shake, 0.4);
             sfx('legendary');
@@ -2592,7 +2617,7 @@ const Battle = (()=>{
     ctx.fillStyle='rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(f.x, f.y+20, 16, 5, 0,0,7); ctx.fill();
 
     /* ★ v5.89→v5.95: 이동 중이면 Run, 공격 중이면 Attack1/Melee, 아니면 Idle. */
-    const isMelee = f.job && !f.job.ranged;
+    const isMelee = !f.ranged;   /* ★ v5.97: 스킨 기준 (f.ranged는 생성 시 heroRanged로 설정) */
     const atkAnim = isMelee ? 'Melee' : 'Attack1';
     const animName = f._moving ? 'Run' : ((f.atkAnimT>0) ? atkAnim : 'Idle');
     const drew = drawHeroSheet(f, animName, f.animFrame||0, row, f.x, f.y+20, sz, 1);
