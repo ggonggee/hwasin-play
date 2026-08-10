@@ -1864,22 +1864,21 @@ const Battle = (()=>{
     const hcy = (heroes[0] && !heroes[0].dead) ? heroes[0].y : H*HERO_CENTER_Y;
     heroes.forEach(h=>{
       if(h.dead){
-        /* ★ v5.51: 사망 연출 — Die 애니메이션을 끝프레임에서 정지.
-           respT가 3초→0초로 줄어드는 동안 마지막 프레임 고정.
-           부활 시 전투 재개. */
+        /* ★ v5.51→v5.106: 사망 연출 — Die 애니메이션 재생 후 정지.
+           홈 모드(solo)에서만 부활, 투기장/던전에서는 부활 없음. */
         h.respT -= dt;
-        /* Die 애니메이션: 처음 1초만 재생, 이후 마지막 프레임 고정 */
         if(h.dieAnimT == null) h.dieAnimT = 0;
         h.dieAnimT += dt;
         if(h.dieAnimT < 1.0){
           h.animFrame = Math.min(14, Math.floor(h.dieAnimT * 15));
         } else {
-          h.animFrame = 14;  /* 마지막 프레임 고정 */
+          h.animFrame = 14;
         }
-        if(h.respT <= 0){
+        /* ★ v5.106: 홈(solo)에서만 부활, 투기장/던전에서는 사망 유지 */
+        if(h.respT <= 0 && solo){
           h.dead = false; h.hp = 1; h.dieAnimT = null; h.animFrame = 0;
         }
-        return;  /* 죽은 동안은 공격/이동 안 함 */
+        return;
       }
       h.hp = Math.min(1, h.hp + 0.05*dt); // 자연 회복
       h.atkT -= dt;
@@ -2088,8 +2087,8 @@ const Battle = (()=>{
            종전엔 아군만 부활해서 투기장 승률이 시간이 지날수록 100%로 수렴. */
         foes.forEach(f=>{
           if(f.dead){
+            /* ★ v5.106: 투기장에서는 부활 없음 — 사망 시 영구 이탈 */
             f.respT -= dt;
-            if(f.respT<=0){ f.dead=false; f.hp=f.hpMax; f.dieAnimT=0; }
             return;
           }
           f.atkT -= dt;
