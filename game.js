@@ -1614,10 +1614,12 @@ const Battle = (()=>{
     shadow: ['DeathSpell_0','DeathSpell_1','DeathAoE_2','DeathAoE_3'],
     wind:   ['Arrow_0', 'FireArrow_1', 'Arrow_2', 'ArcSpell_3'],
   };
-  /* ★ v5.97: 영웅별 이펙트 오버라이드 — 스킨이 직업과 다를 경우.
-     HERO_009(shadow_r = 2Archer 궁수 스킨)은 wind의 활 이펙트 사용. */
+  /* ★ v5.97→v5.101: 영웅별 이펙트 오버라이드.
+     HERO_009(shadow_r = 2Archer 궁수 스킨) → wind 활 이펙트.
+     HERO_006(flame_r = 라비스) → shadow DeathSpell/DeathAoE 이펙트. */
   const HERO_FX_OVERRIDE = {
-    'HERO_009': 'wind',   /* 궁수 스킨 → 활 이펙트 */
+    'HERO_009': 'wind',     /* 궁수 스킨 → 활 이펙트 */
+    'HERO_006': 'shadow',   /* 라비스 → DeathSpell/DeathAoE 이펙트 */
   };
   const SKILL_FX_CACHE = {};
   function skillFxSprite(jobId, skillIdx, frame){
