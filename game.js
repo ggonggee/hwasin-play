@@ -2455,13 +2455,21 @@ const Battle = (()=>{
     /* ★ v5.79: 발 피봇 정렬 — 발을 그림자 중심(h.x+lx, h.y+20)에 고정.
        lx(lungeT 오프셋)도 발에 적용해서 돌진 시 발이 미끄러지듯 이동. */
     const drew = drawHeroSheet(h, animName, h.animFrame||0, row, h.x+lx, h.y+20, sz, 1);
+    /* ★ v5.93: 시트 로드 전 폴백 도형 제거 — 더미 캐릭터 안 보이게.
+       시트가 로드 중이면 그림자만 그리고 스프라이트는 생략. */
     if(!drew){
-      /* 폴백 — 시트 로드 전/실패 시 */
-      const a = ctx.createRadialGradient(h.x+lx,h.y,2,h.x+lx,h.y,26);
-      a.addColorStop(0, h.color+'99'); a.addColorStop(1, h.color+'00');
-      ctx.fillStyle=a; ctx.beginPath(); ctx.arc(h.x+lx,h.y,26,0,7); ctx.fill();
-      roundRectPath(h.x-12+lx, h.y-6, 24, 26, 8); ctx.fillStyle=h.color; ctx.fill(); ctx.strokeStyle='rgba(0,0,0,.4)'; ctx.stroke();
-      ctx.font='20px serif'; ctx.textAlign='center'; ctx.fillText(h.face, h.x+lx, h.y-6);
+      /* 시트가 없으면 로드 시도 (런타임 지연 로드) */
+      const dir = HERO_SPRITE_DIR[h.hid];
+      if(dir){
+        const key = dir+'/'+animName;
+        if(!HERO_SHEETS[key]){
+          const im = new Image();
+          im.src = 'assets/heroes/sheets/'+key+'.png';
+          im.onerror=()=>{};
+          HERO_SHEETS[key] = im;
+        }
+      }
+      /* 폴백 도형은 그리지 않음 — 시트 로드될 때까지 그림자만 */
     }
     /* ★ 홈 1인: 원작형 머리 위 정보 (이름표 + HP/MP 2단 바). 던전 파티는 종전대로 직업명+HP 1단.
        원작 실측(전량판독 라인 33/73): "영웅 머리 위에 이름 + 원형 레벨 뱃지 + 적색 HP바/청색 MP바 2단". */
@@ -2577,15 +2585,18 @@ const Battle = (()=>{
     const atkAnim = isMelee ? 'Melee' : 'Attack1';
     const animName = (f.atkAnimT>0) ? atkAnim : 'Idle';
     const drew = drawHeroSheet(f, animName, f.animFrame||0, row, f.x, f.y+20, sz, 1);
-
+    /* ★ v5.93: 시트 로드 전 폴백 도형 제거 — 더미 안 보이게. 지연 로드만. */
     if(!drew){
-      /* 폴백 — 적색 도형 */
-      const a = ctx.createRadialGradient(f.x,f.y,2,f.x,f.y,26);
-      a.addColorStop(0,'#c8324b99'); a.addColorStop(1,'#c8324b00');
-      ctx.fillStyle=a; ctx.beginPath(); ctx.arc(f.x,f.y,26,0,7); ctx.fill();
-      roundRectPath(f.x-12, f.y-6, 24, 26, 8); ctx.fillStyle='#c8324b'; ctx.fill();
-      ctx.strokeStyle='rgba(0,0,0,.4)'; ctx.stroke();
-      ctx.font='20px serif'; ctx.textAlign='center'; ctx.fillText(f.face, f.x, f.y-6);
+      const dir = HERO_SPRITE_DIR[f.hid];
+      if(dir){
+        const key = dir+'/'+animName;
+        if(!HERO_SHEETS[key]){
+          const im = new Image();
+          im.src = 'assets/heroes/sheets/'+key+'.png';
+          im.onerror=()=>{};
+          HERO_SHEETS[key] = im;
+        }
+      }
     }
 
     /* 적 이름 + HP바 (적색) */
