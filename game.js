@@ -1614,23 +1614,31 @@ const Battle = (()=>{
     shadow: ['DeathSpell_0','DeathSpell_1','DeathAoE_2','DeathAoE_3'],
     wind:   ['Arrow_0', 'FireArrow_1', 'Arrow_2', 'ArcSpell_3'],
   };
-  /* ★ v5.97→v5.101: 영웅별 이펙트 오버라이드.
+  /* ★ v5.97→v5.102: 영웅별 이펙트 오버라이드.
      HERO_009(shadow_r = 2Archer 궁수 스킨) → wind 활 이펙트.
-     HERO_006(flame_r = 라비스) → shadow DeathSpell/DeathAoE 이펙트. */
+     HERO_006(flame_r = 라비스) → flame 폴더의 DeathSpell/DeathAoE (원본 유니티 에셋). */
   const HERO_FX_OVERRIDE = {
     'HERO_009': 'wind',     /* 궁수 스킨 → 활 이펙트 */
-    'HERO_006': 'shadow',   /* 라비스 → DeathSpell/DeathAoE 이펙트 */
+    'HERO_006': 'flame',    /* 라비스 → flame/effects의 DeathSpell/DeathAoE */
+  };
+  /* ★ v5.102: 라비스 전용 이펙트 이름 맵 (flame 폴더의 DeathSpell 사용) */
+  const HERO_FX_NAMES = {
+    'HERO_006': ['DeathSpell_0','DeathSpell_1','DeathAoE_2','DeathAoE_3'],
   };
   const SKILL_FX_CACHE = {};
   function skillFxSprite(jobId, skillIdx, frame){
     const names = SKILL_FX_MAP[jobId];
     if(!names) return null;
     const name = names[Math.min(skillIdx, names.length-1)];
-    const dir = JOB_FX_DIR[jobId] || jobId;
+    return skillFxSpriteByName(JOB_FX_DIR[jobId]||jobId, name, frame);
+  }
+  /* ★ v5.102: 이름+폴더 직접 지정 스킬 이펙트 로드 (영웅별 커스텀용) */
+  function skillFxSpriteByName(dir, name, frame){
     const key = dir+'/effects/'+name+'_'+String(frame||0).padStart(2,'0');
     if(SKILL_FX_CACHE[key]===undefined){
       const im = new Image();
       im.src = 'assets/heroes/'+key+'.png';
+      im.onerror=()=>{};
       SKILL_FX_CACHE[key] = im;
     }
     return SKILL_FX_CACHE[key];
@@ -1905,7 +1913,7 @@ const Battle = (()=>{
             name:sk[0], r:aoeR||50, ult:isUltimate });
           /* ★ v5.44: 발사체 이펙트 — 영웅 정면(아래)에서 발사되어 확장. */
           fx.push({ type:'skillfx', x:h.x, y:h.y+10, t:0, color:h.color, idx:useSkill,
-            jobId:HERO_FX_OVERRIDE[h.hid]||h.job.id, frame:0, ox:h.x, oy:h.y+10 });   /* ★ v5.97: 스킨 기준 이펙트 */
+            jobId:HERO_FX_OVERRIDE[h.hid]||h.job.id, hid:h.hid, frame:0, ox:h.x, oy:h.y+10 });   /* ★ v5.102: hid 추가 */
           if(isUltimate){
             shake = Math.max(shake, 0.4);
             sfx('legendary');
@@ -2343,9 +2351,12 @@ const Battle = (()=>{
           ctx.globalAlpha = 1;
         }
       }
-      /* ★ v5.43: 스킬 발사체 이펙트 스프라이트 렌더링. */
+      /* ★ v5.43→v5.102: 스킬 발사체 이펙트 — HERO_FX_NAMES로 영웅별 커스텀 이름 지원. */
       else if(f.type==='skillfx'){
-        const spr = skillFxSprite(f.jobId, f.idx, f.frame||0);
+        const fxNames = (f.hid && HERO_FX_NAMES[f.hid]) ? HERO_FX_NAMES[f.hid] : SKILL_FX_MAP[f.jobId];
+        const fxName = fxNames ? fxNames[Math.min(f.idx||0, fxNames.length-1)] : null;
+        const fxDir = JOB_FX_DIR[f.jobId] || f.jobId;
+        const spr = fxName ? skillFxSpriteByName(fxDir, fxName, f.frame||0) : null;
         if(spr && spr.complete && spr.naturalWidth>0){
           const e = f.t / 1.0;
           ctx.globalAlpha = clamp(1-e, 0, 1) * 0.9;
