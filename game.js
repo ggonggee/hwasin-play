@@ -1655,6 +1655,22 @@ const Battle = (()=>{
         }
       }
     }
+    /* ★ v5.103: HERO_FX_NAMES 커스텀 이펙트도 프리로드 (라비스 DeathSpell 등) */
+    for(const hid in HERO_FX_NAMES){
+      const jobId = HERO_FX_OVERRIDE[hid] || 'flame';
+      const dir = JOB_FX_DIR[jobId] || jobId;
+      for(const name of HERO_FX_NAMES[hid]){
+        for(let f=0; f<15; f++){
+          const key = dir+'/effects/'+name+'_'+String(f).padStart(2,'0');
+          if(SKILL_FX_CACHE[key]===undefined){
+            const im = new Image();
+            im.src = 'assets/heroes/'+key+'.png';
+            im.onerror=()=>{};
+            SKILL_FX_CACHE[key] = im;
+          }
+        }
+      }
+    }
   }
   /* ★ v4.9: 종전 0.62 는 '상시 노출되던 content-rail 을 피하려고' 좁혀둔 값이었다.
      아이콘열이 원작대로 ☰ 토글로 바뀌어 전장을 가리지 않으므로, 원작처럼 채팅 패널 직전까지 쓴다. */
