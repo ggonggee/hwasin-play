@@ -1707,10 +1707,13 @@ const Battle = (()=>{
   function layoutHeroes(){
     const p = (partySrc || party)();
     const solo = isHuntSolo();
-    const src = solo ? [p[0]] : p;               // 홈은 대표 영웅 1명만 (party()[0])
+    /* ★ v5.107: 시련의 탑(soloSurvival)은 대표 영웅 1명을 중앙에 배치 */
+    const survSolo = (dg && dg.soloSurvival);
+    const src = (solo || survSolo) ? [p[0]] : p;
+    const useCenter = solo || survSolo;
     heroes = src.map((h,i)=>{
-      const cx = solo ? W*HERO_CENTER_X : (W*0.17 + (i%2)*26);
-      const cy = solo ? H*HERO_CENTER_Y : (H*(BAND_TOP+0.20) + i*(H*0.14));
+      const cx = useCenter ? W*HERO_CENTER_X : (W*0.17 + (i%2)*26);
+      const cy = useCenter ? H*HERO_CENTER_Y : (H*(BAND_TOP+0.20) + i*(H*0.14));
       return {
         hid:h.hero_id, job:h.job, cp:heroPower(h), dmgDone:0, lvl:h.level, grade:h.grade, name:h.name||h.job.name,
         x:cx, y:cy, baseX:cx, baseY:cy,
@@ -1735,7 +1738,8 @@ const Battle = (()=>{
             지정하지 않은 콘텐츠는 1 이라 기존 전투 루프에 영향이 없다. */
          dmgMul:(cfg.dmgMul>0 ? cfg.dmgMul : 1),
          foeHeroes:cfg.foeHeroes||null,   /* ★ v5.84: 투기장 적 영웅 스프라이트 정보 */
-         moveEnabled: cfg.moveEnabled!==false };   /* ★ v5.91: 이동 활성화 (기본 true, 홈은 제외) */
+         moveEnabled: cfg.moveEnabled!==false,   /* ★ v5.91: 이동 활성화 (기본 true, 홈은 제외) */
+         soloSurvival: cfg.soloSurvival||false };   /* ★ v5.107: 중앙 서바이벌 (시련의 탑용) */
     /* ★ v5.84→v5.90: 투기장(kind:'arena') — 적 영웅 3명을 아군과 대칭되는 능력치로 생성.
        아군 영웅은 cp(전투력) + hp(0~1 비율) 구조. 적도 동일하게 cp 기반 공격력·HP.
        foeCP(매칭 전투력)를 3명에게 균등 분배 → 비슷한 능력치대의 유저와 싸우는 느낌. */
@@ -1935,7 +1939,7 @@ const Battle = (()=>{
           }
         }
         const finalDmg = Math.round(dmg * skillMul);
-        if(solo){
+        if(solo || (dg && dg.soloSurvival)){   /* ★ v5.107: soloSurvival도 홈처럼 AoE 공격 */
           /* ★ v5.96: 홈 모드에서도 원거리 영웅은 발사체 연출 추가.
              기존엔 AoE 타격만 있고 발사체 스프라이트가 안 나와서 시각적 연출 부족. */
           if(h.ranged && mobs.length){
@@ -2036,8 +2040,9 @@ const Battle = (()=>{
       /* ★ 홈 서바이벌: 몹이 영웅을 '에워싸며' 멈추는 flocking-style 이동.
          ① Arrival 감속 — 목표 거리(STANDOFF)에 가까워질수록 속도를 선형 줄여 급정거 방지.
          ② Separation — 다른 몹와 너무 가까우면 서로 밀어내 원형으로 퍼져 둘러싸기 유도.
-         던전은 이 블록 전체를 안 타고 종전대로 x만 이동(좌측 정지선 W*0.25). */
-      if(solo){
+         던전은 이 블록 전체를 안 타고 종전대로 x만 이동(좌측 정지선 W*0.25).
+         ★ v5.107: soloSurvival(시련의 탑)도 홈처럼 flocking 이동 사용. */
+      if(solo || (dg && dg.soloSurvival)){
         /* ★ v5.42: STANDOFF/분리 로직 간소화 — 몬스터가 서로 겹칠 수 있게.
            종전엔 MON_SCALE 반영으로 분리 거리가 너무 커서(68px+) 몬스터가
            서로를 밀어내며 영웅에게 다가가지 못했음.
@@ -2151,11 +2156,15 @@ const Battle = (()=>{
         dg.waveTimeLeft-=dt;
         if(dg.waveTimeLeft<=0){ endDungeon(false); return; }
         if(dg.groupLeft>0){
-          if(spawnT<=0 && mobs.length<5){ spawnDgMob(); dg.groupLeft--; dg.spawned++; spawnT=rnd(0.35,0.8); }
+          /* ★ v5.107: soloSurvival 모드는 spawnMob(사방→중앙), 일반은 spawnDgMob(우→좌) */
+          if(spawnT<=0 && mobs.length<5){
+            if(dg.soloSurvival) spawnMob(); else spawnDgMob();
+            dg.groupLeft--; dg.spawned++; spawnT=rnd(0.35,0.8);
+          }
         } else if(mobs.length===0){
           dg.waveNo++; dg.waveTimeLeft=dg.waveDur;
           dg.groupLeft=3+Math.min(9,dg.waveNo);
-          dg.foeCP=Math.round(dg.baseCP*Math.pow(1.18, dg.waveNo-1));  // 웨이브마다 +18% — 세션이 무한정 길어지지 않게
+          dg.foeCP=Math.round(dg.baseCP*Math.pow(1.18, dg.waveNo-1));
         }
       } else {
         if(!dg.bossSpawned){ spawnDgBoss(); dg.bossSpawned=true; }
@@ -4797,7 +4806,7 @@ const MODALS = {
         if(S.ticket<1){toast('입장권 부족');return;}
         S.ticket--; dailyUse('tower');                          // ★ G-76 — 차감은 [예] 이후에만
         const foe=600+w*450;
-        enterDungeonFight({ name:'불꽃의 탑', col:'#e85a2e', foeCP:foe, kind:'wave', dur:60, waveDur:60, race:true,
+        enterDungeonFight({ name:'불꽃의 탑', col:'#e85a2e', foeCP:foe, kind:'wave', dur:60, waveDur:60, race:true, soloSurvival:true,
           rewardText:'도달 웨이브 비례 보상',
           reward:(st)=>{ const reach=Math.max(1,(st&&st.wave)||1); S._tower=Math.max(S._tower||0,reach);
             const gold=reach*400000, stn=reach*3, box=Math.max(1,Math.floor(reach/2));
@@ -6500,6 +6509,7 @@ function enterDungeonFight(cfg){
   if(busyFight()) return;
   closeModal(); sysLog(`${cfg.name} 입장`); sfx('tap');
   Battle.startDungeon({ name:cfg.name, col:cfg.col, foeCP:cfg.foeCP, kind:cfg.kind, count:cfg.count, dur:cfg.dur, waveDur:cfg.waveDur,
+    soloSurvival:cfg.soloSurvival||false,
     onEnd:(win,stats)=>showDungeonResult(cfg,win,stats) });
 }
 /* ★ v4.5.1: 던전 결과창 "뭘 받았다" — 보상 함수를 하나하나 고치지 않고
