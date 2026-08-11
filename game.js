@@ -181,14 +181,84 @@ const EM_ICON_MAP = {
   '🌑':'Boss_Shadow',                // 그림자 사신
   '🦇':'Boss_Bat',                   // 몽마
   '🐉':'Boss_Dragon',                // 월드보스/용의 비늘
+  /* ★ v5.109: 화면에 이모지 그대로 남아 있던 18종을 6000FantasyIcons 로 배정.
+     원본 경로는 html/icon-pack.mjs 의 'em' 표가 정본이다(파일명 = 코드포인트). */
+  '🎒':'BagBrown',                   // 월드보스 보상 가방
+  '🔓':'Loot_54_key',                // 옵션 재설정 (해제 열쇠)
+  '🏘️':'Building_06_house',          // 마을
+  '📘':'Book2',                      // 교본·패키지
+  '⚡':'Lightning',                   // 속도·번개
+  '🔋':'Alchemy_24_energy_potion',   // 절전·에너지
+  '🔗':'Chain',                      // 외부 링크
+  '🧙':'ElfMage',                    // 마법 직업
+  '🌀':'vortex',                     // 차원·소용돌이
+  '🗼':'Tower_01',                   // 시련의 탑
+  '👑':'Crown',                      // 왕관·최상위
+  '🪪':'Quest_28_card',              // 계정 카드
+  '🔊':'MusicHorn',                  // 효과음
+  '👤':'BoldWarrior',                // 계정·프로필
+  '📊':'Enchantment_22_scroll',      // 전투력 상세 (두루마리)
 };
 function emSlug(e){ return e.replace(/[\uFE0F\u200D]/g,'').codePointAt(0).toString(16); }
+/* ★ v5.109: 이형(U+FE0F 유무)이 달라도 같은 아이콘을 찾도록 정규화 조회표를 함께 둔다.
+   코드 곳곳이 '⚔'(맨몸)과 '⚔️'(FE0F 포함)를 섞어 써서 조회가 빗나가던 자리가 있었다. */
+const EM_ICON_STRIP = {};
+Object.keys(EM_ICON_MAP).forEach(k=>{ const s=k.replace(/[️‍]/g,''); if(!EM_ICON_STRIP[s]) EM_ICON_STRIP[s]=EM_ICON_MAP[k]; });
+function emFile(e){ return EM_ICON_MAP[e] || EM_ICON_STRIP[String(e).replace(/[️‍]/g,'')] || null; }
 function eImg(e, size){
   if(!e) return '';
-  const file = EM_ICON_MAP[e];
+  const file = emFile(e);
   if(!file) return e;  // 매핑 없으면 원본 이모지
   const s = size||1.3;
   return `<img src="assets/icons/em/${emSlug(e)}.png" style="width:${s}em;height:${s}em;vertical-align:middle;object-fit:contain" alt="${e}">`;
+}
+/* ★ v5.109: 이모지→아이콘 치환의 단일 관문.
+   종전에는 화면을 그리는 코드가 eImg() 를 '기억해서' 호출해야 아이콘이 됐고, 45개 모달 중
+   상당수가 이모지를 그대로 찍고 있었다(실측 42종 잔존). 렌더가 끝난 뒤 DOM 을 한 번 훑어
+   매핑된 이모지를 <img> 로 바꾼다 — 새 화면을 추가해도 자동으로 적용된다.
+   · 입력창·캔버스·이미 <img> 인 것은 건드리지 않는다
+   · 매핑이 없는 기호(★ ⚠ ➜ ✓, 등급 색사각형)는 그대로 둔다 — 의도된 텍스트 기호다 */
+const EM_ICONIZE_RE = (()=>{
+  const keys = Object.keys(EM_ICON_MAP).map(k=>k.replace(/[️‍]/g,'')).filter(Boolean);
+  const uniq = [...new Set(keys)].sort((a,b)=>b.length-a.length)
+    .map(k=>k.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'));
+  return uniq.length ? new RegExp('(?:' + uniq.join('|') + ')\\uFE0F?', 'gu') : null;
+})();
+const EM_SKIP_TAGS = { INPUT:1, TEXTAREA:1, SCRIPT:1, STYLE:1, CANVAS:1, IMG:1, SELECT:1 };
+function iconizeEmoji(root, size){
+  if(!root || !EM_ICONIZE_RE) return;
+  if(typeof document==='undefined' || !document.createTreeWalker || typeof NodeFilter==='undefined') return;
+  try{
+    const s = size || 1.15;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+    const targets = [];
+    for(let n=walker.nextNode(); n; n=walker.nextNode()){
+      const p = n.parentNode;
+      if(!p || EM_SKIP_TAGS[p.tagName]) continue;
+      if(p.closest && p.closest('[data-noicon]')) continue;
+      EM_ICONIZE_RE.lastIndex = 0;
+      if(EM_ICONIZE_RE.test(n.nodeValue||'')) targets.push(n);
+    }
+    for(const n of targets){
+      const text = n.nodeValue, frag = document.createDocumentFragment();
+      let last = 0; EM_ICONIZE_RE.lastIndex = 0;
+      for(let m; (m = EM_ICONIZE_RE.exec(text)); ){
+        if(m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+        const img = document.createElement('img');
+        img.src = 'assets/icons/em/' + emSlug(m[0]) + '.png';
+        img.alt = m[0];
+        img.style.cssText = 'width:'+s+'em;height:'+s+'em;vertical-align:middle;object-fit:contain';
+        frag.appendChild(img);
+        last = m.index + m[0].length;
+      }
+      if(last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+      n.parentNode.replaceChild(frag, n);
+    }
+  }catch(e){
+    /* 치환 실패는 표시 품질 문제일 뿐이라 게임 진행은 막지 않는다.
+       다만 조용히 삼키면 배포 후 아무 흔적도 남지 않으므로 콘솔에는 반드시 남긴다. */
+    try{ console.warn('[iconizeEmoji] 치환 실패:', e); }catch(_){}
+  }
 }
 // 보유 수량 = 그 재료 하나. 공용풀 합산 없음(위 주석 참조).
 function matAvail(k){ return MAT_BY_KEY[k] ? (S.mats[k]||0) : 0; }
@@ -3326,9 +3396,11 @@ function updateGuideBanner(){
   if(!S.seenTutorial || S.guideStep>=GUIDE_CHAIN.length){ bn.classList.add('hidden'); return; }
   const g=GUIDE_CHAIN[S.guideStep], need=GUIDE_NEED[S.guideStep]||1, prog=S.guideProg||0;
   bn.classList.remove('hidden');
-  const ic=$('#gbGoal'); if(ic) ic.textContent=g.goalIcon;
+  /* ★ v5.109: 길잡이 목표 아이콘도 아이콘 팩을 쓴다(종전엔 이모지 그대로 노출).
+     목표는 언제나 '제작할 장비'라 부위 아이콘(equipImg)이 goalIcon 이모지보다 정확하다. */
+  const ic=$('#gbGoal'); if(ic) ic.innerHTML = g.slot ? equipImg(g.slot, 1.15) : eImg(g.goalIcon, 1.15);
   $('#gbTxt').textContent=`길잡이 ${S.guideStep+1}/${GUIDE_CHAIN.length} · ${g.name} 제작${need>1?` (${prog}/${need})`:''}`;
-  const ri=$('#gbRwIc'); if(ri) ri.textContent=g.rewardIcon;
+  const ri=$('#gbRwIc'); if(ri) ri.innerHTML=eImg(g.rewardIcon, 1.15);   // ★ v5.109
   const rq=$('#gbRwQty'); if(rq) rq.textContent='X'+fmt(g.rewardQty);
 }
 // ★ 길잡이 실제 추적 — 9단계 전부 '제작 성공'만으로 진행된다 (합성·각성·투기장 조건 없음)
@@ -3364,7 +3436,7 @@ function openModal(key, arg){   // ★ B3/G-45: arg 전달 (예: openModal('equi
      (하위 화면들이 자기 자신을 openModal 로 다시 열어 새로고침하는 패턴을 그대로 살리기 위함) */
   if(_subKey===key){
     const bd=$('#modal-root .sub-body');
-    if(bd){ const st=bd.scrollTop; bd.innerHTML=''; def.render(bd, arg===undefined?_subArg:arg); bd.scrollTop=st; return; }
+    if(bd){ const st=bd.scrollTop; bd.innerHTML=''; def.render(bd, arg===undefined?_subArg:arg); iconizeEmoji(bd); bd.scrollTop=st; return; }
   }
   if(_subKey) closeSub();   // 다른 화면으로 이동하면 하위 오버레이는 닫는다
   const body = $('#modalBody');
@@ -3374,6 +3446,7 @@ function openModal(key, arg){   // ★ B3/G-45: arg 전달 (예: openModal('equi
   setModalTitle(def.title);
   const holder = document.createElement('div');
   def.render(holder, arg);
+  iconizeEmoji(holder);   // ★ v5.109: 붙이기 전에 한 번에 아이콘화
   body.replaceChildren(...holder.childNodes);
   // 같은 모달이면 보던 위치를 지키고, 다른 모달로 옮기면 반드시 맨 위에서 시작한다.
   // (replaceChildren 은 scrollTop 을 건드리지 않아 명시적으로 0 을 넣어야 한다)
@@ -3408,6 +3481,7 @@ function openSub(key, arg){
   ov.onclick=e=>{ if(e.target===ov) closeSub(); };
   root.appendChild(ov);
   def.render(bd, arg);
+  iconizeEmoji(bd);   // ★ v5.109
   return ov;
 }
 let _subArg=null;
@@ -3434,6 +3508,7 @@ function b2Overlay(title, build){
   const bd=el('div'); pop.appendChild(bd);
   const close=()=>ov.remove();
   build(bd, close);
+  iconizeEmoji(bd);   // ★ v5.109: 제작결과·아이템상세·확인창 등 오버레이도 동일 관문을 지난다
   ov.appendChild(pop); ov.onclick=e=>{ if(e.target===ov) close(); };
   root.appendChild(ov); return ov;
 }
@@ -3723,12 +3798,12 @@ const MODALS = {
       // G-32: 5열 × 3행(24종) 보유 재료 그리드
       const g=el('div','synth-grid');
       MATS.forEach(m=>{ const c=el('div','synth-cell'+(m.k===sel?' on':'')); c.title=m.k;
-        c.innerHTML=`<div class="si">${eImg(m.ic,1.5)}</div><div class="sc">${fmt(matAvail(m.k))}</div>`;
+        c.innerHTML=`<div class="si">${matIcon(m.k,1.5)}</div><div class="sc">${fmt(matAvail(m.k))}</div>`;
         c.onclick=()=>{ sel=m.k; sfx('tap'); rd(); }; g.appendChild(c); });
       body.appendChild(g);
       const m=MAT_BY_KEY[sel], tg=nextOf(sel), p=tg?rateOf(tg.g):0;
       const flow=el('div','synth-flow');
-      flow.innerHTML=`<div class="sf">${eImg(m.ic,1.5)}</div><div class="ar">➜</div><div class="sf">${tg?tg.ic:'🚫'}</div>`;
+      flow.innerHTML=`<div class="sf">${matIcon(m.k,1.5)}</div><div class="ar">➜</div><div class="sf">${tg?matIcon(tg.k,1.5):'🚫'}</div>`;
       body.appendChild(flow);
       body.appendChild(el('div','center small',
         `${m.k} <span class="mut">(${GRADES[m.g].name})</span> → ` +
@@ -3750,7 +3825,7 @@ const MODALS = {
         b2Confirm('확정 합성',
           `<div class="big">확정 합성 하시겠습니까?</div>
            <div class="b2-warnline">*합성시 재료 500개가 소모됩니다*</div>
-           <div class="small mut" style="margin-top:4px">${eImg(m.ic,1.5)} ${m.k} X${fmt(500*n)} → ${eImg(tg.ic,1.5)} ${tg.k} X${n}</div>`,
+           <div class="small mut" style="margin-top:4px">${matIcon(m.k,1.5)} ${m.k} X${fmt(500*n)} → ${matIcon(tg.k,1.5)} ${tg.k} X${n}</div>`,
           ()=>{ if(matAvail(sel)<500*n){ toast('재료가 부족합니다.'); return; }
                 for(let i=0;i<n;i++){ matSpend(sel,500); matGain(tg.k,1); }
                 S.stats.synths=(S.stats.synths||0)+n; sfx('craft');
@@ -4178,7 +4253,7 @@ const MODALS = {
       tabs.appendChild(t); });
     b.appendChild(tabs);
 
-    const wrap=el('div'); wrap.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:8px';
+    const wrap=el('div'); wrap.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px';
     const rankBox=el('div'); const info=el('div');
     wrap.append(rankBox, info); b.appendChild(wrap);
 
@@ -4530,7 +4605,7 @@ const MODALS = {
     // 재료 24칸 (4행×6열)
     const mg=el('div','mat-grid24'); mg.style.marginTop='8px';
     MATS.forEach(m=>{ const c=el('div','cell gframe grade-'+m.g); c.style.setProperty('--gc',GRADES[m.g].color);
-      c.innerHTML=`<div class="ei">${eImg(m.ic,1.5)}</div><div class="cn">${m.k}</div><div class="mq">${fmt(S.mats[m.k]||0)}</div>`;
+      c.innerHTML=`<div class="ei">${matIcon(m.k,1.5)}</div><div class="cn">${m.k}</div><div class="mq">${fmt(S.mats[m.k]||0)}</div>`;
       c.onclick=()=>toast(`${m.k} · 보유 ${fmt(S.mats[m.k]||0)} (등급풀 포함 가용 ${fmt(matAvail(m.k))})`);
       mg.appendChild(c); });
     b.appendChild(mg);
@@ -4979,7 +5054,7 @@ const MODALS = {
     b.appendChild(g);
     // ⑤ 2분할 카드 — 1분당 획득 골드 / 오프라인 골드 (누적 시간 mm:ss)
     const offSec=Math.min(8*3600, Math.floor((S.offlinePending||0)/1000*60));
-    const two=el('div'); two.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0';
+    const two=el('div'); two.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin:10px 0';
     two.innerHTML=`<div class="gframe" style="padding:10px;text-align:center"><div class="small mut">1분당 획득 골드</div><div style="font-size:15px;font-weight:800;color:var(--gold)">${fmt(rate)} G</div></div>
       <div class="gframe" style="padding:10px;text-align:center"><div class="small mut">오프라인 골드 ${mmss(offSec)}</div><div style="font-size:15px;font-weight:800;color:var(--gold)">${fmt(S.offlinePending||0)} G</div></div>`;
     b.appendChild(two);
@@ -5339,7 +5414,7 @@ const MODALS = {
         <span style="font-weight:800;color:var(--txt-hi)">${p.t}</span>
         ${bought?'<span class="small" style="color:var(--ok)">구매완료</span>':''}
         <span style="margin-left:auto;font-weight:800;color:${p.cost?'#e05aa0':'var(--ok)'}">${p.cost?`${eImg("💎",2)} ${p.cost.toLocaleString('ko-KR')}`:'무료'}</span></div>`));
-      const g=el('div'); g.style.cssText='display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin:8px 0';
+      const g=el('div'); g.style.cssText='display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin:8px 0';
       p.items.forEach(([ic,nm])=>{ const c=el('div','cell gframe'); c.style.padding='5px';
         c.innerHTML=`<div class="ei" style="font-size:20px">${eImg(ic,2)}</div><div class="cn" style="font-size:9px;line-height:1.3">${nm}</div>`; g.appendChild(c); });
       card.appendChild(g);
@@ -6388,7 +6463,7 @@ function arenaResult(win, foeName, foeCP, foeTier){
   b.appendChild(el('div','ar-session',`${S.arenaSession.w}승 ${S.arenaSession.l}패`));
   b.appendChild(el('div','result-card',`<div class="rc-icon">${win?eImg("🏆",2):'💥'}</div><div class="rc-title ${win?'win':'lose'}">${win?'WIN':'Loss'}</div><div class="small mut">vs ${foeName} · ${foeTier||''} (전투력 ${fmt(foeCP)})</div>`));
   // 변경 전 → 변경 후 2열 (원작 결과창)
-  const cmp=el('div'); cmp.style.cssText='display:grid;grid-template-columns:1fr auto 1fr;gap:6px;margin:8px 0;text-align:center;align-items:center';
+  const cmp=el('div'); cmp.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:6px;margin:8px 0;text-align:center;align-items:center';
   // ★ v4.8: 원작 비교란은 점수 / 티어 / 연승 3줄뿐이다. '순위' 는 우리가 임의로 넣은 4번째 줄이라 뺀다.
   cmp.innerHTML=`<div class="small mut">${before.pts}점<br>${TIERS[before.tier]}<br>${before.streak}연승</div>
     <div style="color:var(--frame-lit);font-size:16px">▶</div>

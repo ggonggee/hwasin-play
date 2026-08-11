@@ -5,21 +5,28 @@
    ========================================================================= */
 
 :root{
+  /* ★ v5.110: 그리드 칸이 콘텐츠 최소폭에 밀려 안 줄어드는 것을 막기 위해
+     1fr → minmax(0,1fr) 로 통일했다. 폰트를 키우자 투기장 랭킹 칸이 118px/392px 로
+     벌어져 화면 밖으로 밀려나간 것이 실제 증상이었다. */
   --g-normal:#9aa0a6; --g-rare:#3f7fe0; --g-epic:#a855f7; --g-legend:#f2b23a;
   --gold:#e8c15a; --ruby:#c8324b; --gray-coin:#c9cdd4; --dice:#7fb2e8;
   --ink:#0a0807; --panel:#171009; --panel2:#241a10;
   --stone-0:#0d0b09; --stone-1:#171310; --stone-2:#221a12; --stone-3:#2e2417;
   --frame:#6b5636; --frame-lit:#c2a05e; --frame-dk:#3a2c19;
-  --txt:#eaddc4; --txt-dim:#a2937a; --txt-hi:#f6ecd4;
+  --txt:#f0e5cf; --txt-dim:#bcac8f; --txt-hi:#fbf3e0;   /* ★ v5.110: 본문·보조 텍스트 대비 상향 */
   --ember:#ff7a2e; --ok:#5ecb6a; --bad:#df4b3a; --warn:#f0a24a;
   /* 타이포 스케일 — 40대 노안 기준. 본문 14px 최소. 토큰화(v5.9.1). */
-  /* 타이포 스케일 — 453×852 내부 기준. transform:scale 로 화면에 맞춰 확대 표시됨. */
-  --fs-xs: 11px;   /* 배지/태그/장식 */
-  --fs-sm: 12px;   /* 라벨/메타/힌트 */
-  --fs-base:14px;  /* 본문/기본 */
-  --fs-md: 15px;   /* 본문 강조 */
-  --fs-lg: 17px;   /* 모달 헤드 */
-  --fs-xl: 22px;   /* 섹션 타이틀 */
+  /* 타이포 스케일 — 453×852 내부 기준. transform:scale 로 화면에 맞춰 확대 표시됨.
+     ★ v5.110 전면 상향(+18~27%). 근거: 무대는 폰에서 0.75~0.86배로 축소돼 표시되므로
+     내부 14px 는 실제 폰 화면에서 11~12px 로 떨어진다 — 레퍼런스(불칸)나 동종 웹게임의
+     본문이 실측 14~16px 인 것에 비해 확연히 작았다. 내부 기준을 올려 실기기에서
+     본문이 13~14px 대로 오게 맞춘다. 기기별 편차 없이 모든 화면에 동일 적용. */
+  --fs-xs: 14px;   /* 배지/태그/장식 */
+  --fs-sm: 15px;   /* 라벨/메타/힌트 */
+  --fs-base:17px;  /* 본문/기본 */
+  --fs-md: 19px;   /* 본문 강조 */
+  --fs-lg: 22px;   /* 모달 헤드 */
+  --fs-xl: 28px;   /* 섹션 타이틀 */
 }
 *{ box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
 html,body{ height:100%; }
@@ -184,7 +191,8 @@ body{
 .ci{ flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; cursor:pointer; padding:3px 0;
   border:1px solid var(--frame); border-radius:6px; background:linear-gradient(180deg,#241a12,#140f0a); }
 .ci:active{ filter:brightness(1.3); }
-.ci .gi{ font-size:var(--fs-xl); filter:drop-shadow(0 1px 2px #000); } .ci span{ font-size:var(--fs-xs); color:#c9bb9c; white-space:nowrap; }
+.ci .gi{ font-size:var(--fs-xl); filter:drop-shadow(0 1px 2px #000); }
+.ci span{ font-size:var(--fs-xs); color:#e4d7b8; font-weight:600; white-space:nowrap; text-shadow:0 1px 2px #000; }   /* ★ v5.110 */
 
 /* --- 채팅 --- */
 /* ★ v5.13: 453 기준. 반투명 다크 + InputField 에셋. */
@@ -197,7 +205,7 @@ body{
 #chat .skills{ position:absolute; right:8px; top:5px; display:flex; gap:3px; }
 .sk{ width:24px; height:24px; border-radius:5px; border:1px solid var(--frame); font-size:var(--fs-base); display:flex; align-items:center; justify-content:center;
   background:radial-gradient(circle at 40% 30%,#6a4b8f,#241436); box-shadow:inset 0 0 6px rgba(0,0,0,.5); }
-#chat .log{ flex:1; overflow-y:auto; padding:5px 8px; font-size:var(--fs-sm); line-height:1.5; }
+#chat .log{ flex:1; overflow-y:auto; padding:6px 9px; font-size:var(--fs-sm); line-height:1.75; }   /* ★ v5.110: 줄 간격 확대 */
 #chat .log .who{ font-weight:700; } #chat .log .rank{ color:var(--gold); }
 #chat .log .lgd{ color:var(--g-legend);} #chat .log .epi{ color:var(--g-epic);} #chat .log .rar{ color:var(--g-rare);}
 #chat .inputrow{ display:flex; align-items:center; gap:6px; padding:5px 8px; border-top:1px solid #262019; }
@@ -217,7 +225,8 @@ body{
 .nav{ flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; cursor:pointer; padding:4px 4px 5px;
   border:1px solid var(--frame); border-radius:7px; background:linear-gradient(180deg,#1f1810,#15100b);
   justify-content:flex-end; }
-.nav .gi{ font-size:23px; filter:drop-shadow(0 1px 2px #000); } .nav span{ font-size:var(--fs-sm); color:#c9bb9c; }
+.nav .gi{ font-size:23px; filter:drop-shadow(0 1px 2px #000); }
+.nav span{ font-size:var(--fs-sm); color:#e4d7b8; font-weight:600; text-shadow:0 1px 2px #000,0 0 3px rgba(0,0,0,.8); }   /* ★ v5.110 */
 .nav:active{ filter:brightness(1.4); }
 .nav.center{ flex:0 0 auto; margin:0 1px; padding:4px 6px; }
 .nav.center .anvil{ width:64px; height:64px; border-radius:50%; margin-top:-20px; border:2px solid #8a6a38;
@@ -257,7 +266,7 @@ body{
 
 /* 그리드/셀 */
 .grid{ display:grid; gap:8px; }
-.grid.c3{ grid-template-columns:repeat(3,1fr);} .grid.c4{ grid-template-columns:repeat(4,1fr);} .grid.c5{ grid-template-columns:repeat(5,1fr);}
+.grid.c3{ grid-template-columns:repeat(3,minmax(0,1fr));} .grid.c4{ grid-template-columns:repeat(4,minmax(0,1fr));} .grid.c5{ grid-template-columns:repeat(5,minmax(0,1fr));}
 .cell{ aspect-ratio:1; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; padding:4px; position:relative; }
 .cell .ei{ font-size:30px; filter:drop-shadow(0 2px 3px #000); } .cell .cn{ font-size:var(--fs-sm); color:#cdbf9f; margin-top:2px; text-align:center; line-height:1.1; }
 .cell .lvl{ position:absolute; bottom:2px; right:4px; font-size:var(--fs-sm); color:#f0d59a; font-weight:700; }
@@ -292,7 +301,7 @@ body{
   background:linear-gradient(180deg,#221a12,#120d09); border:1px solid var(--frame); border-radius:6px; }
 
 /* ===== 대장간 (등급탭 × 부위 매트릭스) ===== */
-.forge-grid{ display:grid; grid-template-columns:1fr 128px; gap:8px; }
+.forge-grid{ display:grid; grid-template-columns:minmax(0,1fr) 128px; gap:8px; }
 /* minmax(0,1fr) 필수 — 1fr의 자동 최소값은 min-content라, 셀 내용(이모지)이 크면 트랙이
    컨테이너보다 넓어져 5열이 가로 스크롤 1열처럼 깨진다(실브라우저 측정: 195px 칸에 205px 트랙). */
 .forge-items{ display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:4px; max-height:210px; overflow-y:auto; overflow-x:hidden; }
@@ -356,7 +365,7 @@ body{
 
 /* ★ B7/F1 — 상점 '영웅' 탭 개별 영웅 조각 카드 (2열 그리드 · 리본 2단가)
    원작 재판독 cardLayout: 컬러 리본 헤더 → 좌 초상 / 우 명칭+가격 → 폭 전체 [구매] 1개 */
-.shard-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }
+.shard-grid{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px; margin-top:8px; }
 .shard-card{ display:flex; flex-direction:column; overflow:hidden; border-radius:9px;
   background:linear-gradient(180deg,#20180f,#140f0a); border:1px solid var(--frame-dk); }
 .shard-card .sc-ribbon{ font-size:var(--fs-xs); font-weight:800; letter-spacing:-.02em; text-align:center;
@@ -377,7 +386,7 @@ body{
 .shard-card .sc-buy{ margin:0 7px 7px; width:calc(100% - 14px); }
 
 /* 편성 2x2 */
-.formation{ display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:8px; }
+.formation{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:10px; padding:8px; }
 .fslot{ aspect-ratio:1; border-radius:50%; border:2px solid #5a4a2e; position:relative;
   background:radial-gradient(circle at 50% 35%,#2a2016,#120d09); display:flex; flex-direction:column; align-items:center; justify-content:center; }
 .fslot .ei{ font-size:28px; } .fslot .fn{ font-size:var(--fs-sm); color:#cdbf9f; margin-top:2px; }
@@ -501,7 +510,7 @@ body{
 .mult-sel .ma{ cursor:pointer; font-size:var(--fs-sm); color:var(--txt-hi); border:1px solid var(--frame-dk); border-radius:4px; padding:0 5px; }
 
 /* ===================== [B3] 장비·인벤·코스튬 전용 ===================== */
-.grid.c2{ grid-template-columns:repeat(2,1fr); }
+.grid.c2{ grid-template-columns:repeat(2,minmax(0,1fr)); }
 
 /* 영웅 전환 헤더 (G-45) */
 .eq-heroswitch{ display:flex; align-items:center; gap:6px; margin-bottom:8px; }
@@ -882,7 +891,7 @@ body{
   border:1px solid var(--gc,var(--frame)); background:linear-gradient(180deg,#2c2217,#140e09); }
 .boss-card .bc-n{ font-size:var(--fs-base); font-weight:800; color:var(--gc,var(--txt-hi)); }
 .boss-card .bc-g{ font-size:var(--fs-sm); color:#a99a7d; margin-top:2px; }
-.boss-card .bc-mats{ display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(2,1fr);
+.boss-card .bc-mats{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); grid-template-rows:repeat(2,1fr);
   gap:4px; margin-top:7px; }
 .boss-card .bc-mat{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
   padding:4px 2px; border-radius:6px; border:1px solid var(--frame-dk); background:rgba(0,0,0,.28); }
@@ -1051,7 +1060,7 @@ body{
 
 /* G-87: 대전 화면 DOM 3분할 헤더 (좌 내 닉/점수 · 중앙 mm:ss · 우 상대 닉/티어).
    §4-3 — 내 티어는 헤더에 넣지 않는다. 전투 중에는 좌상단 시계 팟을 가린다. */
-.ar-head{ position:absolute; left:0; right:0; top:0; z-index:6; display:grid; grid-template-columns:1fr auto 1fr;
+.ar-head{ position:absolute; left:0; right:0; top:0; z-index:6; display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
   align-items:center; gap:6px; padding:7px 8px 9px; pointer-events:none;
   background:linear-gradient(180deg,rgba(12,8,5,.97),rgba(12,8,5,.92)); border-bottom:1px solid #4a2320; }
 .ar-head .ah-side{ min-width:0; line-height:1.2; }
