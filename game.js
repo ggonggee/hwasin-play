@@ -1,6 +1,6 @@
 /* =========================================================================
-   화신 (火神) — 2D HTML 게임 엔진
-   레퍼런스(벤치마크 방치 RPG) UI 구조·흐름 참고 / 콘텐츠·명칭·아트는 화신 오리지널.
+   결정의 시대 (Age of Decision) — 2D HTML 게임 엔진
+   레퍼런스(벤치마크 방치 RPG) UI 구조·흐름 참고 / 콘텐츠·명칭·아트는 결정의 시대 오리지널.
    확정 수치(2라운드 시뮬): 각성 +1.5%/12단계·조각 250×1.08^(n-1),
    등급배율 N1.0/R1.6/E2.8/L4.5, 제작확률 R85/E55/L40, 입장권 상한 30,
    마을 cost=100×lv^1.3·마을회관 골드버프 +0.2%p/Lv 등.
@@ -33,7 +33,7 @@ const GORDER = ['N','R','E','L'];
    구세이브(직업키 {grade,level,own})는 migrateHeroes() 가 hero_id 구조로 변환한다.
    조각(S.shards)은 지금까지처럼 '직업' 단위로 유지된다 — 같은 직업의 상위 등급 영웅을
    합성으로 해금할 때 소모한다(heroFuse). */
-/* ★ F3 · IP 세탁 예방 — 이 표의 인명은 전부 화신 오리지널 조어여야 한다.
+/* ★ F3 · IP 세탁 예방 — 이 표의 인명은 전부 결정의 시대 오리지널 조어여야 한다.
    원작 영웅명 음차는 물론, 타사 게임 캐릭터의 국문 공식표기와 겹치는 조어도 금지다
    (교체 이력: 베인·리나·녹스·모르간·클라리스 → 타사 캐릭터 국문표기 충돌로 폐기). */
 const HERO_NAMES = {
@@ -106,7 +106,7 @@ const MATS = [
   { k:'용접기',        ic:'🔧', g:'R', icon:'hammer' },   { k:'은사슬',   ic:'⛓️', g:'R', icon:'ring' },       { k:'서리결정', ic:'❄️', g:'R', icon:'snowflake' },
   { k:'최상급 마법서', ic:'📘', g:'E', icon:'book' },     { k:'대장장이의 눈물', ic:'💠', g:'E', icon:'water' }, { k:'심연광석', ic:'🟣', g:'E', icon:'gem_purple' },
   { k:'불멸의 뿌리',   ic:'🌿', g:'E', icon:'leaf' },     { k:'영혼석',   ic:'👻', g:'E', icon:'soul' },       { k:'천공수정', ic:'💎', g:'E', icon:'crystal' },
-  { k:'화신의 심장',   ic:'❤️‍🔥', g:'L', icon:'heart' },   { k:'용의 비늘', ic:'🐉', g:'L', icon:'feather' },   { k:'태초의 불씨', ic:'🔥', g:'L', icon:'fire' },
+  { k:'결정의 심장',   ic:'❤️‍🔥', g:'L', icon:'heart' },   { k:'용의 비늘', ic:'🐉', g:'L', icon:'feather' },   { k:'태초의 불씨', ic:'🔥', g:'L', icon:'fire' },
   { k:'성좌파편',      ic:'✨', g:'L', icon:'star' },     { k:'무명의 각인', ic:'🔱', g:'L', icon:'rune' },     { k:'금강석',    ic:'🧿', g:'L', icon:'gem_red' },
 ];
 const MAT_BY_KEY = {}; MATS.forEach(m=>MAT_BY_KEY[m.k]=m);
@@ -233,17 +233,17 @@ const FORGE_SLOTS = [
       N:[['잿불 단검','🗡️'],['흑철 대검','⚔️'],['전투도끼','🪓'],['비전 지팡이','🪄'],['강궁','🏹']],
       R:_PFX('청강',_WEAPON5).concat([['서리 창','🔱'],['은빛 낫','🪒']]),
       E:_PFX('심연',_WEAPON5).concat(_PFX('심연',_WEAPON_X)),   // 실측 8
-      L:_PFX('화신',_WEAPON5) } },
+      L:_PFX('결정',_WEAPON5) } },
   { k:'방어구', ic:'🛡️', items:{
       N:_ARMOR10.slice(0,5),
       R:_PFX('청강',_ARMOR10).concat(_PFX('청강',_ARMOR_X.slice(0,2))),      // 실측 12
       E:_PFX('심연',_ARMOR10).concat(_PFX('심연',_ARMOR_X)),                  // 실측 15
-      L:_PFX('화신',_ARMOR10).concat(_PFX('성좌',_ARMOR10), _PFX('성좌',_ARMOR_X)) } },  // 실측 25+
+      L:_PFX('결정',_ARMOR10).concat(_PFX('성좌',_ARMOR10), _PFX('성좌',_ARMOR_X)) } },  // 실측 25+
   { k:'장신구', ic:'💍', items:{
       N:_ACC3,
       R:_PFX('청옥',_ACC3),
       E:_PFX('심연',_ACC5).concat(_PFX('심연',_ACC_X)),   // 실측 7
-      L:_PFX('화신',_ACC5).concat(_PFX('성좌',_ACC5)).concat([['용린 반지','💍'],['용린 목걸이','📿'],['용린 인장','🔖']]) } },
+      L:_PFX('결정',_ACC5).concat(_PFX('성좌',_ACC5)).concat([['용린 반지','💍'],['용린 목걸이','📿'],['용린 인장','🔖']]) } },
   { k:'특수', ic:'📖', items:{
       N:[['고서','📖'],['정수','🔮'],['물약','🧪'],['곡괭이','⛏️']],
       R:[['청류 고서','📖'],['청류 정수','🔮'],['상급 물약','🧪'],['오래된 곡괭이','⛏️'],['마력 나침반','🧭'],['소환 부적','🎴']],
@@ -284,7 +284,7 @@ function itemFlavor(name){
   if(n.indexOf('곡괭이')>=0) return '채굴 칭호 획득 조건 아이템';
   return '마법 공격력·치명타 확률·치명타 공격력·공격 속도 상승';
 }
-/* 세트효과 9종 — 화신 오리지널 명칭 (레퍼런스 명칭 미사용). 임계값·효과 문구는 원작 도감 구조 그대로.
+/* 세트효과 9종 — 결정의 시대 오리지널 명칭 (레퍼런스 명칭 미사용). 임계값·효과 문구는 원작 도감 구조 그대로.
    ★ A2 정정 — 종전 B3/G-49 의 `half`(2/4 소효과 = 4/4 의 40%) 2단계 설계는 원작 오독이었다. 폐기한다.
      원작 세트효과 도감 실측(직접 판독):
        docs/reference/기능별/11_설정_도움말_버프/캡처_2026_07_22_06_35_51_171.png (1~3번 카드)
@@ -345,7 +345,7 @@ function activeSets(){ return SETS.map(st=>({ n:st.n, c:setPieceCount(st.n) })).
 function setFxSummary(s){ const t=s.tiers[s.tiers.length-1]; return `${t.k}세트: ${t.fx[0]}`; }
 /* ★ v5.7: 세트별 구성 아이템 확정.
    원작 도감은 카드마다 아이콘 6칸(작열만 더 많음)을 보여주는데, 아이콘을 눌러도 이름이 뜨지 않아
-   (대표 확인) 원작의 실제 구성품을 알아낼 방법이 없다 → **화신 자체 결정**으로 확정한다.
+   (대표 확인) 원작의 실제 구성품을 알아낼 방법이 없다 → **자체 결정**으로 확정한다.
 
    설계 원칙
      · 세트 1벌 = 서로 다른 부위 6종 (원작 카드 아이콘 6칸과 일치). 작열만 8종(3/6/8 3단계).
@@ -363,11 +363,11 @@ const SET_PIECES = {
   '응시':   ['심연 투구','심연 상의','심연 하의','심연 신발','심연 방패','심연 장궁'],
   '광란':   ['심연 견갑','심연 각반','심연 완갑','심연 망토','심연 벨트','심연 대검'],
   '그늘칼': ['심연 면갑','심연 흉갑','심연 정강이받이','심연 손목보호대','심연 어깨받이','심연 쌍검'],
-  // 레전더리 — 마법(화신) / 수호(성좌) / 최상위 8종(작열)
-  '주술':   ['화신 투구','화신 상의','화신 하의','화신 신발','화신 방패','화신 지팡이'],
+  // 레전더리 — 마법(결정) / 수호(성좌) / 최상위 8종(작열)
+  '주술':   ['결정 투구','결정 상의','결정 하의','결정 신발','결정 방패','결정 지팡이'],
   '강철맹세':['성좌 투구','성좌 상의','성좌 하의','성좌 신발','성좌 방패','성좌 견갑'],
-  '작열':   ['화신 견갑','화신 각반','화신 완갑','화신 망토','화신 벨트',
-             '화신 단검','화신 대검','화신 도끼'],
+  '작열':   ['결정 견갑','결정 각반','결정 완갑','결정 망토','결정 벨트',
+             '결정 단검','결정 대검','결정 도끼'],
 };
 function setPieceCount(name){
   const list = SET_PIECES[name];
@@ -450,10 +450,10 @@ function statLine(key, enh, gmult){
    변경 시 반드시 migrateNames() 의 COSTUME_ID_MIGRATE 에 구→신 매핑을 추가할 것.
    flame/frost/gold 는 구버전 계정버프 3종의 호환 id 이다.
    ★ F3 · IP 세탁 — 구 id(lycan·nova·bargon·carmilla·seraphin)는 타사 게임 캐릭터 표기와
-   충돌하는 음차였다 → 화신 오리지널 표기(월영·홍염·수림·한서리·창해)로 전면 교체. */
+   충돌하는 음차였다 → 결정의 시대 오리지널 표기(월영·홍염·수림·한서리·창해)로 전면 교체. */
 const COSTUMES = [
   /* 판매 5종 = ★ B7/F1: 원작 재판독이 지목한 '영웅 전용 코스튬 확정구매' 위치(코스튬 탭, 5장·각 3,400루비).
-     hero = 전용 대상 영웅(HERO_ROSTER 정본 hero_id). 명칭·id 는 전부 화신 오리지널. */
+     hero = 전용 대상 영웅(HERO_ROSTER 정본 hero_id). 명칭·id 는 전부 결정의 시대 오리지널. */
   { id:'wolyeong',  name:'월영 사냥 예복',   heroId:'shadow', hero:'HERO_009', icon:'💀', kind:'atk',  fx:'물리 공격력 +10%',          price:3400, owned:false },
   { id:'hongyeom',  name:'홍염 축제 예복',   heroId:'flame',  hero:'HERO_006', icon:'🦊', kind:'atk',  fx:'물리 공격력 +10%',          price:3400, owned:false },
   { id:'surim',     name:'수림 수호 예복',   heroId:'earth',  hero:'HERO_008', icon:'🌿', kind:'hp',   fx:'체력 +10%',                 price:3400, owned:false },
@@ -729,7 +729,7 @@ let MONSTERS = [];
    전투력 사다리는 등급 안에서 완만하게만 오르게 두어 기존 성장 곡선을 유지한다.
    ★ v5.9 정정 — 원작 실측(전량판독·UI카탈로그): 등급당 ~5종(고유명), "30마리"는 마릿수 선택기.
      종전 pre×base 조합의 등급당 30종(총 120종)은 "30마리"를 도감 종 수로 오독한 것이었다.
-     등급당 5종(총 20종) 고유명으로 축소. 명칭은 화신 세계관 오리지널 조어(타사 IP 미사용).
+     등급당 5종(총 20종) 고유명으로 축소. 명칭은 결정의 시대 세계관 오리지널 조어(타사 IP 미사용).
      각 몬스터는 5직업에 1:1 대응하고 고정 드랍 재료 1종을 갖는다. */
 /* ★ v5.25: 몬스터 스프라이트 — 2D Pixel-RPGMonstersIcon 에셋 매핑.
    각 몬스터 이름의 분위기(해골/짐승/동굴/얼음/악마 등)와
@@ -828,26 +828,26 @@ const GOLD_DUNGEON = [
 /* ★ B5/G-70: 월드보스 서버 랭킹 — 원작은 스크롤되는 대형 랭킹표(길드태그 컬럼 포함).
    29명 고정 데이터 + 내 기록 1행 = 30행. */
 const WB_RANK = [
-  ['불철','화신단',1288400],['무쇠손','철혈',940200],['청염','화신단',862300],['잿불','잿더미',781500],
+  ['불철','결정단',1288400],['무쇠손','철혈',940200],['청염','결정단',862300],['잿불','잿더미',781500],
   ['대장장이K','철혈',742100],['로엔','새벽단',701800],['서리검','서리맹',668400],['재의노래','잿더미',640900],
-  ['강철심','철혈',612500],['불꽃술사','화신단',588200],['흑야','그림자',561700],['백랑','새벽단',540300],
+  ['강철심','철혈',612500],['불꽃술사','결정단',588200],['흑야','그림자',561700],['백랑','새벽단',540300],
   ['적묘','잿더미',519800],['현무','서리맹',498600],['월광','그림자',477200],['풍백','새벽단',455900],
-  ['운해','화신단',434100],['묵검','철혈',412700],['설야','서리맹',391300],['홍련','잿더미',369800],
-  ['천추','그림자',348400],['벽라','새벽단',327000],['금강','철혈',305600],['자하','화신단',284200],
+  ['운해','결정단',434100],['묵검','철혈',412700],['설야','서리맹',391300],['홍련','잿더미',369800],
+  ['천추','그림자',348400],['벽라','새벽단',327000],['금강','철혈',305600],['자하','결정단',284200],
   ['소야','서리맹',262800],['백호','그림자',241400],['남풍','새벽단',220000],['철벽','철혈',198600],
   ['여명','잿더미',177200],
   ['무쇠뿔','서리맹',412800],['잔불','잿더미',398400],['설한','서리맹',381900],['쇳물','철혈',366200],
-  ['검은재','그림자',352700],['불씨','화신단',339100],['달그림자','그림자',326500],['모루손','철혈',313800],
+  ['검은재','그림자',352700],['불씨','결정단',339100],['달그림자','그림자',326500],['모루손','철혈',313800],
   ['새벽별','새벽단',301200],['하늬','서리맹',289600],
 ];
 /* ★ B5/G-73: 시련의 탑 랭킹 — 정렬 기준이 누적 데미지가 아니라 '도달 웨이브'다. */
 const TW_RANK = [
-  ['불철','화신단',312],['무쇠손','철혈',298],['청염','화신단',285],['잿불','잿더미',271],
+  ['불철','결정단',312],['무쇠손','철혈',298],['청염','결정단',285],['잿불','잿더미',271],
   ['대장장이K','철혈',264],['로엔','새벽단',252],['서리검','서리맹',241],['재의노래','잿더미',233],
-  ['강철심','철혈',225],['불꽃술사','화신단',216],['흑야','그림자',208],['백랑','새벽단',199],
+  ['강철심','철혈',225],['불꽃술사','결정단',216],['흑야','그림자',208],['백랑','새벽단',199],
   ['적묘','잿더미',191],['현무','서리맹',183],['월광','그림자',176],['풍백','새벽단',168],
-  ['운해','화신단',160],['묵검','철혈',153],['설야','서리맹',146],['홍련','잿더미',138],
-  ['천추','그림자',131],['벽라','새벽단',124],['금강','철혈',117],['자하','화신단',110],
+  ['운해','결정단',160],['묵검','철혈',153],['설야','서리맹',146],['홍련','잿더미',138],
+  ['천추','그림자',131],['벽라','새벽단',124],['금강','철혈',117],['자하','결정단',110],
   ['소야','서리맹',102],['백호','그림자',95],['남풍','새벽단',88],['철벽','철혈',80],
   ['여명','잿더미',73],
 ];
@@ -891,7 +891,7 @@ const TITLE_GRADES = {
 // ★ N3: 원작 칭호 목록의 실제 노출 순서 — GM 1종이 영웅(E)과 레전더리(L) 사이에 끼어 있다(칭호창 13장 실측)
 const TITLE_GORDER = ['N','R','E','GM','L'];
 /* ★ F2: 월드챗 문구 칭호 4종 — 원작은 '특정 문구를 월드챗에 전송'하면 즉시 지급된다.
-   문구는 화신 오리지널(원작 문구 음차 금지). 전송 판정은 chatTitleCheck() 가 한다. */
+   문구는 결정의 시대 오리지널(원작 문구 음차 금지). 전송 판정은 chatTitleCheck() 가 한다. */
 const CHAT_TITLE_WORDS = [
   { id:'lover',    key:'love',  words:['모두 사랑합니다','사랑합니다'] },
   { id:'kind',     key:'hello', words:['안녕하세요','안녕'] },
@@ -914,7 +914,7 @@ const TITLES = [
   { id:'rookie',     g:'N',  n:'풀무질 초심자', fx:'몬스터 골드 획득량 +10%', e:{gold:0.10},
     cond:'⚠ 초반 진행 시 자동 획득 (데모: 몬스터 100마리 사냥)', have:()=>titleStat('kills')>=100 },
   /* 원작 확정 조건 = '일반 등급 영웅 **10명** 보유'(N3 칭호창 실측).
-     화신 로스터의 N등급은 직업당 1명 = 총 5명이 상한이라 10명이 원천적으로 불가능 → 상한(전원 5명)으로 치환한다. */
+     결정의 시대 로스터의 N등급은 직업당 1명 = 총 5명이 상한이라 10명이 원천적으로 불가능 → 상한(전원 5명)으로 치환한다. */
   { id:'collector',  g:'N',  n:'재료 수집꾼',   fx:'몬스터 경험치 획득량 +10%', e:{exp:0.10},
     cond:'일반 등급 영웅 5명 전원 보유',                    have:()=>heroGradeOwnCount('N')>=5 },
   { id:'lover',      g:'N',  n:'다정한 대장장이', fx:'몬스터 골드 획득량 +10%', e:{gold:0.10},
@@ -927,7 +927,7 @@ const TITLES = [
   // ★ N3: 원작 조건문에 '(해골 장비 제외)' 부기가 붙어 있다(숙련·행운·신의 손 3종 공통) → 문구·집계 양쪽 반영. isSkullGear() 참조
   { id:'skilled',    g:'R',  n:'숙달된 손',    fx:'제작 확률 +2%p',       e:{crate:0.02},
     cond:'영웅 등급 이상 장비 제작 5연속 성공 (해골 장비 제외)',  have:()=>titleStat('craftWinBest')>=5 },
-  // 원작은 특정 최상위 보스 던전(원작 고유명사)을 지목 → 화신의 레전더리 보스 소환(몽마·수호거상) 클리어로 치환
+  // 원작은 특정 최상위 보스 던전(원작 고유명사)을 지목 → 결정의 시대의 레전더리 보스 소환(몽마·수호거상) 클리어로 치환
   { id:'inter',      g:'R',  n:'중견 대장장이', fx:'몬스터 골드 획득량 +15%', e:{gold:0.15},
     cond:'레전더리 보스(몽마·수호거상) 처치',               have:()=>titleStat('bossTop')>=1 },
   { id:'instructor', g:'R',  n:'화로의 스승',  fx:'몬스터 경험치 획득량 +15%', e:{exp:0.15},
@@ -957,7 +957,7 @@ const TITLES = [
   { id:'smith',      g:'E',  n:'노련한 사냥꾼', fx:'몬스터 골드 획득량 +20%', e:{gold:0.20},
     cond:'요일던전 2단계 클리어',                           have:()=>titleStat('ddStage')>=2 },
   /* 원작 확정 조건 = '레전더리 등급 영웅 **6명 이상** 보유'(N3 칭호창 실측).
-     화신 로스터의 L등급은 직업당 1명 = 총 5명이 상한이라 6명이 원천적으로 불가능 → 상한(전원 5명)으로 치환한다. */
+     결정의 시대 로스터의 L등급은 직업당 1명 = 총 5명이 상한이라 6명이 원천적으로 불가능 → 상한(전원 5명)으로 치환한다. */
   { id:'tactician',  g:'E',  n:'책략가',       fx:'몬스터 경험치 획득량 +20%', e:{exp:0.20},
     cond:'레전더리 등급 영웅 5명 전원 보유',                have:()=>heroGradeOwnCount('L')>=5 },
   { id:'dirthand',   g:'E',  n:'무딘 손',      fx:'제작 시간 -10%',       e:{ctime:-0.10},
@@ -989,10 +989,10 @@ const TITLES = [
   /* ★ A2 정정 — 종전 '코스튬 8종 보유' 매핑은 오답이었다(원작 조건을 세트가 아닌 컬렉션으로 잘못 읽음).
      원작 원문 실측: docs/reference/기능별/10_퀘스트_업적_보상/캡처_2026_07_22_06_37_15_316.png
        · 효과 = "보유 시 몬스터 소환수 증가 효과 자동 적용"  · 조건 = "(세트명) 8세트 달성 시 획득"
-     해당 세트는 3/6/8 3단계를 가진 유일한 세트 = 화신의 '작열'(SETS 주석 참조)이며,
+     해당 세트는 3/6/8 3단계를 가진 유일한 세트 = 결정의 시대의 '작열'(SETS 주석 참조)이며,
      그 8세트 효과 "초당 몬스터 소환 마릿수 증가"와 이 칭호 효과가 정확히 같은 문구다.
      · own:true → 이 칭호만은 '착용'이 아니라 **보유만으로** 효과가 자동 적용된다(원문 명시). titleFlag() 참조.
-     · 소환 마릿수 증가폭(%)은 원작 UI에도 수치가 없다 — 원작도 수치 미표기, 화신 자체 결정 필요.
+     · 소환 마릿수 증가폭(%)은 원작 UI에도 수치가 없다 — 원작도 수치 미표기, 자체 결정 필요.
        현행 +2마리(titleSpawnBonus)를 그대로 둔다. */
   { id:'lava',       g:'L',  n:'불씨의 벗',    fx:'보유 시 몬스터 소환 수 증가 효과 자동 적용', e:{spawn:true}, own:true,
     cond:'‘작열’ 세트 8세트 달성',
@@ -1030,7 +1030,7 @@ function titleGoldMul(){ return 1 + titleEff('gold'); }            // 몬스터 
 function titleExpMul(){ return 1 + titleEff('exp'); }              // 몬스터 경험치 획득량
 function titleCraftRateAdd(){ return titleEff('crate'); }          // 제작 확률 가산(%p)
 function titleCraftTimeMul(){ return Math.max(0.05, 1 + titleEff('ctime')); } // 제작 시간 배율
-// '불씨의 벗' — 동시 등장 몬스터 +2 (보유만으로 적용). 증가폭은 원작도 수치 미표기 → 화신 자체 결정 필요.
+// '불씨의 벗' — 동시 등장 몬스터 +2 (보유만으로 적용). 증가폭은 원작도 수치 미표기 → 자체 결정 필요.
 function titleSpawnBonus(){ return titleFlag('spawn') ? 2 : 0; }
 /* ★ F2: 월드챗 문구 전송 판정 — 최초 1회만 지급하고 토스트로 알린다. */
 function chatTitleCheck(text){
@@ -1258,6 +1258,16 @@ function migrateHeroes(){
    구 id 는 어느 테이블에도 없으므로 남겨두면 보유/구매 이력이 통째로 증발한다. */
 const COSTUME_ID_MIGRATE = { lycan:'wolyeong', nova:'hongyeom', bargon:'surim', carmilla:'hanseori', seraphin:'changhae' };
 const PACK_ID_MIGRATE    = { ap_carm:'ap_hero027', ap_lycan:'ap_hero029' };
+/* ★ v5.108 · 브랜드 통일(화신 → 결정의 시대): L등급 장비 접두 '화신 XX' → '결정 XX'.
+   장비는 세이브에 이름(slot 문자열) 그대로 저장되고 SET_PIECES 도 그 이름으로 매칭하므로,
+   이관하지 않으면 구세이브의 레전더리 장비가 '주술·작열' 세트에서 통째로 빠진다
+   (전투력은 그대로인데 세트 효과만 조용히 꺼지는 유형의 버그). */
+const EQUIP_NAME_MIGRATE = /^화신 /;
+function migrateEquipNames(){
+  const fix = nm => (typeof nm==='string' && EQUIP_NAME_MIGRATE.test(nm)) ? nm.replace(EQUIP_NAME_MIGRATE,'결정 ') : nm;
+  if(Array.isArray(S.equips)) S.equips.forEach(e=>{ if(e && e.slot) e.slot = fix(e.slot); });
+  if(S.craft && S.craft.slot) S.craft.slot = fix(S.craft.slot);
+}
 function migrateNames(){
   if(S.costumeOwn && typeof S.costumeOwn==='object'){
     for(const oldId in COSTUME_ID_MIGRATE){
@@ -1290,6 +1300,7 @@ function mergeDefaults(){ deepFill(S, freshState());
   if(!S.title || !TITLE_BY_ID[S.title]) S.title='newbie';
   migrateHeroes();   // ★ B4/G-50: 직업키 → hero_id 로스터 구조 변환
   migrateNames();    // ★ F3: IP 세탁으로 바뀐 코스튬·패키지 id 이관
+  migrateEquipNames(); // ★ v5.108: 브랜드 통일로 바뀐 L등급 장비명 이관 (세트 매칭 보존)
   migrateMatPools(); // ★ v4.3: 폐지된 등급 공용풀 잔량을 같은 등급 재료로 분배
   // ★ v4.7: 몬스터 8종 → 120종 확장. 구세이브의 0~7 인덱스를 같은 등급·상대위치로 옮긴다.
   if(typeof S.huntTier==='number' && S.huntTier<HUNT_MIGRATE_V47.length && S._huntV!==47){
@@ -1681,12 +1692,22 @@ const Battle = (()=>{
      홈 모드(solo)는 이동 없이 말뚝딜. 던전/투기장은 이동 활성화. */
   const MELEE_RANGE=70, RANGED_RANGE=200, HERO_SPEED=55;
 
+  /* ★ v5.108: 종전에는 getBoundingClientRect() 로 W·H 를 잡았다. 그런데 #device 에는
+     transform:scale 이 걸려 있어서 이 값은 '화면에 보이는 크기'다 → 기기마다 게임 월드의
+     크기(W·H)가 달라졌고, 몬스터 반지름·영웅 스프라이트는 고정 픽셀이라 **작은 화면일수록
+     캐릭터가 상대적으로 크게** 보였다(PC와 모바일의 체감 차이의 정체).
+     offsetWidth/Height 는 레이아웃 크기라 transform 의 영향을 받지 않는다 → 모든 기기에서
+     월드 크기가 453 좌표계로 고정되고, 표시 배율은 transform 이 전담한다.
+     백버퍼 해상도만 화면 배율(UI_SCALE)을 곱해 잡아 확대 시에도 선명도를 유지한다. */
   function resize(){
     cv = $('#battle'); if(!cv) return;
-    const r = cv.getBoundingClientRect();
-    dpr = Math.min(window.devicePixelRatio||1, 2);
-    W = r.width; H = r.height;
-    cv.width = Math.max(1,W*dpr); cv.height = Math.max(1,H*dpr);
+    /* 폴백(453×548)은 #home 이 아직 hidden 이라 레이아웃 크기가 0인 초기 1회에만 쓰인다.
+       그 시점엔 Battle.start() 전이라 그려지는 프레임이 없다. 값은 실제 레이아웃 실측치와 맞춰 둔다. */
+    W = cv.offsetWidth || cv.clientWidth || 453;
+    H = cv.offsetHeight || cv.clientHeight || 548;
+    const ui = (typeof UI_SCALE === 'number' && UI_SCALE > 0) ? UI_SCALE : 1;
+    dpr = Math.min((window.devicePixelRatio||1) * ui, 3);
+    cv.width = Math.max(1, Math.round(W*dpr)); cv.height = Math.max(1, Math.round(H*dpr));
     ctx = cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
     layoutHeroes();
   }
@@ -2851,7 +2872,7 @@ function updateSkillCD(){
 
 /* 채팅
    ★ B1/G-10: 모든 발화 앞에 [등급라벨][N위] 공통 접두가 붙는다.
-     라벨 4종(인사쟁이 / 견습 광부증 / 노련한 사냥꾼 / 화신의 안내자 — ★ F2 칭호 재판독 명칭)은 닉네임별로 고정 매핑된다.
+     라벨 4종(인사쟁이 / 견습 광부증 / 노련한 사냥꾼 / 결정의 안내자 — ★ F2 칭호 재판독 명칭)은 닉네임별로 고정 매핑된다.
    ★ B1/G-09: 유저 잡담 외에 전역 획득 브로드캐스트 · 서버 접속 알림을 포함해 10종 이상. */
 const CHAT_NAMES = ['불철','무쇠손','잿불','대장장이K','로엔','서리검','재의노래','강철심','청염','불꽃술사'];
 const CHAT_TIERS = [
@@ -2871,7 +2892,7 @@ function chatWho(nm){
 }
 // 전역 획득 브로드캐스트 — {닉}님이 {등급색 아이템}({경로})을(를) 획득하셨습니다.
 const BCAST_ITEMS = [
-  ['L','화신 대검'],['L','태초의 고서'],['E','심연 지팡이'],['E','최상급 마법서'],
+  ['L','결정 대검'],['L','태초의 고서'],['E','심연 지팡이'],['E','최상급 마법서'],
   ['R','청강 방패'],['R','청옥 목걸이'],['E','심연 반지'],['L','성좌 투구'],
 ];
 const BCAST_WAY = ['제작','합성','획득'];
@@ -3179,7 +3200,10 @@ function nextDialogue(){ if(!_dlgQueue.length){ $('#npc-layer').classList.add('h
 function clearFinger(){ document.querySelectorAll('.tut-highlight').forEach(e=>e.classList.remove('tut-highlight')); const f=$('#tutFinger'); if(f) f.remove(); }
 function pointFinger(modalKey){ clearFinger(); const t=document.querySelector(`[data-modal="${modalKey}"]`); if(!t) return; t.classList.add('tut-highlight');
   const f=el('div','tut-finger','👆'); f.id='tutFinger'; const r=t.getBoundingClientRect(), dr=$('#device').getBoundingClientRect();
-  f.style.left=(r.left-dr.left+r.width/2-12)+'px'; f.style.top=(r.top-dr.top-26)+'px'; $('#device').appendChild(f); }
+  /* ★ v5.108: 두 rect 는 transform:scale 이 적용된 '화면 좌표'인데, 손가락은 #device 안(453 좌표계)에
+     배치된다 → 배율로 나눠 되돌리지 않으면 화면이 작을수록 목표에서 점점 멀어진다. */
+  const ui=(typeof UI_SCALE==='number' && UI_SCALE>0)?UI_SCALE:1;
+  f.style.left=((r.left-dr.left+r.width/2)/ui-12)+'px'; f.style.top=((r.top-dr.top)/ui-26)+'px'; $('#device').appendChild(f); }
 /* ★ B1/G-02: 건너뛰기(.ob-skip) 마크업·핸들러 완전 삭제 — 원작에는 스킵이 없다. */
 function renderTutorial(){
   const box=$('#onboard'); if(!box) return;
@@ -5567,7 +5591,7 @@ const MODALS = {
 /* ------- 모달 헬퍼 ------- */
 /* ★ N3/§7-10: 외부 서비스 링크 정본.
    url 은 **의도적으로 비어 있다.** 원작 스샷에 찍힌 실제 주소·서비스 브랜드는 타사 자산이라 코드에 옮기지 않는다.
-   라이브 빌드에서 화신 자체 채널 주소를 주입하면 window.open 경로가 그대로 살아난다(구조는 이미 외부 이동). */
+   라이브 빌드에서 자체 채널 주소를 주입하면 window.open 경로가 그대로 살아난다(구조는 이미 외부 이동). */
 const EXT_LINKS = {
   social:{ ic:'💬', n:'공식 오픈채팅',  p:'으로', dest:'외부 메신저 앱',
     d:'운영진·이용자와 실시간으로 이야기하는 결정의 시대 공식 채팅방입니다.',
@@ -6021,7 +6045,7 @@ function openEnhance(e){
 
 /* ------- 제작 결과 ------- */
 /* ★ N3: 제작 성공 스트릭 칭호(숙련·행운·신의 손)의 원작 조건 부기 '(해골 장비 제외)' 실집계용 판정.
-   화신의 제작 목록에는 현재 해골 계열 장비가 없어 상시 false 지만, 규칙을 코드에 고정해 둔다. */
+   결정의 시대의 제작 목록에는 현재 해골 계열 장비가 없어 상시 false 지만, 규칙을 코드에 고정해 둔다. */
 function isSkullGear(c){
   const nm = String((c&&(c.slot||c.name))||'');
   return /해골|백골/.test(nm);
@@ -6036,7 +6060,7 @@ function resolveCraft(forceSuccess){
      · 실패 스트릭 5/7/10/15 → 제작 시간 단축 칭호
      · '영웅 등급 이상' 장비 제작 성공 스트릭 5/10/15 → 제작 확률 칭호
        ★ N3 실측: 원작 조건문 3종(숙련·행운·신의 손) 모두 끝에 **'(해골 장비 제외)'** 부기가 붙는다.
-         화신에는 현재 해골 계열 제작 장비가 없어 실제 제외 대상이 0건이지만, 규칙이 문구로만 남으면
+         결정의 시대에는 현재 해골 계열 제작 장비가 없어 실제 제외 대상이 0건이지만, 규칙이 문구로만 남으면
          나중에 해골 장비를 추가했을 때 조용히 어긋난다 → isSkullGear() 로 집계에서 실제로 뺀다.
          (제외 대상은 성공 스트릭을 **올리지도 끊지도 않는다** — 영웅등급 미만 제작과 같은 취급) */
   {
@@ -6674,16 +6698,85 @@ function wire(){
 }
 
 /* ★ v5.13: #device(453×852)를 화면에 맞춰 균일 확대 — transform:scale.
-   게임 내부 좌표계(453)는 불변, 표시 배율만 키운다. 가로/세로 중 작은 비율로 맞춤. */
+   게임 내부 좌표계(453)는 불변, 표시 배율만 키운다. 가로/세로 중 작은 비율로 맞춤.
+
+   ★ v5.108 · 기기별 잘림/확대 편차 수정
+   종전에는 window.innerWidth/innerHeight 로 배율을 냈다. 그런데 모바일 브라우저의
+   innerHeight 는 'URL바가 접힌 상태의 큰 뷰포트'를 돌려주는 경우가 많다(안드로이드 크롬·
+   삼성인터넷·카카오톡 인앱뷰 전부 해당). 그래서 실제로 보이는 높이보다 큰 값으로 배율을
+   계산 → 무대가 화면보다 커지고, transform 은 레이아웃을 바꾸지 않으므로 위아래가 잘렸다.
+   (동시에 배율이 과하게 커져 캐릭터·몬스터가 PC보다 크게 보이는 원인이기도 했다.)
+
+   실제로 보이는 영역은 visualViewport 가 정확하다. 여기에 노치·홈인디케이터가 먹는
+   세이프에리어를 빼고 남은 크기에 맞춘다. */
+let UI_SCALE = 1;
+function safeAreaInsets(){
+  const num = v => { const x = parseFloat(v); return isFinite(x) ? x : 0; };
+  try{
+    const p = document.getElementById('safeProbe'); if(!p) return { t:0, r:0, b:0, l:0 };
+    const cs = window.getComputedStyle(p);
+    return { t:num(cs.paddingTop), r:num(cs.paddingRight), b:num(cs.paddingBottom), l:num(cs.paddingLeft) };
+  }catch(e){ return { t:0, r:0, b:0, l:0 }; }
+}
+function visibleViewport(){
+  let w = window.innerWidth || 453, h = window.innerHeight || 852;
+  const vv = window.visualViewport;
+  /* visualViewport 는 핀치줌 중에는 확대된 만큼 작아진다. 줌은 사용자가 의도한 것이라
+     배율을 다시 건드리면 안 되므로, 줌 배율로 되돌려 '줌 없는 가시 크기'를 쓴다. */
+  if(vv && vv.width > 0 && vv.height > 0){
+    const z = vv.scale && vv.scale > 0 ? vv.scale : 1;
+    w = Math.min(w, vv.width * z);
+    h = Math.min(h, vv.height * z);
+  }
+  return { w, h };
+}
 function updateUIScale(){
   const dev = document.getElementById('device'); if(!dev) return;
-  const s = Math.min(window.innerWidth/453, window.innerHeight/852);
+  const vp = visibleViewport(), sa = safeAreaInsets();
+  const availW = Math.max(1, vp.w - sa.l - sa.r);
+  const availH = Math.max(1, vp.h - sa.t - sa.b);
+  const s = Math.min(availW / 453, availH / 852);
+  if(!isFinite(s) || s <= 0) return;
+  /* visualViewport 의 scroll 은 URL바가 움직이는 동안 초당 수십 번 발생한다.
+     배율이 실제로 바뀐 경우에만 스타일·캔버스를 건드려 백버퍼 재할당을 막는다. */
+  if(Math.abs(s - UI_SCALE) < 0.0005) return;
+  UI_SCALE = s;
   dev.style.setProperty('--ui-scale', s);
+  /* 배율이 바뀌면 캔버스 백버퍼 해상도도 다시 잡아야 확대 시 선명도가 유지된다. */
+  try{ Battle.resize(); }catch(e){}
+}
+/* 모바일은 로드 직후 URL바가 접히며 뷰포트가 한 번 더 바뀐다 → 잠깐 뒤에 다시 맞춘다.
+   resize 이벤트 시점에는 innerWidth/innerHeight 가 아직 전환 중인 값인 브라우저가 있어
+   (실측: 360으로 줄이는 중 368이 보고됨) 다음 프레임에 한 번 더 확인한다. */
+function scheduleUIScale(){
+  updateUIScale();
+  if(typeof requestAnimationFrame === 'function') requestAnimationFrame(updateUIScale);
+  setTimeout(updateUIScale, 250); setTimeout(updateUIScale, 800);
 }
 window.addEventListener('DOMContentLoaded',()=>{
   load(); wire(); refreshHUD();
-  updateUIScale();
+  scheduleUIScale();
   setTimeout(()=>{ if(!$('#home').classList.contains('hidden')) Battle.resize(); }, 100);
 });
-window.addEventListener('resize', updateUIScale);
+window.addEventListener('resize', scheduleUIScale);
+window.addEventListener('orientationchange', scheduleUIScale);
+window.addEventListener('pageshow', scheduleUIScale);   // 뒤로가기 복원(bfcache) 대응
+if(window.visualViewport){
+  /* URL바가 접히고 펴질 때 resize 가 아니라 visualViewport 의 resize/scroll 로만 통지되는 브라우저가 있다. */
+  window.visualViewport.addEventListener('resize', updateUIScale);
+  window.visualViewport.addEventListener('scroll', updateUIScale);
+}
+/* ★ v5.108 · 최후 안전망 — 뷰포트가 바뀌었는데 **아무 이벤트도 오지 않는** 환경이 실제로 있다
+   (카카오톡·인스타 등 인앱 웹뷰에서 상·하단 바가 접히는 경우, 일부 CDP 제어 브라우저).
+   그러면 화면이 잘린 채로 방치되므로, 0.5초마다 크기만 비교해 **바뀐 경우에만** 다시 맞춘다.
+   비교는 숫자 두 개 읽기라 사실상 비용이 없고, updateUIScale 도 배율이 같으면 즉시 반환한다. */
+(function watchViewport(){
+  let lastW = 0, lastH = 0;
+  setInterval(()=>{
+    const vp = visibleViewport();
+    if(Math.abs(vp.w-lastW) < 1 && Math.abs(vp.h-lastH) < 1) return;
+    lastW = vp.w; lastH = vp.h;
+    updateUIScale();
+  }, 500);
+})();
 window.addEventListener('beforeunload', save); // 오프라인 정산 정확도

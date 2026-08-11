@@ -1,6 +1,6 @@
 /* =========================================================================
-   화신 (火神) — 2D HTML 게임 / 디자인 시스템 v2
-   레퍼런스(벤치마크 방치 RPG) 화면 구조를 화신 오리지널로 재현한 다크판타지 대장간 룩.
+   결정의 시대 (Age of Decision) — 2D HTML 게임 / 디자인 시스템 v2
+   레퍼런스(벤치마크 방치 RPG) 화면 구조를 결정의 시대 오리지널로 재현한 다크판타지 대장간 룩.
    타사 명칭·아트 자산 미사용. 재현 근거: docs/design/20260725-화신-UI재현카탈로그.md
    ========================================================================= */
 
@@ -27,6 +27,21 @@ body{
   background:#000; color:var(--txt); overflow:hidden; user-select:none;
   font-family:'Malgun Gothic','Apple SD Gothic Neo','Noto Sans KR',sans-serif;
   display:flex; align-items:center; justify-content:center;
+  /* ★ v5.108 · 기기별 잘림 대응 — 노치·펀치홀·홈인디케이터가 차지하는 만큼 무대를 안쪽으로 민다.
+     지원하지 않는 브라우저에서는 0px 로 떨어져 종전과 동일하게 동작한다. */
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+           env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+/* ★ v5.108: 모바일 브라우저의 height:100% 는 'URL바가 접힌 상태의 큰 뷰포트'를 가리키는 경우가 있어
+   실제로 보이는 높이보다 커진다 → 무대가 화면 밖으로 밀려 위아래가 잘렸다.
+   dvh 는 URL바가 접히고 펴지는 것을 그대로 따라간다. */
+@supports (height: 100dvh){ body{ height: 100dvh; } }
+/* 세이프에리어 실측 프로브 (JS가 computed padding 으로 읽는다) */
+#safeProbe{
+  position:fixed; left:0; top:0; width:0; height:0;
+  visibility:hidden; pointer-events:none; z-index:-1;
+  padding-top: env(safe-area-inset-top, 0px);    padding-right: env(safe-area-inset-right, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px); padding-left: env(safe-area-inset-left, 0px);
 }
 #device{
   /* ★ v5.13: 453×852 내부 좌표계 (game.js 가 이 기준으로 작동). transform:scale 로 화면에 맞춰
@@ -1307,13 +1322,16 @@ body{
 /* ===== 타이포 모바일 확대 (실제 폰에서만) — v5.9.1 =====
    데스크탑(453px 캔버스)은 그대로, 실제 폰(좁은 화면)에서 토큰값을 키운다.
    토큰 기반이라 이 한 블록으로 전체 자동 확대. */
-@media (max-width: 420px){
-  :root{
-    --fs-xs: 12px;    /* 11→12 */
-    --fs-sm: 13px;    /* 12→13 */
-    --fs-base: 15px;  /* 14→15 */
-  }
-}
+/* ★ v5.108 제거 — 종전에는 아래 규칙으로 좁은 화면에서 폰트를 키웠다.
+     @media (max-width:420px){ :root{ --fs-xs:12px; --fs-sm:13px; --fs-base:15px; } }
+   그런데 이 미디어쿼리는 **브라우저 뷰포트 폭**을 보는데, 무대(#device)는 어떤 기기에서도
+   453px 고정 좌표계다. 즉 폰에서는 전체가 이미 0.7~0.9배로 축소된 위에 폰트만 다시 커지는
+   이중 보정이 걸렸고, 그 결과
+     · 글자·아이콘이 PC보다 크게 보이고
+     · HUD·채팅 줄 높이가 늘어 전투 캔버스가 22px 줄었다(실측 548→526px)
+   → 같은 게임이 기기마다 다른 레이아웃으로 보이는 원인이었다.
+   가독성은 '화면에 꽉 차게 확대'하는 배율이 이미 담당하고, 핀치줌도 열려 있다(viewport meta).
+   타이포는 모든 기기에서 동일하게 유지한다. */
 
 /* ===== 재료/직업 아이콘 — v5.16 UniqueIcon(컬러) <img> 직접 표시 =====
    v5.15의 CSS mask 염색 방식은 제거. UniqueIcon은 컬러 원본이라 <img>로 그대로 쓴다. */
