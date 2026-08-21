@@ -58,7 +58,7 @@ const HERO_ROSTER = (()=>{
   return out;
 })();
 const HERO_BY_ID = {}; HERO_ROSTER.forEach(h=>HERO_BY_ID[h.hero_id]=h);
-/* ★ v5.83: 원작(불칸) 실측 기준 합성 조각 수량.
+/* ★ v5.83: 원작(벤치마크) 실측 기준 합성 조각 수량.
    N→R 진화(=R 해금): 50조각
    R→E 진화(=E 해금): 600조각
    E→L 진화(=L 해금): 1800조각
@@ -1275,7 +1275,7 @@ function load(){
   }
   S = freshState();
   S.lastSeen = Date.now();
-  // ★ v5.83: 원작(불칸) 기준 — 시작 보유는 일반(N) 영웅만.
+  // ★ v5.83: 원작(벤치마크) 기준 — 시작 보유는 일반(N) 영웅만.
   //   R 등급은 합성(진화)으로 획득해야 함. 종전엔 HERO_006(R)을 지급했으나 원작과 다름.
   //   화염 N(도르카) + 빙결 N(리엔) 시작 보유.
   S.heroes.HERO_001 = { level:1, own:true };
@@ -1796,7 +1796,7 @@ const Battle = (()=>{
   /* ★ B6/G-81: 편성 소스 훅 — null 이면 기존과 100% 동일하게 party()(3인)를 쓴다.
      투기장 입장 시에만 arenaParty(4인)로 교체되고, 결과창에서 다시 null 로 되돌린다. */
   let partySrc = null;
-  /* ★ 홈 1인 중앙 서바이벌 — 원작(불칸) 실측:
+  /* ★ 홈 1인 중앙 서바이벌 — 원작(벤치마크) 실측:
      - 원작플로우-전량판독 라인 33/39/45/73-75 (5회 관찰 전부 일치)
      - UI재현카탈로그 라인 444 "파티 대표 영웅 1명이 십수 마리 해골 무리에 둘러싸여 자동 교전"
      홈(mode='hunt', partySrc 없음)은 대표 영웅 1명을 필드 중앙에 배치.
@@ -2324,9 +2324,9 @@ const Battle = (()=>{
     if(mode==='dungeon'&&dg){ dg.killed++; S.stats.kills++; sfx(boss?'legendary':'coin'); addGold(ri(200,600)); return; } // 던전 보상은 결과창에서 일괄
     const t=tierDef();
     S.stats.kills++; sfx(boss?'legendary':'coin');
-    /* ★ v5.30: 홈 AoE 다중 킬 골드 밸런스 — 마리당 골드가 불칸(분당 18,885G)의
+    /* ★ v5.30: 홈 AoE 다중 킬 골드 밸런스 — 마리당 골드가 벤치마크 원작(분당 18,885G)의
        55배였던 원인 수정. AoE로 N마리를 동시에 잡으면 각 몹 골드를 1/N 분배.
-       30마리 동시 킬 시 각 몹 = t.gold/30 → Lv10 기준 분당 약 34,000G (불칸의 1.8배).
+       30마리 동시 킬 시 각 몹 = t.gold/30 → Lv10 기준 분당 약 34,000G (벤치마크 원작의 1.8배).
        던전·보스는 그대로 (단일 타겟이라 과급 없음).
        ★ v5.40: mobs.length 대신 S.mobCount(설정 마릿수) 사용 —
        onKill 시점엔 이미 죽은 몹이 빠져 있어 1/N 분배가 비일관적이었음. */
@@ -2346,7 +2346,7 @@ const Battle = (()=>{
     /* ★ v5.29: 같은 등급 랜덤 추가 드랍 (10%) — 몬스터가 5종이라 고정 드랍이 5개 재료만
        커버한다. 6번째 재료(잿가루/서리결정/천공수정/금강석)는 전투로 얻을 수 없었는데,
        같은 등급 풀에서 랜덤 드랍을 추가해 제작 교착을 방지한다.
-       불칸 원작도 전투 드랍 + 재료 소환(랜덤) + 합성으로 전 재료를 커버한다. */
+       벤치마크 원작도 전투 드랍 + 재료 소환(랜덤) + 합성으로 전 재료를 커버한다. */
     if(Math.random()<0.10){ matGainGrade(t.drop, 1); }
     /* ★ A3-1: 회색코인(S.gray)은 전투 드랍으로 충전되지 않는다.
        근거 — UI재현카탈로그 '길드 상점 — 회색코인(길드코인) 전용 교환소' 절:
@@ -2666,7 +2666,7 @@ const Battle = (()=>{
        원작 실측(전량판독 라인 33/73): "영웅 머리 위에 이름 + 원형 레벨 뱃지 + 적색 HP바/청색 MP바 2단". */
     if(isHuntSolo()){
       const nm = h.name || h.job.name;
-      /* ★ v5.54: 불칸형 레이아웃 — 이름 + 원형 레벨 뱃지(이름 좌측) + HP/MP 바.
+      /* ★ v5.54: 벤치마크형 레이아웃 — 이름 + 원형 레벨 뱃지(이름 좌측) + HP/MP 바.
          이름이 머리 위 중앙, 레벨 뱃지는 이름 왼쪽에 원형으로.
          ★ v5.79: 발 피봇 적용으로 캐릭터가 위로 커졌으므로 이름표/HP바도 위로 이동. */
       const nmY = h.y - 58;
@@ -3263,7 +3263,9 @@ function tutWatch(){
 /* ★ v5.113: '편성 저장' 한 칸만 인정하는 훅. 편성 내용이 그대로여도(시그니처 불변)
    저장을 눌렀다면 인정해야 한다 — 안 그러면 유저가 시키는 대로 저장했는데 진행이 안 잡힌다.
    단계를 통째로 충족시키는 tutEvent 와 달리 STEP8 의 두 목표 중 하나만 채운다. */
-function tutFormDone(){ if(!S || S.seenTutorial) return; const t=tutState(); t.formN=(t.formN||0)+1; tutPoll(); }
+function tutFormDone(){ if(!S || S.seenTutorial) return; const t=tutState(); t.formN=(t.formN||0)+1;
+  /* 시그니처도 같이 갱신한다 — 안 하면 직후 tutWatch 가 같은 저장을 한 번 더 세서 formN 이 2씩 오른다 */
+  t.formSig=JSON.stringify([S.formation||{}, S.formations||null]); tutPoll(); }
 // 외부(다른 배치)에서 단계를 직접 완료시키고 싶을 때 쓰는 공개 훅
 function tutEvent(key){
   if(!S || S.seenTutorial) return;
@@ -3276,8 +3278,11 @@ function tutPoll(){
   if(!S || S.seenTutorial) return;
   const home=$('#home'); if(!home || home.classList.contains('hidden')) return;  // 타이틀·로그인 화면에서는 동작하지 않는다
   tutWatch();
-  const st=TUT[S.tutStep]; if(!st) return;
   const t=tutState();
+  /* ★ v5.114: 예약된 미션 완료 보상 — 전투 중도, 모달이 열려 있는 중도 아닐 때만 연다 */
+  if(t.missionPending && !currentModal && !document.querySelector('.sub-ovl')
+     && !(Battle.inDungeon && Battle.inDungeon())){ t.missionPending=false; openModal('missionReward'); return; }
+  const st=TUT[S.tutStep]; if(!st) return;
   if(t.base[st.k]===undefined) t.base[st.k] = st.base ? st.cnt() : 0;
   const prog=clamp(st.cnt()-t.base[st.k], 0, st.goal);
   if(prog!==_tutProg){ _tutProg=prog; renderTutorial(); }
@@ -3292,7 +3297,10 @@ function tutAdvance(){
   if(S.tutStep>=TUT.length){ S.seenTutorial=true; renderTutorial(); updateGuideBanner(); sysLog('튜토리얼 9단계를 모두 완료했습니다.'); return; }
   renderTutorial();
   // 8단계까지 끝나면 미션 완료 보상 → 클래스 선택 순서로 이어진다
-  if(TUT[S.tutStep].k==='mission') setTimeout(()=>openModal('missionReward'), 500);
+  /* ★ v5.114: 종전엔 STEP8 통과 0.5초 뒤 무조건 열었다. STEP8 마지막 행동이 '투기장 입장'이라
+     매치가 시작되자마자 보상창이 덮쳐 정신이 없었다(대표 지적). 예약만 걸고, 전투가 끝나고
+     모달·오버레이가 전부 닫혀 홈으로 돌아온 순간에 연다(tutPoll 이 감시). */
+  if(TUT[S.tutStep].k==='mission') tutState().missionPending=true;
 }
 // --- 가이드 NPC 대사 ---
 let _dlgQueue=[], _dlgDone=null;
@@ -3362,7 +3370,9 @@ function runIntro(){ showDialogue(['안녕하세요, 군주님. 저는 결정의
 /* ★ B1/G-08: 3개 팝업이 서로 다른 화면이다.
    ① 랭크 보상 카드 ② 7일 출석 전체 그리드(1일차 체크) ③ 오프라인 정산 3필드 */
 function introRewards(){
-  S.introDone=true;   // ★ v5.113: 지급 직전에 못박는다(대사 중 이탈 시엔 다음 접속에 다시 준다)
+  /* ★ v5.114: introDone 을 여기서 세우면(=대사 직후) 보상 팝업 3개를 다 받기 전에 이탈했을 때
+     미수령분을 영영 못 받는다. 팝업까지 전부 수령한 뒤에 세운다 — 지급 자체가 idempotent 하지
+     않으므로, 중간 이탈 시엔 인트로를 통째로 다시 재생하는 쪽이 안전하다(무한 파밍은 여전히 차단). */
   const rewards=[ {t:'투기장 무쇠 랭크 보상',ic:'🏅',d:'골드 500,000',act:()=>addGold(500000)},
     {t:'7일 출석 · 1일차',ic:'🗓️',d:'소환권 1',act:()=>S.tickHero++},
     {t:'첫 방치 보상',ic:'⏳',d:'희귀 재료 20',act:()=>{ matGainGrade('R',20); }} ];
@@ -3380,7 +3390,7 @@ function introRewards(){
     S.shards[r.class_id]=(S.shards[r.class_id]||0)+HERO_SHARD_NEED.R; });
   _introActive=true; let i=0;
   (function showNext(){
-    if(i>=rewards.length){ _introActive=false; startGuidedTutorial(); return; }
+    if(i>=rewards.length){ S.introDone=true; save(); _introActive=false; startGuidedTutorial(); return; }   // ★ v5.114
     const idx=i, r=rewards[i++]; setModalTitle('보상 획득'); const b=$('#modalBody'); b.innerHTML='';
     if(idx===1){
       // ② 7일 출석 전체 그리드 — 1일차만 체크된 상태로 노출
@@ -3417,17 +3427,23 @@ function startGuidedTutorial(){
 /* ★ 길잡이 9단계 — 전부 '제작' 이벤트로만 진행되는 순수 제작 체인.
    name=배너 표기명 / cat·slot=완료 판정용 실제 제작 카테고리·아이템명 /
    goalIcon=목표 아이템 아이콘 / rewardIcon·rewardQty=단계 보상 */
+/* ★ v5.114: 표기명(name)을 없애고 제작 대상 아이템명(slot)을 그대로 쓴다.
+   종전엔 배너·퀘스트가 '잿불 지팡이 제작'이라 해놓고 대장간에는 '비전 지팡이'가 있었다.
+   유저가 뭘 만들어야 하는지 두 화면이 서로 다른 이름을 부르는 상태였다(대표 지적).
+   판정도 slot 으로 하므로, 이제 표기와 판정이 같은 문자열 하나를 본다 — 다시 어긋날 수 없다. */
 const GUIDE_CHAIN=[
-  { name:'잿불 지팡이', cat:'무기',   slot:'비전 지팡이', goalIcon:'🪄', rewardIcon:'🎟️', rewardQty:20,       rw:()=>{ S.tickHero+=20; } },
-  { name:'흑철 방패',   cat:'방어구', slot:'방패',        goalIcon:'🛡️', rewardIcon:'📦', rewardQty:100,      rw:()=>{ S.tickMat+=100; } },
-  { name:'흑철 투구',   cat:'방어구', slot:'투구',        goalIcon:'⛑️', rewardIcon:'🪨', rewardQty:350,      rw:()=>{ S.stones+=350; } },
-  { name:'흑철 상의',   cat:'방어구', slot:'상의',        goalIcon:'🥼', rewardIcon:'🪨', rewardQty:350,      rw:()=>{ S.stones+=350; } },
-  { name:'흑철 하의',   cat:'방어구', slot:'하의',        goalIcon:'👖', rewardIcon:'🪨', rewardQty:1000,     rw:()=>{ S.stones+=1000; } },
-  { name:'흑철 신발',   cat:'방어구', slot:'신발',        goalIcon:'🥾', rewardIcon:'📜', rewardQty:1000,     rw:()=>{ S.craftScroll+=1000; } },
-  { name:'금빛 반지',   cat:'장신구', slot:'반지',        goalIcon:'💍', rewardIcon:'🪙', rewardQty:25000000, rw:()=>{ addGold(25000000); } },
-  { name:'금빛 목걸이', cat:'장신구', slot:'목걸이',      goalIcon:'📿', rewardIcon:'🔨', rewardQty:20,       rw:()=>{ S.hammers+=20; } },
-  { name:'결정의 고서', cat:'특수',   slot:'고서',        goalIcon:'📖', rewardIcon:'🎲', rewardQty:200,      rw:()=>{ S.dice+=200; } },
+  { cat:'무기',   slot:'비전 지팡이', goalIcon:'🪄', rewardIcon:'🎟️', rewardQty:20,       rw:()=>{ S.tickHero+=20; } },
+  { cat:'방어구', slot:'방패',        goalIcon:'🛡️', rewardIcon:'📦', rewardQty:100,      rw:()=>{ S.tickMat+=100; } },
+  { cat:'방어구', slot:'투구',        goalIcon:'⛑️', rewardIcon:'🪨', rewardQty:350,      rw:()=>{ S.stones+=350; } },
+  { cat:'방어구', slot:'상의',        goalIcon:'🥼', rewardIcon:'🪨', rewardQty:350,      rw:()=>{ S.stones+=350; } },
+  { cat:'방어구', slot:'하의',        goalIcon:'👖', rewardIcon:'🪨', rewardQty:1000,     rw:()=>{ S.stones+=1000; } },
+  { cat:'방어구', slot:'신발',        goalIcon:'🥾', rewardIcon:'📜', rewardQty:1000,     rw:()=>{ S.craftScroll+=1000; } },
+  { cat:'장신구', slot:'반지',        goalIcon:'💍', rewardIcon:'🪙', rewardQty:25000000, rw:()=>{ addGold(25000000); } },
+  { cat:'장신구', slot:'목걸이',      goalIcon:'📿', rewardIcon:'🔨', rewardQty:20,       rw:()=>{ S.hammers+=20; } },
+  { cat:'특수',   slot:'고서',        goalIcon:'📖', rewardIcon:'🎲', rewardQty:200,      rw:()=>{ S.dice+=200; } },
 ];
+/* 표기는 언제나 실제 제작 아이템명 하나에서 나온다 */
+function guideName(g){ return g ? g.slot : ''; }
 // 길잡이 구간 제작 수치 오버라이드 (등급 테이블 대신 적용)
 const GUIDE_RECIPE = { step:{ p0:1.0, gold:1500000, sec:30 }, final:{ p0:1.0, gold:5000000, sec:3600 } };
 function guideTarget(){ return (S && S.guideStep<GUIDE_CHAIN.length) ? GUIDE_CHAIN[S.guideStep] : null; }
@@ -3444,7 +3460,7 @@ function updateGuideBanner(){
   /* ★ v5.109: 길잡이 목표 아이콘도 아이콘 팩을 쓴다(종전엔 이모지 그대로 노출).
      목표는 언제나 '제작할 장비'라 부위 아이콘(equipImg)이 goalIcon 이모지보다 정확하다. */
   const ic=$('#gbGoal'); if(ic) ic.innerHTML = g.slot ? equipImg(g.slot, 1.15) : eImg(g.goalIcon, 1.15);
-  $('#gbTxt').textContent=`길잡이 ${S.guideStep+1}/${GUIDE_CHAIN.length} · ${g.name} 제작${need>1?` (${prog}/${need})`:''}`;
+  $('#gbTxt').textContent=`길잡이 ${S.guideStep+1}/${GUIDE_CHAIN.length} · ${guideName(g)} 제작${need>1?` (${prog}/${need})`:''}`;
   const ri=$('#gbRwIc'); if(ri) ri.innerHTML=eImg(g.rewardIcon, 1.15);   // ★ v5.109
   const rq=$('#gbRwQty'); if(rq) rq.textContent='X'+fmt(g.rewardQty);
 }
@@ -5141,7 +5157,7 @@ const MODALS = {
       if(tab==='임무목록'){
         body.appendChild(el('div','hint','길잡이 제작 체인 · 완료 시 보상. 최종 단계에서 약탈 해금.'));
         GUIDE_CHAIN.forEach((q,i)=>{ const done=i<S.guideStep, cur=i===S.guideStep;
-          const row=el('div','pack'); row.style.opacity=done?'.5':'1'; row.innerHTML=`<div class="pic">${done?'✅':cur?q.goalIcon:eImg("🔒",2)}</div><div class="info"><div class="t">${i+1}. ${q.name} 제작</div><div class="d">${done?'완료':cur?`진행 중 · 보상 ${q.rewardIcon} X${fmt(q.rewardQty)}`:'잠김'}</div></div>`;
+          const row=el('div','pack'); row.style.opacity=done?'.5':'1'; row.innerHTML=`<div class="pic">${done?'✅':cur?q.goalIcon:eImg("🔒",2)}</div><div class="info"><div class="t">${i+1}. ${guideName(q)} 제작</div><div class="d">${done?'완료':cur?`진행 중 · 보상 ${q.rewardIcon} X${fmt(q.rewardQty)}`:'잠김'}</div></div>`;
           if(cur){ const btn=el('button','btn sm gold','바로가기'); btn.onclick=()=>{ closeModal(); openModal('forge'); }; row.appendChild(btn); }
           body.appendChild(row); });
         const need=GUIDE_NEED[S.guideStep]||1;
@@ -5922,10 +5938,9 @@ function giftBox(b, items){
     const btn=el('button','btn sm'+(done?'':' gold'),done?'수령완료':'받기'); btn.disabled=!!done; btn.onclick=()=>{ if(S.claimed.mail[id])return; give(); S.claimed.mail[id]=true; toast(`${t}`); openModal('mail'); refreshHUD(); }; row.appendChild(btn); b.appendChild(row); });
   if(!pending.length) b.appendChild(el('div','center small mut','새 우편이 없습니다.'));
 }
-function questList(b){
-  b.appendChild(el('div','hint','길잡이 제작 체인. 완료 시 보상.'));
-  [['해골 지팡이 제작(무기)','⚒️'],['강철 방어구 세트','🛡️'],['금 반지(희귀) 제작','💍']].forEach(([t,ic])=>{ const row=el('div','pack'); row.innerHTML=`<div class="pic">${ic}</div><div class="info"><div class="t">${t}</div><div class="d">보상: 골드·소환권</div></div>`; const btn=el('button','btn sm gold','바로가기'); btn.onclick=()=>{ closeModal(); openModal('forge'); }; row.appendChild(btn); b.appendChild(row); });
-}
+/* ★ v5.114 제거: questList() — 호출부가 없는 죽은 함수인데, 본문에 벤치마크 원작의
+   길잡이 아이템명이 그대로 하드코딩돼 있었다(타사 IP·표기 불일치 이중 문제).
+   실제 길잡이 목록은 MODALS.quest 가 GUIDE_CHAIN 으로 렌더한다 — 우리 아이템명이 정본이다. */
 
 /* ------- 편성 배정 ------- */
 function assignFormation(slot){
