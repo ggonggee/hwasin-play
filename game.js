@@ -6330,43 +6330,11 @@ function resolveCraft(forceSuccess){
    시간이 완료되면 곧바로 확률 판정 → 성공 시 인벤토리 자동 추가.
    팝업은 결과만 보여주고 확인 버튼으로 닫음. */
 function craftAutoCheck(){
-  if(S.craft && Date.now()>=S.craft.endAt && !S.craft._notified){
-    S.craft._notified=true;
-    const c=S.craft;
-    /* 즉시 성공/실패 판정 */
-    const p0 = c.p0 || CRAFT[c.grade].p0;
-    const success = Math.random() < p0;
-    if(success){
-      S.equips.push({ grade:c.grade, slot:c.slot, enh:0, equipped:false });
-      sysLog(`${gradeBadge(c.grade)} ${c.slot} 제작 성공`);
-    } else {
-      const refund = Math.floor(CRAFT[c.grade].mat * 0.9);
-      for(let r=0;r<refund;r++) matGainGrade(c.grade, 1);
-      sysLog(`${c.slot} 제작 실패 · 재료 90% 환급`);
-    }
-    S.stats.crafts++; guideCheck('craft',{grade:c.grade,cat:c.cat,slot:c.slot});
-    const wasSuccess = success;
-    S.craft=null; refreshHUD();
-    /* 강제 결과 팝업 */
-    setModalTitle(wasSuccess ? '제작 성공!' : '제작 실패');
-    const b=$('#modalBody'); b.innerHTML='';
-    if(wasSuccess){
-      b.appendChild(el('div','center',`<div class="ei" style="font-size:52px">${equipImg(c.slot,3)}</div>
-        <div class="big" style="margin:8px 0;color:${GRADES[c.grade].color}">${GRADES[c.grade].name} ${c.slot}</div>
-        <div class="small" style="color:var(--ok)">인벤토리에 추가되었습니다.</div>`));
-      sfx('win');
-    } else {
-      b.appendChild(el('div','center',`<div class="ei" style="font-size:48px;opacity:.5">${equipImg(c.slot,3)}</div>
-        <div class="big" style="margin:8px 0;color:var(--bad)">제작 실패</div>
-        <div class="small mut">재료 90% 환급되었습니다.</div>`));
-      sfx('fail');
-    }
-    const btn=el('button','btn gold wide','확인');
-    btn.style.marginTop='12px';
-    btn.onclick=()=>{ closeModal(); };
-    b.appendChild(btn);
-    $('#modal-root').classList.add('on'); currentModal='craftDone';
-  }
+  /* ★ v5.125: 종전엔 이 함수가 자체 판정·자체 팝업을 가진 레거시 경로였다(QA 독립 검증 발견).
+     resolveCraft() 와 미묘하게 달랐던 것 — ① 칭호 스트릭(craftFail/craftWin) 미반영
+     ② 재료 환급이 레시피 기준이 아니라 등급 풀 뿌리기 ③ 팝업에 ✕+[확인] 동시 노출
+     (v5.123 noX 정책 미적용). 자연 만료도 확정/즉시와 같은 단일 경로로 판정한다. */
+  if(S.craft && Date.now()>=S.craft.endAt) resolveCraft();
 }
 
 /* ------- 소환 ------- */
