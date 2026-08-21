@@ -3399,7 +3399,12 @@ function introRewards(){
   _introActive=true; let i=0;
   (function showNext(){
     while(i<rewards.length && _t.introClaimed[i]) i++;        // ★ v5.115: 이미 받은 칸은 건너뛴다
-    if(i>=rewards.length){ S.introDone=true; save(); _introActive=false; startGuidedTutorial(); return; }
+    if(i>=rewards.length){
+      /* ★ v5.116: 이미 끝난 인트로를 다시 마무리하지 않는다. 완료 후에도 모달 본문의 [받기]
+         노드가 남아 있어(closeModal 은 on 클래스만 뗀다) 비정상 경로로 재클릭되면
+         startGuidedTutorial 이 다시 돌아 tutStep 을 0 으로 되돌릴 수 있었다. */
+      if(S.introDone){ closeModal(); return; }
+      S.introDone=true; save(); _introActive=false; startGuidedTutorial(); return; }
     const idx=i, r=rewards[i++]; setModalTitle('보상 획득'); const b=$('#modalBody'); b.innerHTML='';
     if(idx===1){
       // ② 7일 출석 전체 그리드 — 1일차만 체크된 상태로 노출
