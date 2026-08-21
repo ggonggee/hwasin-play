@@ -3370,9 +3370,14 @@ function runIntro(){ showDialogue(['안녕하세요, 군주님. 저는 결정의
 /* ★ B1/G-08: 3개 팝업이 서로 다른 화면이다.
    ① 랭크 보상 카드 ② 7일 출석 전체 그리드(1일차 체크) ③ 오프라인 정산 3필드 */
 function introRewards(){
-  /* ★ v5.114: introDone 을 여기서 세우면(=대사 직후) 보상 팝업 3개를 다 받기 전에 이탈했을 때
-     미수령분을 영영 못 받는다. 팝업까지 전부 수령한 뒤에 세운다 — 지급 자체가 idempotent 하지
-     않으므로, 중간 이탈 시엔 인트로를 통째로 다시 재생하는 쪽이 안전하다(무한 파밍은 여전히 차단). */
+  /* ★ v5.115: 인트로는 '몇 번 재생돼도 총 지급량이 같아야' 한다. 플래그 하나로는 못 푼다 —
+     v5.113 은 대사 직후에 못박아 미수령분이 영영 날아갔고(보상 유실),
+     v5.114 는 끝까지 받아야 못박게 바꿨더니 중간 이탈 → 재접속 반복으로 자원이 무한 복제됐다(듀프).
+     지급 단위마다 수령 여부를 기록해 멱등하게 만든다:
+       tut.introResGiven  = 사전지급(재료·강화석·소환권·조각) 1회
+       tut.introClaimed[i]= 보상 팝업 i 수령 1회 (이미 받은 칸은 재생 시 건너뛴다)
+     introDone 은 '팝업까지 전부 처리됨' 표식으로만 남는다. */
+  const _t=tutState(); if(!_t.introClaimed || typeof _t.introClaimed!=='object') _t.introClaimed={};
   const rewards=[ {t:'투기장 무쇠 랭크 보상',ic:'🏅',d:'골드 500,000',act:()=>addGold(500000)},
     {t:'7일 출석 · 1일차',ic:'🗓️',d:'소환권 1',act:()=>S.tickHero++},
     {t:'첫 방치 보상',ic:'⏳',d:'희귀 재료 20',act:()=>{ matGainGrade('R',20); }} ];
@@ -3382,15 +3387,19 @@ function introRewards(){
      - 강화석: 장비 강화 1회 (1개)
      - 재료소환권: 재료 소환 (1개)
      이 자원들이 없으면 튜토리얼이 중간에 막혀 신규 이탈. */
-  matGain('흑염석', 20); S.stones = (S.stones||0) + 10; S.tickMat = (S.tickMat||0) + 10;
-  /* ★ v5.112: STEP7(영웅 합성)용 조각. 소환은 1회당 1~3개를 5개 직업에 무작위로 뿌리므로
-     R등급 요구치(50)를 튜토리얼 안에서 모으는 건 불가능하다 — 막히면 신규가 이탈한다.
-     시작 보유 영웅(HERO_001·002)의 직업에 요구치만큼 얹어 '모아서 합성'을 체험만 시킨다. */
-  ['HERO_001','HERO_002'].forEach(h=>{ const r=HERO_BY_ID[h]; if(!r) return;
-    S.shards[r.class_id]=(S.shards[r.class_id]||0)+HERO_SHARD_NEED.R; });
+  if(!_t.introResGiven){
+    matGain('흑염석', 20); S.stones = (S.stones||0) + 10; S.tickMat = (S.tickMat||0) + 10;
+    /* ★ v5.112: STEP7(영웅 합성)용 조각. 소환은 1회당 1~3개를 5개 직업에 무작위로 뿌리므로
+       R등급 요구치(50)를 튜토리얼 안에서 모으는 건 불가능하다 — 막히면 신규가 이탈한다.
+       시작 보유 영웅(HERO_001·002)의 직업에 요구치만큼 얹어 '모아서 합성'을 체험만 시킨다. */
+    ['HERO_001','HERO_002'].forEach(h=>{ const r=HERO_BY_ID[h]; if(!r) return;
+      S.shards[r.class_id]=(S.shards[r.class_id]||0)+HERO_SHARD_NEED.R; });
+    _t.introResGiven=true; save();
+  }
   _introActive=true; let i=0;
   (function showNext(){
-    if(i>=rewards.length){ S.introDone=true; save(); _introActive=false; startGuidedTutorial(); return; }   // ★ v5.114
+    while(i<rewards.length && _t.introClaimed[i]) i++;        // ★ v5.115: 이미 받은 칸은 건너뛴다
+    if(i>=rewards.length){ S.introDone=true; save(); _introActive=false; startGuidedTutorial(); return; }
     const idx=i, r=rewards[i++]; setModalTitle('보상 획득'); const b=$('#modalBody'); b.innerHTML='';
     if(idx===1){
       // ② 7일 출석 전체 그리드 — 1일차만 체크된 상태로 노출
@@ -3412,7 +3421,8 @@ function introRewards(){
       b.appendChild(el('div','result-card',`<div class="rc-icon">${eImg(r.ic,2)}</div><div class="rc-title win" style="font-size:18px">${r.t}</div><div class="small mut">${r.d}</div>`));
     }
     const btn=el('button','btn gold wide','받기'); btn.style.marginTop='10px';
-    btn.onclick=()=>{ r.act(); if(idx===2) addGold(720000); refreshHUD(); showNext(); };
+    btn.onclick=()=>{ if(_t.introClaimed[idx]){ showNext(); return; }        // ★ v5.115: 중복 수령 차단
+      r.act(); if(idx===2) addGold(720000); _t.introClaimed[idx]=true; save(); refreshHUD(); showNext(); };
     b.appendChild(btn); $('#modal-root').classList.add('on'); currentModal='introReward';
   })();
 }
