@@ -3601,15 +3601,18 @@ let _subArg=null;
 /* ★ v5.1: MODALS 가 아니라 함수로 만들어진 하위 화면(제작결과·아이템상세·장비강화·영웅상세)용.
    기존 `setModalTitle(t); const b=$('#modalBody'); b.innerHTML='';` 자리를 그대로 대체한다.
    부모 모달 본문은 건드리지 않으므로 대장간 그리드·착용창 슬롯이 뒤에 계속 남는다. */
-function subBody(title){
+/* ★ v5.123: opts.noX — [확인] 하나로만 닫는 결과 팝업에는 ✕를 달지 않는다(대표 지시:
+   확인 버튼이 유일한 동작인 팝업에 ✕가 같이 있으면 혼란만 준다). noX 팝업은 바깥 탭으로도
+   닫히지 않는다 — 결과 확인을 명시적으로 받는 팝업이기 때문. */
+function subBody(title, opts){
   const root=$('#modal-root'); if(!root) return $('#modalBody');
   closeSub();
   const ov=el('div','sub-ovl'), pop=el('div','sub-pop');
   const head=el('div','sub-head', title);
-  const x=el('div','sub-x','✕'); x.onclick=()=>closeSub(); head.appendChild(x);
+  if(!(opts&&opts.noX)){ const x=el('div','sub-x','✕'); x.onclick=()=>closeSub(); head.appendChild(x);
+    ov.onclick=e=>{ if(e.target===ov) closeSub(); }; }
   const bd=el('div','sub-body');
   pop.append(head, bd); ov.appendChild(pop);
-  ov.onclick=e=>{ if(e.target===ov) closeSub(); };
   root.appendChild(ov);
   return bd;
 }
@@ -6294,11 +6297,16 @@ function resolveCraft(forceSuccess){
   else { recipe.forEach(r=>matGain(r.k, Math.max(1,Math.floor(r.need*0.9)))); }
   refreshHUD();
   // 제작 결과 팝업 (G-30: 성공 시 '제작 성공' 타이틀 + 상단 '확인' 헤더바 + 부위 아이콘 + 플레이버)
-  const G=GRADES[grade]; const b=subBody(ok?'제작 성공':'제작 결과');   // ★ v5.1 대장간 위 오버레이
-  b.appendChild(el('div','b2-head','확인'));
+  /* ★ v5.123: [확인]이 유일한 동작이므로 ✕ 없이(noX). 종전의 b2-head '확인' 헤더바는
+     버튼이 아니라 죽은 텍스트로 렌더되고 있어 제거 — 하단 [확인] 버튼 하나로 통일. */
+  const G=GRADES[grade]; const b=subBody(ok?'제작 성공':'제작 결과', {noX:true});   // ★ v5.1 대장간 위 오버레이
   if(ok) b.appendChild(el('div','result-card',`<div class="rc-icon grade-${grade}" style="color:${G.color}">${equipImg(slot,3)}</div><div class="rc-title win" style="color:${G.color};font-size:20px">${G.name} ${slot}</div><div class="small mut">${itemFlavor(slot)}</div><div class="small mut">인벤토리에 추가되었습니다.</div>`));
   else b.appendChild(el('div','result-card',`<div class="rc-icon">💥</div><div class="rc-title lose">제작 실패</div><div class="small mut">재료 90% 환급 · 다시 도전하세요</div>`));
-  const btn=el('button','btn gold wide','확인'); btn.style.marginTop='10px'; btn.onclick=()=>openModal('forge'); b.appendChild(btn);
+  /* ★ v5.123: 종전 onclick 이 openModal('forge') 만 불러서 — 이 팝업은 _subKey 미등록
+     오버레이라 openModal 이 닫아 주지 않는다 — 대장간이 팝업 '뒤'에서 다시 그려질 뿐,
+     팝업은 ✕로만 닫혔다(대표 제보). closeSub() 로 팝업을 닫고 대장간으로 복귀한다. */
+  const btn=el('button','btn gold wide','확인'); btn.style.marginTop='10px';
+  btn.onclick=()=>{ closeSub(); openModal('forge'); }; b.appendChild(btn);
   $('#modal-root').classList.add('on'); currentModal='craftResult';
 }
 /* ★ v5.58: 제작 완성 시 중앙 강제 팝업 (원작: 완성되면 알림 팝업이 중앙에 뜸). */
