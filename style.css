@@ -447,10 +447,12 @@ body{
 @keyframes npcBlink{ 50%{ opacity:.2; } }
 
 /* 길잡이 배너 */
-/* ★ v5.121: z-index 7 → 30. 모달(#modal-root z:20)이 열리면 스크림이 배너 위를 덮어
-   [바로가기] 클릭이 스크림에 먹혔다(= 모달만 닫힘). 대장간을 열어 둔 채 배너의 바로가기를
-   눌러도 목표 아이템이 선택되도록 배너를 모달 위에 둔다 — 원작도 퀘스트 트래커가 상시 최상단. */
-#guide-banner{ position:absolute; left:6px; right:6px; top:6px; z-index:30; display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:8px;
+/* ★ v5.122: v5.121(z:30) 롤백. 배너를 모달 위로 올리자 화면 상단까지 차는 모달 11종의
+   ✕·상단 탭이 배너에 먹혔다(QA 독립 검증 NO-GO). 모달(#modal-root z:20)은 스크림과 모달 박스가
+   한 스태킹 컨텍스트라 '스크림 위·모달 아래'는 z-index 로 불가능하다. 배너는 모달 아래(z:7)로
+   두고 — 모달이 떠 있으면 스크림에 눌려 보이는 게 표준 동작 — 바로가기의 본래 목적은
+   대장간 사전 선택(forgeLocate, 어떤 경로로 열어도 목표 선택)이 이미 보장한다. */
+#guide-banner{ position:absolute; left:6px; right:6px; top:6px; z-index:7; display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:8px;
   background:linear-gradient(180deg,rgba(40,28,14,.95),rgba(24,16,9,.9)); border:1px solid var(--frame); box-shadow:0 3px 10px rgba(0,0,0,.5); }
 #guide-banner .gb-ic,#guide-banner .gb-goal{ font-size:var(--fs-xl); } #guide-banner .gb-txt{ flex:1; font-size:var(--fs-base); color:var(--txt-hi); }
 #guide-banner .gb-goal{ width:26px; height:26px; display:flex; align-items:center; justify-content:center; border-radius:6px;
