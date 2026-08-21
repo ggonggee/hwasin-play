@@ -83,6 +83,13 @@ const SHARD_TIERS = [
 // 온보딩 클래스 특성 → 확정 지급되는 N등급 영웅(HERO_001~005)
 const CLASS_STARTER = { mage:'HERO_002', warrior:'HERO_001' };
 // 제작 파라미터 (시뮬 baseline; 데모용 제작시간은 단축)
+/* ★ v5.124: 확정 제작(성공 보장 + 시간 스킵) 비용 — 제작서(craftScroll), 등급별.
+   원작 실측은 즉시 완성(제작서 30, 확률 유지)뿐이고 확정 제작은 'UI재현카탈로그 §제작중 패널'에
+   "재화 소모 추정"으로만 남아 정확한 수치가 없다(⚠원작 수치 미확인). 종전 구현은 아예 공짜라
+   즉시 완성(30 소모·실패 가능)을 완전히 무의미하게 만들었다(대표 지적) — 제작 실패 시스템이
+   장식이 되는 경제 구멍. 자율결정 근거: 즉시 완성 30의 배수로, 보장 가치가 없는 100% 등급(N·R)은
+   2배, 실패 확률이 실재하는 E(80%)·L(40%)는 4배·8배. 원작 수치가 실측되면 이 표만 교체한다. */
+const CRAFT_FIN_COST = { N:60, R:60, E:120, L:240 };
 const CRAFT = {
   N:{ p0:1.00, gold:5000,     mat:5,  sec:30   },
   R:{ p0:1.00, gold:50000,    mat:15, sec:30   },
@@ -3880,10 +3887,19 @@ const MODALS = {
         ()=>{ if(!S.craft) return; if(S.craftScroll<30){ toast('제작서가 부족합니다.'); return; }
               S.craftScroll-=30; S.craft.endAt=Date.now(); resolveCraft(); }); };
       // G-29: 확정 제작 = 성공 100% 보장 + 시간 스킵 (대기 중에도 클릭 가능)
-      const fin=el('button','btn gold','확정 제작'); fin.id='forgeFin'; fin.onclick=()=>resolveCraft(true);
+      // ★ v5.124: 공짜였던 것을 제작서 소모(CRAFT_FIN_COST, 등급별)로 — 즉시 완성과 동일한 확인 팝업 경유
+      const fin=el('button','btn gold','확정 제작'); fin.id='forgeFin';
+      fin.onclick=()=>{ if(!S.craft) return; const fc=CRAFT_FIN_COST[S.craft.grade]||60;
+        b2Confirm('확정 제작',
+          `<div class="big">확률을 무시하고 성공이 보장됩니다.</div>
+           <div class="b2-warnline">*시간을 건너뛰고 즉시 완료합니다*</div>
+           <div style="margin-top:6px"><span style="font-size:26px">📜</span> <b style="color:var(--g-legend)">${fc}</b> <span class="small mut">(보유 ${fmt(S.craftScroll)})</span></div>`
+           + ((CRAFT[S.craft.grade]&&CRAFT[S.craft.grade].p0>=1)||S.craft.p0>=1 ? `<div class="small mut" style="margin-top:4px">이 아이템은 제작 확률 100% — 즉시 완성(📜30)이 더 경제적입니다.</div>` : ''),
+          ()=>{ if(!S.craft) return; if(S.craftScroll<fc){ toast('제작서가 부족합니다.'); return; }
+                S.craftScroll-=fc; resolveCraft(true); }); };
       const cancel=el('button','btn red','제작 취소'); cancel.onclick=()=>cancelCraft();   // G-28: 100% 환급
       row.append(inst,fin,cancel); body.appendChild(row);
-      body.appendChild(el('div','hint','즉시 완성 = 시간만 스킵(실패 확률 유지) · 확정 제작 = 성공 보장 + 시간 스킵 · 제작 취소 = 재료·골드 100% 환급'));
+      body.appendChild(el('div','hint','즉시 완성 = 📜30, 시간만 스킵(실패 확률 유지) · 확정 제작 = 📜60~240(등급별), 성공 보장 + 시간 스킵 · 제작 취소 = 재료·골드 100% 환급'));
     }
     render2();
   }},
