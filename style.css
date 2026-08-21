@@ -461,7 +461,10 @@ body{
 .tut-highlight{ position:relative; z-index:11 !important; box-shadow:0 0 0 3px var(--g-legend), 0 0 16px rgba(242,178,58,.7) !important; border-radius:8px; animation:tutPulse 1s ease-in-out infinite; }
 @keyframes tutPulse{ 50%{ box-shadow:0 0 0 4px var(--g-legend), 0 0 24px rgba(242,178,58,.95) !important; } }
 /* ★ v5.83: 손가락 연출 강화 — 더 크고 눈에 띄게, 골든 글로우 */
-.tut-finger{ position:absolute; z-index:13; font-size:36px; pointer-events:none;
+/* ★ v5.120: z-index 13 → 30. 모달(#modal-root z:20)이 열리면 손가락이 그 뒤에 깔려
+   모달 안 버튼을 짚는 유도(제작·소환 타일·장비창 등)가 하나도 안 보였다(QA 독립 검증 발견).
+   손가락은 pointer-events:none 이라 위에 떠도 조작을 막지 않는다. */
+.tut-finger{ position:absolute; z-index:30; font-size:36px; pointer-events:none;
   animation:fingerBob .7s ease-in-out infinite;
   filter:drop-shadow(0 0 8px rgba(242,178,58,.9)) drop-shadow(0 2px 4px #000); }
 @keyframes fingerBob{ 0%,100%{ transform:translateY(0) scale(1); } 50%{ transform:translateY(8px) scale(1.1); } }
