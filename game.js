@@ -1833,7 +1833,9 @@ const Battle = (()=>{
     mode='dungeon'; wiped=0; mobs=[]; spawnT=0;
     heroes.forEach(h=>{ h.dead=false; h.hp=1; h.respT=0; h.dmgDone=0; });
     dg={ name:cfg.name, col:cfg.col||'#e8843c', foeCP:Math.max(1,cfg.foeCP||1000), kind:cfg.kind||'mobs',
-         total:cfg.count||10, spawned:0, killed:0, timeLeft:cfg.dur||30, onEnd:cfg.onEnd, done:false, bossSpawned:false,
+         total:cfg.count||10, spawned:0, killed:0, dur:cfg.dur||30, timeLeft:cfg.dur||30, onEnd:cfg.onEnd, done:false, bossSpawned:false,
+         /* ★ v5.117: 서든데스 규칙(있으면). otMul 은 매 프레임 계산되는 현재 가중 배율. */
+         overtime:(cfg.overtime ? (typeof cfg.overtime==='object' ? cfg.overtime : OVERTIME) : null), otMul:1,
          /* ★ N2: 던전별 데미지 배율(양방향). 투기장만 0.5 를 넘겨 원작 '모든 데미지 50% 감소'를 재현한다.
             지정하지 않은 콘텐츠는 1 이라 기존 전투 루프에 영향이 없다. */
          dmgMul:(cfg.dmgMul>0 ? cfg.dmgMul : 1),
@@ -1998,7 +2000,7 @@ const Battle = (()=>{
       if(h.atkT<=0 && !h._moving && (mobs.length || (arenaTargets && arenaTargets.length))){
         h.atkT = rnd(0.7,1.1);
         const crit = Math.random()<0.22;
-        const dgMul = (mode==='dungeon'&&dg) ? (dg.dmgMul||1) : 1;
+        const dgMul = (mode==='dungeon'&&dg) ? (dg.dmgMul||1)*(dg.otMul||1) : 1;   // ★ v5.117 가중 포함
         const dmg = Math.max(1, Math.round(Math.max(10, partyCP*0.08)*(crit?1.8:1)*rnd(0.85,1.15)*dgMul));
         h.dmgDone += dmg;
         /* ★ v5.36: 스킬 4종 — 단일/광역 혼합 + 스킬별 스프라이트 애니메이션.
@@ -2182,6 +2184,12 @@ const Battle = (()=>{
     spawnT -= dt;
     if(mode==='dungeon' && dg){
       dg.timeLeft-=dt;
+      /* ★ v5.117: 경과 시간으로 가중 배율 갱신 — 양측 피해 계산이 이 값을 함께 본다 */
+      if(dg.overtime){
+        const was=dg.otMul||1;
+        dg.otMul=overtimeMul((dg.dur||0)-dg.timeLeft, dg.overtime);
+        if(was<=1 && dg.otMul>1){ shake=0.2; toast('서든데스 — 지금부터 양측 피해가 계속 커집니다'); }
+      }
       // ★ v5.84: 투기장(kind:'arena') — 적 영웅(foes) 전멸 시 승리, 시간초과 시 패배.
       //   일반 몹 스폰 없음. 적 영웅은 foes[]에서 관리.
       if(dg.kind==='arena'){
@@ -2226,7 +2234,7 @@ const Battle = (()=>{
               /* ★ v5.90: 아군과 동일한 공격 공식 — f.cp 기반 데미지.
                  아군: partyCP*0.08 → 적의 cp로 동일하게. dmgMul(0.5) 적용. */
               const crit = Math.random()<0.22;
-              const dmgMul = (dg.dmgMul||1);
+              const dmgMul = (dg.dmgMul||1)*(dg.otMul||1);   // ★ v5.117: 가중은 양측 동일
               const dmg = Math.max(1, Math.round(Math.max(10, f.cp*0.08)*(crit?1.8:1)*rnd(0.85,1.15)*dmgMul));
               /* 아군 HP(0~1) 감소 — 아군의 cp로 정규화 */
               const hpDmg = dmg / Math.max(1, tgt.cp) * 0.08;
@@ -2518,7 +2526,8 @@ const Battle = (()=>{
         ctx.fillText(`잔여 ${dg.groupLeft+mobs.length}체 · 클리어 시 ${dg.waveDur}초 리셋`, W/2, 34);
       } else {
         ctx.fillStyle='#f0a24a'; ctx.font="11px 'Malgun Gothic'";
-        ctx.fillText((dg.kind==='mobs'? `처치 ${dg.killed}/${dg.total} · `:'')+`남은 ${Math.max(0,dg.timeLeft).toFixed(0)}s`, W/2, 34);
+        ctx.fillText((dg.kind==='mobs'? `처치 ${dg.killed}/${dg.total} · `:'')+`남은 ${Math.max(0,dg.timeLeft).toFixed(0)}s`
+          +((dg.otMul||1)>1 ? ` · 가중 x${dg.otMul.toFixed(1)}` : ''), W/2, 34);   // ★ v5.117
       }
       // 보스 HP = 상단 전폭 붉은 바 (원작: 보스 머리 위가 아니라 화면 상단 고정)
       const bossM=mobs.find(m=>m.boss);
@@ -2849,7 +2858,14 @@ const Battle = (()=>{
            /* ★ v5.32: 스킬 쿨타임 UI 업데이트용 노출. */
            skillCDs:()=>(heroes[0]&&heroes[0].skillCD)||[0,0,0,0],
            /* ★ 홈 1인 서바이벌 검증용 노출 (스모크 테스트에서 사용). 내부 상태 변경 아님. */
-           isHuntSolo:()=>isHuntSolo(), heroCount:()=>heroes.length };  // ★ B6/G-81
+           isHuntSolo:()=>isHuntSolo(), heroCount:()=>heroes.length,  // ★ B6/G-81
+           /* ★ v5.117: 투기장 헤더가 벽시계로 따로 세면 백그라운드 탭 등에서 전투 내부 시간과
+              어긋난다. 표시와 판정이 같은 값을 보도록 전투가 쓰는 수치를 그대로 내보낸다. */
+           timeLeft:()=>(mode==='dungeon'&&dg ? Math.max(0,dg.timeLeft) : 0),
+           otMul:()=>(mode==='dungeon'&&dg ? (dg.otMul||1) : 1),
+           /* ★ v5.117: 프레임을 손으로 한 칸 돌린다 — 스모크에서 시간이 걸린 규칙(서든데스 등)을
+              rAF 없이 검증하기 위한 통로다. 게임 코드는 쓰지 않는다(항상 loop 가 부른다). */
+           stepFrame:(dt)=>{ try{ update(Math.min(0.05, dt||0.016)); }catch(e){ throw e; } } };
 })();
 
 /* ============================================================
@@ -6397,6 +6413,18 @@ function heroRevealFx(list, gained){
 /* ★ v5.112: 120 → 60. 다른 전투가 15~60초인데 투기장만 2분이라 3v3 대치가 늘어지고
    루즈했다(대표 지적). 헤더 mm:ss·종료 판정 모두 이 상수 하나를 본다. */
 const ARENA_DUR = 60;    // 1매치 제한 시간(초) — 헤더 mm:ss 와 동일 소스
+/* ★ v5.117: 서든데스(가중 피해). 방어력만으로 버티면 아무도 안 죽고 시간만 흐르는 판이 나온다
+   — 시간 단축만으로는 '못 끝내고 패배'가 늘 뿐이라, 늦어질수록 결판이 나게 만든다.
+   at 초까지는 각자의 기본 공격·스킬로 그대로 싸우고, 그 뒤부터 양측 피해가 함께 커진다.
+   startDungeon 에 overtime:true 만 넘기면 어떤 전투에서도 켜진다(투기장 계열 확장용).
+   기본값: 30초 이후 5초마다 +60%p → 45초 2.8배, 60초 4.6배. */
+const OVERTIME = { at:30, stepSec:5, stepMul:0.6 };
+function overtimeMul(elapsed, rule){
+  const r=(rule && typeof rule==='object') ? rule : OVERTIME;
+  const at=(r.at!=null?r.at:OVERTIME.at), sec=(r.stepSec!=null?r.stepSec:OVERTIME.stepSec), mul=(r.stepMul!=null?r.stepMul:OVERTIME.stepMul);
+  const over=elapsed-at;
+  return over<=0 ? 1 : 1 + (over/Math.max(0.1,sec))*mul;
+}
 /* ★ B6/G-88·G-90: 랭킹 리스트 행 생성. 내 순위가 5위 이내로 올라와도 NPC 와 순위가 겹치지 않게 민다.
    ★ N2/G-93: 돋보기(유저 정보) 팝업이 요구하는 필드(길드·서버·ID)를 행에 같이 실어 보낸다.
      원작 ID 는 ISO 타임스탬프 문자열(예: 2026-05-02T23:40:25.551Z)이라 계정 생성 시각으로 읽힌다 →
@@ -6469,14 +6497,20 @@ function arenaHeadShow(foeName, foeTier){
   wrap.classList.add('arena-on');
   const h=el('div','ar-head'); h.id='ar-head';
   h.innerHTML=`<div class="ah-side"><div class="ah-nm">${S.name}</div><div class="ah-sc">${fmtFull(S.arenaPts)}점</div></div>
-    <div class="ah-time" id="arHeadT">${mmss(ARENA_DUR)}</div>
+    <div class="ah-timewrap"><div class="ah-time" id="arHeadT">${mmss(ARENA_DUR)}</div><div class="ah-ot hidden" id="arHeadOT"></div></div>
     <div class="ah-side r"><div class="ah-nm">${foeName}</div><div class="ah-tier">${foeTier}</div></div>`;
   wrap.appendChild(h);
   const endAt=Date.now()+ARENA_DUR*1000;
   _arHeadT=setInterval(()=>{
     const t=$('#arHeadT'); if(!t){ arenaHeadHide(); return; }
-    const s=Math.max(0,Math.ceil((endAt-Date.now())/1000));
+    /* ★ v5.117: 전투가 돌고 있으면 전투 내부 시간을 쓰고, 아니면(입장 연출 등) 벽시계로 폴백 */
+    const inFight = Battle.inDungeon && Battle.inDungeon();
+    const s = inFight ? Math.max(0,Math.ceil(Battle.timeLeft()))
+                      : Math.max(0,Math.ceil((endAt-Date.now())/1000));
     t.textContent=`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+    const ot=$('#arHeadOT'); if(ot){ const mul = inFight ? Battle.otMul() : 1;
+      if(mul>1){ ot.classList.remove('hidden'); ot.textContent=`서든데스 x${mul.toFixed(1)}`; }
+      else ot.classList.add('hidden'); }
   }, 200);
 }
 function arenaHeadHide(){
@@ -6515,7 +6549,7 @@ function arenaFight(){
   closeModal(); sysLog(`투기장 매칭 · vs ${foeName}`);
   if(Battle.setPartySource) Battle.setPartySource(arenaParty);   // 투기장 3인 출전
   /* ★ N2: dmgMul — 원작 '투기장에선 모든 데미지가 50% 감소 됩니다.' */
-  Battle.startDungeon({ name:`투기장 · vs ${foeName}`, col:'#c8324b', foeCP, kind:'arena', count:3, dur:ARENA_DUR,
+  Battle.startDungeon({ name:`투기장 · vs ${foeName}`, col:'#c8324b', foeCP, kind:'arena', count:3, dur:ARENA_DUR, overtime:true,
     dmgMul:ARENA_DMG_MUL, foeHeroes,
     onEnd:(win)=>arenaResult(win, foeName, foeCP, foeTier) });
   arenaHeadShow(foeName, foeTier);

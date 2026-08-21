@@ -277,6 +277,35 @@ console.log('\n[6] 코어 루프 (idleTick / Battle / save)');
 step('idleTick 600틱', ()=>{ ev('load')(); const t=ev('idleTick'); for(let i=0;i<600;i++) t(0.1); });
 step('save() 후 재load 왕복', ()=>{ ev('save')(); ev('load')(); if(ev('S').gold===undefined) throw new Error('gold 유실'); });
 step('Battle.resize/step', ()=>{ const B=ev('Battle'); if(B){ B.resize&&B.resize(); B.step&&B.step(0.016); B.update&&B.update(0.016); } });
+/* ★ v5.117: 서든데스(가중 피해) — 늘어지는 전투를 끊는 규칙이라 곡선이 틀어지면 바로 밸런스 사고다.
+   브라우저 실전투는 rAF 가 필요해 자동 검증이 어려우니, 여기서 시간을 직접 흘려 고정한다. */
+step('서든데스 — 임계 전 1배, 이후 계단식 가중', ()=>{
+  const B=ev('Battle'), OT=ev('OVERTIME');
+  if(!B || !B.startDungeon) throw new Error('Battle.startDungeon 없음');
+  /* kind:'arena' 는 적 3인을 즉시 정리해버려 규칙이 붙기 전에 끝난다(스텁 환경). 규칙 자체를
+     보려는 테스트이므로 시간이 남는 몹 던전으로 돌린다 — overtime 은 kind 와 무관하게 동작한다. */
+  B.startDungeon({ name:'검증', foeCP:1000, kind:'mobs', count:9999, dur:120, overtime:true, onEnd:()=>{} });
+  const at=OT.at, seen=[];
+  const adv=sec=>{ for(let i=0;i<sec*20;i++) B.stepFrame(0.05); };   // 0.05초(프레임 상한) 스텝
+  adv(at-2);            seen.push(['임계 직전', B.otMul()]);
+  adv(7);               seen.push(['임계+5초',  B.otMul()]);
+  adv(5);               seen.push(['임계+10초', B.otMul()]);
+  if(!B.inDungeon()) throw new Error('던전이 조기 종료되어 규칙을 볼 수 없다');
+  const [a,b,c]=seen.map(x=>x[1]);
+  if(a!==1) throw new Error(`임계 전에 가중이 붙었다: ${a}`);
+  if(!(b>1 && c>b)) throw new Error(`가중이 커지지 않는다: ${seen.map(x=>x[0]+'='+x[1].toFixed(2)).join(', ')}`);
+  const expect=1+(10/OT.stepSec)*OT.stepMul;                       // 임계+10초 기대치
+  if(Math.abs(c-expect)>0.35) throw new Error(`곡선 이탈: 임계+10초 ${c.toFixed(2)} (기대 ${expect.toFixed(2)})`);
+  console.log(`     ${seen.map(x=>x[0]+' x'+x[1].toFixed(2)).join(' → ')}`);
+});
+step('서든데스 미지정 전투는 영향 없음', ()=>{
+  const B=ev('Battle');
+  B.startDungeon({ name:'검증2', foeCP:1000, kind:'mobs', count:5, dur:60, onEnd:()=>{} });
+  for(let i=0;i<1200;i++) B.stepFrame(0.05);                       // 60초 진행
+  if(B.otMul()!==1) throw new Error('overtime 미지정인데 가중이 붙었다: '+B.otMul());
+  /* 던전 모드가 남으면 뒤따르는 홈 모드 검사(isHuntSolo)를 오염시킨다 — 세이브 리로드로 되돌린다 */
+  store.delete('hwasin_save_v1'); ev('load')(); B.refreshParty&&B.refreshParty(); B.setHunt&&B.setHunt();
+});
 /* ★ v5.108 · 기기별 뷰포트 대응 회귀 방지.
    ① 배율은 '실제로 보이는 영역' 기준이어야 한다 — 모바일 innerHeight 가 URL바를 포함한
       큰 값을 돌려주면 무대가 화면보다 커져 위아래가 잘렸다.

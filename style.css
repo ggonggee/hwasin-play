@@ -1068,6 +1068,11 @@ body{
 .ar-head .ah-nm{ font-size:var(--fs-base); font-weight:700; color:var(--txt-hi); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .ar-head .ah-sc{ font-size:var(--fs-sm); color:#c9bb9c; }
 .ar-head .ah-tier{ font-size:var(--fs-sm); color:#e2743c; }
+.ar-head .ah-timewrap{ display:flex; flex-direction:column; align-items:center; gap:2px; }
+/* ★ v5.117: 서든데스(가중 피해) 배지 — 남은 시간 아래에 붙는다 */
+.ar-head .ah-ot{ font-size:var(--fs-xs); font-weight:800; color:#ffd9d2; background:rgba(200,50,75,.85);
+  border:1px solid #e2504a; border-radius:999px; padding:1px 7px; letter-spacing:.02em; animation:otpulse 1s ease-in-out infinite; }
+@keyframes otpulse{ 0%,100%{ opacity:1; } 50%{ opacity:.55; } }
 .ar-head .ah-time{ font-size:var(--fs-xl); font-weight:800; color:#f6ecd4; letter-spacing:.06em; }
 #stage-wrap.arena-on .timepod{ display:none; }
 
