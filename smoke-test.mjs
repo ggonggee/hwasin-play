@@ -372,7 +372,7 @@ step('뷰포트 배율 — 가시영역 기준 + 월드 크기 불변', ()=>{
 });
 /* ★ 홈 1인 서바이벌 검증 — 홈(mode='hunt', partySrc 없음)은 영웅 1명만 배치되어야 한다.
    partySrc가 설정되면(던전/투기장) 다인 파티로 동작하므로, partySrc=null 기본 상태에서 heroCount===1 확인.
-   원작 실측(전량판독 라인 33/73): 홈은 단일 영웅 1명. */
+   홈 필드는 단일 영웅 1명 배치가 설계 기준이다. */
 step('홈 모드 영웅 1명 배치 (isHuntSolo)', ()=>{
   const B=ev('Battle'); if(!B || !B.isHuntSolo) return;   // 구 인터페이스 호환
   if(B.setPartySource) B.setPartySource(null);              // 홈 모드 보장
@@ -383,7 +383,7 @@ step('홈 모드 영웅 1명 배치 (isHuntSolo)', ()=>{
   const ov=windowStub.document.getElementById('stage-overlay');
   if(ov && ov.innerHTML!=='') throw new Error('홈 모드인데 기여도 패널이 표시됨');
 });
-/* ★ v5.9: 몬스터 종 수 검증 — 등급당 5종, 총 20종 (원작 실측). 마릿수 선택기 기본값 30.
+/* ★ v5.9: 몬스터 종 수 검증 — 등급당 5종, 총 20종(설계 기준). 마릿수 선택기 기본값 30.
    종전 120종(등급당 30종)은 "30마리" 마릿수 선택기를 도감 종 수로 오독한 것이었다. */
 step('몬스터 종 수 = 20 (등급당 5종) + 마릿수 기본 30', ()=>{
   const HT=ev('HUNT_TIERS');
@@ -480,11 +480,13 @@ console.log('\n[9] 유사성 회귀 가드 (금칙 스캐너 — L1 자기고백
 /* ★ v5.126 도입, v5.127 확장(QA 검증계획 20260822-유사성제거-검증계획.md §2 A-0 반영).
    목록 정본은 코드에 나열하지 않고 ip-banlist.json(스캔 대상 제외 경로) 한 곳에 둔다 — §2-4-c
    "금칙 목록을 코드 주석에 나열하지 않는다, 자기 가드에 걸린다"를 따른다(game.js:38 사고 재발 방지).
-   L1 = 배포 3파일에 남아있으면 안 되는 자기고백 토큰(원작/벤치마크/전량판독/갭스펙/화면지도/불칸 등).
+   L1 = 배포 3파일에 남아있으면 안 되는 내부 작업 용어 토큰(목록은 데이터 파일 참조).
    verbatim_signatures = 라운드1에서 다룬 축자 문구·수치 조합. 단일 리터럴은 substring, 조합
    시그니처(가격표·수치객체 등은 개별 값이 우연히 재사용될 수 있어)는 all[] 로 '전부 동시에
    존재할 때만' 실패 처리한다. */
-const BANLIST = JSON.parse(fs.readFileSync(D+'ip-banlist.json','utf8'));
+let BANLIST;
+try{ BANLIST = JSON.parse(fs.readFileSync(D+'ip-banlist.json','utf8')); }
+catch(e){ console.error('[9] ip-banlist.json 없음 — 회귀 가드 데이터는 로컬 정본이다. 내부 저장소 docs/design/ 의 백업(ip-banlist-정본-*.json)을 이 경로로 복사하라.'); process.exit(2); }
 const SCAN_TARGETS = [ ['game.js', js], ['index.html', html], ['style.css', css] ];
 
 /* 유니코드 정규화(NFC) 후 비교 — 원본 파일이 NFD(자모 분해)로 저장돼도 놓치지 않는다.
@@ -513,7 +515,7 @@ function scanOne(hay){
    3건(L1 토큰 · verbatim any · verbatim all 조합) 중 하나라도 미검출이면 스캐너 자체 고장으로 보고
    본 스캔에 들어가지 않는다(종료코드 2). NFD(자모 분해) 이형도 섞어 정규화 누락을 함께 확인한다. */
 function runCanarySelfCheck(){
-  const l1Sample = BANLIST.l1_self_incrimination_tokens[0];                 // 예: '원작'
+  const l1Sample = BANLIST.l1_self_incrimination_tokens[0];                 // 데이터 파일의 첫 토큰
   const anySig = BANLIST.verbatim_signatures.find(s=>s.any);
   const allSig = BANLIST.verbatim_signatures.find(s=>s.all);
   const l1SampleNFD = l1Sample.normalize('NFD');                             // 자모 분해 이형
