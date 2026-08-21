@@ -828,7 +828,14 @@ const HUNT_TIERS = (()=>{
       const f=w.list.length<=1 ? 0 : n/(w.list.length-1);     // 0..1 등급 내 진행도
       const cp=Math.round(w.cp0+(w.cp1-w.cp0)*f);
       const mat=pool[n%pool.length].k;                        // 고정 드랍 재료 (5종 → 6종 풀 순환)
-      const drops=[mat];
+      /* ★ v5.111: 등급당 재료 6종 vs 몬스터 5종이라 pool[5](잿가루/서리결정/천공수정/금강석)는
+         어떤 몬스터의 고정 드랍도 아니었다. 레시피에서는 66곳이 이 4종을 요구하는데(L 금강석만 24곳),
+         획득 경로가 '10% 랜덤 등급 드랍 × 1/6 = 킬당 1.7%' 뿐이라 대표 재료(35%)의 약 21배 느렸다.
+         → 등급 내 중간 난도 몬스터(n===2)에게 보조 고정 드랍(mat2)으로 배정한다.
+         왜 중간인가: 최약체에 붙이면 상위 재료가 공짜가 되고, 최강체에 붙이면 그 등급 제작이
+         통째로 그 몬스터 하나에 잠긴다. 아래 onKill 의 mat2 드랍률은 대표의 절반이다. */
+      const mat2 = (n===2 && pool.length>w.list.length) ? pool[pool.length-1].k : null;
+      const drops=mat2?[mat,mat2]:[mat];
       while(drops.length<w.slots){                           // 드랍 아이콘 칸 채우기
         const k=(drops.length<=2||!subPool.length)
           ? pool[(n+drops.length)%pool.length].k
@@ -838,7 +845,7 @@ const HUNT_TIERS = (()=>{
       out.push({ n:nm, c:w.c, shape:SHAPES[bi%SHAPES.length],
         img:(w.imgs&&w.imgs[bi])||null,   // ★ v5.25: 몬스터 스프라이트
         cp, hp:Math.round(80+cp*0.22), gold:Math.round(260+cp*1.05),
-        drop:g, sub, level:w.lv, job:w.job[bi%w.job.length], mat, drops });
+        drop:g, sub, level:w.lv, job:w.job[bi%w.job.length], mat, mat2, drops });
     });
   });
   return out;
@@ -2330,6 +2337,9 @@ const Battle = (()=>{
     /* ★ v4.3: 등급 공용풀 폐지 → 사냥터마다 '여기서만 나오는 대표 재료'(t.mat)를 떨군다.
        다음 티어로 올라갈 이유가 골드 배율뿐이 아니라 "그 재료가 여기서만 나온다"가 되도록. */
     if(Math.random()<p){ matGain(t.mat, boss?ri(2,4):1); drop(mx-8,my,'mat'); }
+    /* ★ v5.111: 보조 고정 드랍 — 등급당 6번째 재료의 유일한 '지정 파밍' 경로(HUNT_TIERS 주석 참조).
+       대표 재료의 절반 확률로 둔다. 아래 10% 랜덤 드랍은 그대로 유지(다른 재료 보완용). */
+    if(t.mat2 && Math.random()<p*0.5){ matGain(t.mat2, boss?ri(1,2):1); drop(mx-8,my,'mat'); }
     if(t.sub && Math.random()<0.25){ matGainGrade(t.sub, 1); }   // 하위 등급은 아무 재료나 소량
     /* ★ v5.29: 같은 등급 랜덤 추가 드랍 (10%) — 몬스터가 5종이라 고정 드랍이 5개 재료만
        커버한다. 6번째 재료(잿가루/서리결정/천공수정/금강석)는 전투로 얻을 수 없었는데,
@@ -3655,13 +3665,23 @@ const MODALS = {
       return matn;
     }
     /* 재료를 떨구는 몬스터 목록 팝업 — 같은 등급의 모든 몬스터 표시. */
+    /* ★ v5.111: 종전에는 '같은 등급 몬스터 전체'를 무조건 보여줬다. 몬스터는 저마다 고정 재료
+       1종만 떨구므로(onKill 참조), 흑염석을 눌러도 청연석·무쇠조각 몬스터가 같이 떴고 —
+       고정 드랍이 없던 잿가루/서리결정/천공수정/금강석은 5종 전부가 '그 재료를 안 주는 몬스터'였다.
+       즉 안내대로 사냥해도 원하는 재료가 안 나왔다. 이제 실제 드랍 몬스터를 먼저 지목하고,
+       나머지는 '랜덤 10%' 라벨을 달아 구분해서 보여준다. */
     function openMatMonsterPopup(matKey){
       const grade = matToGrade(matKey);
       if(!grade){ toast('재료 소환/합성으로 획득 가능합니다.'); return; }
-      const mons = HUNT_TIERS.map((t,i)=>({t,i})).filter(x=>x.t.drop===grade);
+      const all = HUNT_TIERS.map((t,i)=>({t,i})).filter(x=>x.t.drop===grade);
+      const dropsIt = x => x.t.mat===matKey || x.t.mat2===matKey;
+      const mons = [...all.filter(dropsIt), ...all.filter(x=>!dropsIt(x))];
+      const hit = all.filter(dropsIt).length;
       setModalTitle(`${matKey} 파밍 — ${GRADES[grade].name} 몬스터`);
       const b=$('#modalBody'); b.innerHTML='';
-      b.appendChild(el('div','hint',`이 재료를 떨구는 ${GRADES[grade].name} 등급 몬스터들입니다. 사냥할 몬스터를 선택하세요.`));
+      b.appendChild(el('div','hint', hit
+        ? `<b style="color:${GRADES[grade].color}">${matKey}</b> 을(를) 고정 드랍하는 몬스터입니다. 아래쪽 몬스터는 같은 등급이라 낮은 확률로만 나옵니다.`
+        : `<b style="color:${GRADES[grade].color}">${matKey}</b> 을(를) 고정 드랍하는 몬스터가 없습니다. 같은 등급 사냥 중 낮은 확률로 나오거나, 재료 소환·합성으로 얻습니다.`));
       mons.forEach(({t,i})=>{
         const isHunting = (S.huntTier||0)===i;
         const row=el('div','pack');
@@ -3669,8 +3689,8 @@ const MODALS = {
           <img src="assets/monsters/${t.img}.png" style="width:40px;height:40px;object-fit:contain">
         </div>
         <div class="info">
-          <div class="t" style="color:${t.c}">${t.n} ${isHunting?'<span class="small" style="color:var(--ok)">사냥중</span>':''}</div>
-          <div class="d">드랍: ${matIcon(t.mat)} ${t.mat} · 권장 전투력 ${fmt(t.cp)}${totalCP()<t.cp?' ⚠':''}</div>
+          <div class="t" style="color:${t.c}">${t.n} ${isHunting?'<span class="small" style="color:var(--ok)">사냥중</span>':''}${(t.mat===matKey||t.mat2===matKey)?'<span class="small" style="color:var(--g-legend)">고정 드랍</span>':'<span class="small mut">랜덤</span>'}</div>
+          <div class="d">드랍: ${matIcon(t.mat)} ${t.mat}${t.mat2?` · ${matIcon(t.mat2)} ${t.mat2}`:''} · 권장 전투력 ${fmt(t.cp)}${totalCP()<t.cp?' ⚠':''}</div>
         </div>`;
         const btn=el('button','btn sm'+(isHunting?'':' gold'), isHunting?'사냥중':'사냥');
         if(isHunting) btn.disabled=true;
@@ -5483,12 +5503,12 @@ const MODALS = {
         <div class="d"><b>레벨 : ${t.level}</b> · <span style="color:${jb.color}">${jb.emoji} ${jb.name}</span> · 권장 전투력 <b style="${danger?'color:var(--bad)':'color:var(--ok)'}">${fmt(t.cp)}</b>${danger?' ⚠ 전멸 위험':''}
         <div class="mdrops">${dropGrid}</div>
         ${curT&&!cur?`<div class="mon-why">
-            <div class="mw"><span class="mwl">여기서만</span> ${matIcon(t.mat)} <b style="color:${GRADES[t.drop].color}">${t.mat}</b></div>
+            <div class="mw"><span class="mwl">여기서만</span> ${matIcon(t.mat)} <b style="color:${GRADES[t.drop].color}">${t.mat}</b>${t.mat2?` · ${matIcon(t.mat2)} <b style="color:${GRADES[t.drop].color}">${t.mat2}</b>`:''}</div>
             <div class="mw"><span class="mwl">골드</span> <b style="color:${goldMul>=1.5?'var(--ok)':''}">×${goldMul.toFixed(1)}</b> <span class="mut">(${fmt(t.gold)}/마리)</span></div>
             ${GORDER.indexOf(t.drop)>GORDER.indexOf(base.drop)
               ? `<div class="mw"><span class="mwl">해금</span> <b style="color:${GRADES[t.drop].color}">${GRADES[t.drop].name} 장비</b> 제작 재료</div>`
               : `<div class="mw"><span class="mwl">난이도</span> 레벨 ${t.level} · 체력 ${fmt(t.hp)}</div>`}
-          </div>`:`<br>드랍: ${matIcon(t.mat)} <b style="color:${GRADES[t.drop].color}">${t.mat}</b>${t.sub?` + ${GRADES[t.sub].name} 소량`:''} · 골드 ${fmt(t.gold)}`}
+          </div>`:`<br>드랍: ${matIcon(t.mat)} <b style="color:${GRADES[t.drop].color}">${t.mat}</b>${t.mat2?` · ${matIcon(t.mat2)} <b style="color:${GRADES[t.drop].color}">${t.mat2}</b>`:''}${t.sub?` + ${GRADES[t.sub].name} 소량`:''} · 골드 ${fmt(t.gold)}`}
         </div></div>`;
       const btn=el('button','btn sm'+(cur?'':' gold'),cur?'사냥중':'사냥');
       if(cur) btn.disabled=true;
