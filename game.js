@@ -1254,7 +1254,7 @@ function freshState(){
             bossTop:0,                      // 레전더리 보스 처치 횟수
             rubyBox:0,                      // 루비 상자(충전 상품) 구매 횟수
             chat:{} },                      // 월드챗 문구 칭호 전송 플래그
-    seenTutorial:false, tutStep:0, guideStep:0, guideProg:0, huntTier:0, mobCount:30,   // mobCount: 홈 필드 동시 스폰 상한 (마릿수 선택기, 원작 기본 30). ★ _huntV 는 freshState 에 두지 않는다 — mergeDefaults 가 먼저 채우면 이관이 통째로 스킵된다
+    seenTutorial:false, introDone:false, tutStep:0, guideStep:0, guideProg:0, huntTier:0, mobCount:30,   // mobCount: 홈 필드 동시 스폰 상한 (마릿수 선택기, 원작 기본 30). ★ _huntV 는 freshState 에 두지 않는다 — mergeDefaults 가 먼저 채우면 이관이 통째로 스킵된다
     // ★ B1 신규 — G-01 튜토리얼 진행 관측 / G-04 보상 1회 지급 / G-11 길드 미가입 / G-13 자동전투 표시
     tut:{ base:{}, matBase:null, matN:0, formSig:'', formN:0 },
     _missionPaid:false,
@@ -3260,6 +3260,10 @@ function tutWatch(){
   if(!t.formSig) t.formSig=sig;
   else if(sig!==t.formSig){ t.formSig=sig; t.formN=(t.formN||0)+1; }
 }
+/* ★ v5.113: '편성 저장' 한 칸만 인정하는 훅. 편성 내용이 그대로여도(시그니처 불변)
+   저장을 눌렀다면 인정해야 한다 — 안 그러면 유저가 시키는 대로 저장했는데 진행이 안 잡힌다.
+   단계를 통째로 충족시키는 tutEvent 와 달리 STEP8 의 두 목표 중 하나만 채운다. */
+function tutFormDone(){ if(!S || S.seenTutorial) return; const t=tutState(); t.formN=(t.formN||0)+1; tutPoll(); }
 // 외부(다른 배치)에서 단계를 직접 완료시키고 싶을 때 쓰는 공개 훅
 function tutEvent(key){
   if(!S || S.seenTutorial) return;
@@ -3358,6 +3362,7 @@ function runIntro(){ showDialogue(['안녕하세요, 군주님. 저는 결정의
 /* ★ B1/G-08: 3개 팝업이 서로 다른 화면이다.
    ① 랭크 보상 카드 ② 7일 출석 전체 그리드(1일차 체크) ③ 오프라인 정산 3필드 */
 function introRewards(){
+  S.introDone=true;   // ★ v5.113: 지급 직전에 못박는다(대사 중 이탈 시엔 다음 접속에 다시 준다)
   const rewards=[ {t:'투기장 무쇠 랭크 보상',ic:'🏅',d:'골드 500,000',act:()=>addGold(500000)},
     {t:'7일 출석 · 1일차',ic:'🗓️',d:'소환권 1',act:()=>S.tickHero++},
     {t:'첫 방치 보상',ic:'⏳',d:'희귀 재료 20',act:()=>{ matGainGrade('R',20); }} ];
@@ -3967,7 +3972,10 @@ const MODALS = {
           form[slot]=r.hero_id; S.formation=Object.assign({},form);
           toast(isHome ? `${r.name} 배치 — 홈 필드에 출전` : `${r.name} 배치 · ${['전방','측면','후방','예비'][slot]}`);
         }
-        S.formations[activeKey]=form; Battle.refreshParty(); tutEvent('form'); openModal('hero'); refreshHUD(); };
+        /* ★ v5.113: tutEvent('form') → tutFormDone(). tutEvent 는 goal 과 무관하게
+           base=cnt()-goal 로 단계를 통째로 즉시 충족시켜, STEP8 이 goal 2(편성+투기장)가 된 뒤
+           편성 저장 한 번에 투기장을 건너뛰고 STEP9 로 점프했다. 이제 '편성' 한 칸만 인정한다. */
+        S.formations[activeKey]=form; Battle.refreshParty(); tutFormDone(); openModal('hero'); refreshHUD(); };
       act.append(eq,sb); card.appendChild(act);
       card.onclick=()=> e.own ? heroDetail(r.hero_id) : toast(`${r.name} 미보유 · 조각 ${fmt(sh)}/${fmt(need)}`);
       grid.appendChild(card);
@@ -4041,7 +4049,7 @@ const MODALS = {
       S.formations[tab]=Object.assign({},draft);
       if(tab!=='pvp'){ S.formActive=tab; S.formation=Object.assign({},draft); }   // 레거시 미러(투기장·구코드 호환)
       dirty=false; Battle.refreshParty(); sfx('tap');
-      toast(`${TABS.find(t=>t[0]===tab)[1]} 저장 완료`); tutEvent('form'); refreshHUD(); openModal('formation');
+      toast(`${TABS.find(t=>t[0]===tab)[1]} 저장 완료`); tutFormDone(); refreshHUD(); openModal('formation');   // ★ v5.113: 위 주석 참조
     };
     const back=el('button','btn wide','◀ 영웅');
     back.onclick=()=>{ if(dirty) toast('저장하지 않은 편성은 반영되지 않습니다.'); openModal('hero'); };
@@ -6754,7 +6762,9 @@ function enterHome(){
   sysLog('결정의 시대에 오신 것을 환영합니다, 군주여.');
   if(!_loopOn){ _loopOn=true; requestAnimationFrame(gameLoop); }
   updateGuideBanner();
-  if(!S.seenTutorial){ setTimeout(runIntro, 500); }
+  /* ★ v5.113: 종전엔 '튜토리얼 미완료'이기만 하면 재접속할 때마다 인트로가 다시 돌아
+     사전지급 자원이 무제한 중복 지급됐다(새로고침만으로 조각 파밍 가능). 1회로 못박는다. */
+  if(!S.seenTutorial && !S.introDone){ setTimeout(runIntro, 500); }
   else { renderTutorial(); if(S.offlinePending>0) setTimeout(()=>openModal('settle'), 450); }
 }
 /* ★ B1/G-06: START → 홈 직행이 아니라 로그인 목업 2단계(알약 버튼 → 계정 선택 시트)를 거친다.
