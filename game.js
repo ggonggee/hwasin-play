@@ -322,6 +322,19 @@ const FORGE_SLOTS = [
   { k:'용광로', ic:'🔥', act:'synth' },      // 액션 숏컷 (아이템 그리드 아님)
   { k:'망치',   ic:'🔨', act:'hammerSynth' },
 ];
+/* ★ v5.119: 아이템명 → 대장간 위치(등급 탭·부위·인덱스) 역인덱스.
+   길잡이 [바로가기]·튜토리얼이 아이템을 콕 집어 열 때 쓴다(대표 지시: 바로가기를 누르면
+   그 아이템이 선택된 상태로 열려 [제작]만 누르면 되게). */
+function forgeLocate(name){
+  for(let si=0; si<FORGE_SLOTS.length; si++){
+    const s=FORGE_SLOTS[si]; if(!s.items) continue;
+    for(const g of GORDER){
+      const i=(s.items[g]||[]).findIndex(it=>it[0]===name || it.n===name);
+      if(i>=0) return { grade:g, slotIdx:si, itemIdx:i };
+    }
+  }
+  return null;
+}
 // 아이템별 요구 재료 2~5종 가변 — 등급 총량(CRAFT[g].mat)을 분배해 결정적으로 생성
 function buildForgeRecipes(){
   FORGE_SLOTS.forEach((s,si)=>{
@@ -3238,7 +3251,9 @@ function reviveHUDTick(){
    base:true = 단계 진입 시점 값을 기준선으로 잡고 증분만 센다. */
 const TUT = [
   { k:'hunt',    goal:20, modal:'monster',   txt:'몬스터를 사냥해 20마리를 처치하세요',        base:true, cnt:()=>(S.stats.kills||0) },
-  { k:'shield',  goal:1,  modal:'forge',     txt:'대장간에서 방패를 제작하세요',              base:true, cnt:()=>S.equips.filter(e=>(e.slot||'').indexOf('방패')>=0).length },
+  /* ★ v5.119: 대장간이 방패를 미리 골라 두므로(사전 선택) 손가락은 [제작]만 짚으면 된다 */
+  { k:'shield',  goal:1,  modal:'forge',     txt:'대장간에서 방패를 제작하세요',              base:true, cnt:()=>S.equips.filter(e=>(e.slot||'').indexOf('방패')>=0).length,
+    subs:{ forge:'#forgeCraftBtn' } },
   /* ★ v5.112: 원작 STEP3·4 는 '영웅탭 → 영웅 장비창'에서 장착·강화한다(reference 화면지도 01-B).
      종전엔 인벤토리를 가리켰는데, 인벤토리에는 장착 기능이 없어(영웅 귀속 필요) 흐름이 끊겼다.
      subs = 모달이 열린 뒤 그 안에서 다시 짚어줄 대상 — 원작의 다단계 손가락 유도. */
@@ -3246,8 +3261,10 @@ const TUT = [
     subs:{ hero:'#eqOpenBtn', equip:'.grid.c5 .cell' } },
   { k:'enh',     goal:1,  modal:'hero',      txt:'장착한 장비를 1회 강화하세요',               base:true, cnt:()=>S.equips.reduce((a,e)=>a+(e.enh||0),0),
     subs:{ hero:'#eqOpenBtn', equip:'.eq-fn5 .round-btn' } },
-  { k:'hsum',    goal:1,  modal:'summon',    txt:'영웅을 소환해 조각을 모으세요',             base:true, cnt:()=>(S.stats.summons||0) },
-  { k:'msum',    goal:1,  modal:'summon',    txt:'재료를 소환하세요',                         base:true, cnt:()=>((S.tut&&S.tut.matN)||0) },
+  { k:'hsum',    goal:1,  modal:'summon',    txt:'영웅을 소환해 조각을 모으세요',             base:true, cnt:()=>(S.stats.summons||0),
+    subs:{ summon:'#sumHero1 button' } },
+  { k:'msum',    goal:1,  modal:'summon',    txt:'재료를 소환하세요',                         base:true, cnt:()=>((S.tut&&S.tut.matN)||0),
+    subs:{ summon:'#sumMat1 button' } },
   /* ★ v5.112: 원작 STEP7 은 '영웅탭 → 합성'(조각→등급업→스킬 해금)이다. 종전의 '용광로 재료 합성'은
      원작 온보딩에 없고, 정작 코어 성장축인 조각 합성을 튜토리얼이 한 번도 안 가르치고 있었다.
      소환 자동해금(20조각 N등급)과 구분하려고 실제 합성 횟수(stats.fuses)로 판정한다. */
@@ -3702,8 +3719,15 @@ const MODALS = {
   }},
 
   /* ---------- 제작 / 대장간 ---------- */
-  forge:{ title:'대장간', render(b){
+  forge:{ title:'대장간', render(b, pre){
     let cur='N', slotIdx=0, itemIdx=0;
+    /* ★ v5.119: 사전 선택 — 열리자마자 목표 아이템이 골라져 있어 [제작]만 누르면 된다.
+       우선순위: ① pre 인자(바로가기가 넘긴 아이템명) ② 튜토리얼 STEP2(방패)
+       ③ 길잡이 진행 중이면 현재 목표. 해당 없으면 종전처럼 일반/무기/첫 칸. */
+    const want = (typeof pre==='string' && pre) ? pre
+      : (!S.seenTutorial && TUT[S.tutStep] && TUT[S.tutStep].k==='shield') ? '방패'
+      : (S.seenTutorial && guideTarget()) ? guideTarget().slot : null;
+    if(want){ const loc=forgeLocate(want); if(loc){ cur=loc.grade; slotIdx=loc.slotIdx; itemIdx=loc.itemIdx; } }
     const tabs=el('div','tabrow');
     GORDER.forEach(g=>{ const t=el('div','tab'+(g===cur?' on':''), GRADES[g].name); if(g!==cur) t.style.color=GRADES[g].color;
       t.onclick=()=>{ cur=g; itemIdx=0; render2(); [...tabs.children].forEach((c,i)=>c.classList.toggle('on',GORDER[i]===g)); };
@@ -3819,7 +3843,7 @@ const MODALS = {
           + (cp.guide?'<br><b style="color:var(--g-legend)">길잡이 단계</b>':'');
         side.appendChild(info);
         /* ★ v5.58: 제작 버튼 클릭 시 제작 팝업(확률/비용 표시) → 확인 후 startCraft. */
-        const btn=el('button','btn gold sm','제작'); btn.onclick=()=>openForgeItemPopup(item); side.appendChild(btn);
+        const btn=el('button','btn gold sm','제작'); btn.id='forgeCraftBtn'; btn.onclick=()=>openForgeItemPopup(item); side.appendChild(btn);
       }
       grid.appendChild(side); body.appendChild(grid);
       // G-17: 6칸 부위행 — 5·6번째(용광로·망치)는 액션 숏컷
@@ -4303,8 +4327,9 @@ const MODALS = {
     b.appendChild(res);
     const grid=el('div','grid c2 summon-grid'); grid.style.marginTop='8px';
     // 석판 타일 — 확인 오버레이(G-58) 경유 후에만 실제 소환
-    const mkTile=(ic,title,sub,costTxt,qty,can,run,gr)=>{
-      const t=el('div','sum-tile gframe grade-'+gr); t.style.setProperty('--gc',GRADES[gr].color);
+    const mkTile=(ic,title,sub,costTxt,qty,can,run,gr,id)=>{
+      const t=el('div','sum-tile gframe grade-'+gr); if(id) t.id=id;   // ★ v5.119: 튜토리얼 손가락 타깃
+      t.style.setProperty('--gc',GRADES[gr].color);
       t.innerHTML=`<div class="st-t" style="color:${GRADES[gr].color}">${title}</div>
         <div class="st-s">${sub}</div><div class="st-art">${eImg(ic,2)}</div><div class="st-c">${costTxt}</div>`;
       const btn=el('button','btn xs'+(can?' gold':''),'소환');
@@ -4326,12 +4351,12 @@ const MODALS = {
       t.appendChild(btn); grid.appendChild(t);
     };
     // 영웅 3티어
-    mkTile('📜','영웅 소환','일반 · 조각 X20','소환권 1', 20, S.tickHero>=1, ()=>{ if(S.tickHero<1)return null; S.tickHero--; return summonRun(20); },'R');
+    mkTile('📜','영웅 소환','일반 · 조각 X20','소환권 1', 20, S.tickHero>=1, ()=>{ if(S.tickHero<1)return null; S.tickHero--; return summonRun(20); },'R','sumHero1');
     mkTile('📜','영웅 소환','고급 · 조각 X50', (S.tickHeroP>0?'고급 소환권 1':'루비 300'), 50, (S.tickHeroP>0||S.ruby>=300),
       ()=>{ if(S.tickHeroP>0){ S.tickHeroP--; } else if(S.ruby>=300){ S.ruby-=300; } else return null; return summonRun(50); },'E');
     mkTile('📜','영웅 소환','최상급 · 조각 X100','루비 800', 100, S.ruby>=800, ()=>{ if(S.ruby<800)return null; S.ruby-=800; return summonRun(100); },'L');
     // 재료 2티어
-    mkTile('📦','재료 소환','일반 · 재료 X20','재료권 1', 20, S.tickMat>=1, ()=>{ if(S.tickMat<1)return null; S.tickMat--; return matSummon(20); },'N');
+    mkTile('📦','재료 소환','일반 · 재료 X20','재료권 1', 20, S.tickMat>=1, ()=>{ if(S.tickMat<1)return null; S.tickMat--; return matSummon(20); },'N','sumMat1');
     mkTile('📦','재료 소환','고급 · 재료 X80', (S.tickMatP>0?'고급 재료권 1':'재료권 3'), 80, (S.tickMatP>0||S.tickMat>=3),
       ()=>{ if(S.tickMatP>0){ S.tickMatP--; } else if(S.tickMat>=3){ S.tickMat-=3; } else return null; return matSummon(80); },'R');
     // 직업 지정 5종
@@ -5193,7 +5218,7 @@ const MODALS = {
         body.appendChild(el('div','hint','길잡이 제작 체인 · 완료 시 보상. 최종 단계에서 약탈 해금.'));
         GUIDE_CHAIN.forEach((q,i)=>{ const done=i<S.guideStep, cur=i===S.guideStep;
           const row=el('div','pack'); row.style.opacity=done?'.5':'1'; row.innerHTML=`<div class="pic">${done?'✅':cur?q.goalIcon:eImg("🔒",2)}</div><div class="info"><div class="t">${i+1}. ${guideName(q)} 제작</div><div class="d">${done?'완료':cur?`진행 중 · 보상 ${q.rewardIcon} X${fmt(q.rewardQty)}`:'잠김'}</div></div>`;
-          if(cur){ const btn=el('button','btn sm gold','바로가기'); btn.onclick=()=>{ closeModal(); openModal('forge'); }; row.appendChild(btn); }
+          if(cur){ const btn=el('button','btn sm gold','바로가기'); btn.onclick=()=>{ closeModal(); openModal('forge', q.slot); }; row.appendChild(btn); }   // ★ v5.119: 목표 선택 상태로
           body.appendChild(row); });
         const need=GUIDE_NEED[S.guideStep]||1;
         body.appendChild(el('div','hint',S.guideStep>=GUIDE_CHAIN.length?'모든 길잡이 완료 — 약탈이 해금되었습니다.':`각 단계는 <b>실제 행동으로 자동 완료</b>됩니다. 현재 진행 ${S.guideProg||0}/${need}`));
@@ -6891,7 +6916,9 @@ function wire(){
   $('#btnPlusRuby').onclick=()=>openModal('shop');
   const tp=$('.timepod'); if(tp) tp.addEventListener('click',()=>openModal('settle'));   // ★ B1/G-14: topbar → stage-wrap 이동
   const npl=$('#npc-layer'); if(npl) npl.addEventListener('click', nextDialogue);
-  const gbGo=$('#gbGo'); if(gbGo) gbGo.addEventListener('click',()=>openModal('quest'));
+  /* ★ v5.119: 원작의 바로가기는 '대장간 유도'다(화면지도 01-C). 퀘스트 목록을 한 번 거치던 것을
+     현재 목표가 선택된 대장간 직행으로 — [바로가기] → [제작] 두 번이면 끝난다. */
+  const gbGo=$('#gbGo'); if(gbGo) gbGo.addEventListener('click',()=>{ const g=guideTarget(); if(g) openModal('forge', g.slot); else openModal('quest'); });
   $('#battle').addEventListener('click',()=>{ $('#sidemenu').classList.add('hidden'); });
   document.querySelectorAll('[data-modal]').forEach(elm=>{ elm.addEventListener('click',()=>{ sfx('tap'); $('#sidemenu').classList.add('hidden'); openModal(elm.dataset.modal); }); });
   const ci=$('#chatInput'); ci.addEventListener('keydown',e=>{ if(e.key==='Enter'&&ci.value.trim()){
