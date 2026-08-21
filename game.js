@@ -1246,6 +1246,7 @@ function freshState(){
        craftFail/craftWin 은 '현재 연속(스트릭)', ...Best 는 '최고 스트릭'이다.
        칭호는 한 번 달성하면 유지돼야 하므로 have() 는 Best 만 본다. */
     stats:{ kills:0, crafts:0, summons:0, arenaWins:0, synths:0, bossChallenges:0, raids:0,
+            fuses:0, arenaEnters:0,          // ★ v5.112: 튜토 STEP7(영웅 합성)·STEP8(투기장 입장) 판정용
             craftFail:0, craftFailBest:0,   // 제작 연속 실패
             craftWin:0,  craftWinBest:0,    // 영웅등급 이상 장비 제작 연속 성공
             poorClick:0, poorBest:0,        // 골드 부족 상태에서의 제작 연속 시도
@@ -1493,6 +1494,7 @@ function heroFuseReady(hid){ const r=HERO_BY_ID[hid]; if(!r||heroOwned(hid)) ret
 function heroFuse(hid){ const r=HERO_BY_ID[hid]; if(!r||!heroFuseReady(hid)) return false;
   if(!heroShardSpend(hid, heroFuseNeed(hid))) return false;
   const st=heroSlot(hid); st.own=true; st.level=st.level||1;
+  S.stats.fuses=(S.stats.fuses||0)+1;                    // ★ v5.112: 튜토 STEP7 실측 (소환 자동해금과 구분)
   Battle.refreshParty(); return true; }
 // 온보딩 클래스 특성 확정 시 해당 직업의 N등급 영웅(HERO_001~005)을 확정 지급
 function grantClassStarter(traitId){
@@ -3217,14 +3219,30 @@ function reviveHUDTick(){
 const TUT = [
   { k:'hunt',    goal:20, modal:'monster',   txt:'몬스터를 사냥해 20마리를 처치하세요',        base:true, cnt:()=>(S.stats.kills||0) },
   { k:'shield',  goal:1,  modal:'forge',     txt:'대장간에서 방패를 제작하세요',              base:true, cnt:()=>S.equips.filter(e=>(e.slot||'').indexOf('방패')>=0).length },
-  { k:'wear',    goal:1,  modal:'inventory', txt:'제작한 장비를 장착하세요',                  base:true, cnt:()=>S.equips.filter(e=>e.equipped).length },
-  { k:'enh',     goal:1,  modal:'inventory', txt:'장비를 1회 강화하세요',                     base:true, cnt:()=>S.equips.reduce((a,e)=>a+(e.enh||0),0) },
+  /* ★ v5.112: 원작 STEP3·4 는 '영웅탭 → 영웅 장비창'에서 장착·강화한다(reference 화면지도 01-B).
+     종전엔 인벤토리를 가리켰는데, 인벤토리에는 장착 기능이 없어(영웅 귀속 필요) 흐름이 끊겼다.
+     subs = 모달이 열린 뒤 그 안에서 다시 짚어줄 대상 — 원작의 다단계 손가락 유도. */
+  { k:'wear',    goal:1,  modal:'hero',      txt:'영웅 장비창에서 제작한 장비를 장착하세요',   base:true, cnt:()=>S.equips.filter(e=>e.equipped).length,
+    subs:{ hero:'#eqOpenBtn', equip:'.grid.c5 .cell' } },
+  { k:'enh',     goal:1,  modal:'hero',      txt:'장착한 장비를 1회 강화하세요',               base:true, cnt:()=>S.equips.reduce((a,e)=>a+(e.enh||0),0),
+    subs:{ hero:'#eqOpenBtn', equip:'.eq-fn5 .round-btn' } },
   { k:'hsum',    goal:1,  modal:'summon',    txt:'영웅을 소환해 조각을 모으세요',             base:true, cnt:()=>(S.stats.summons||0) },
   { k:'msum',    goal:1,  modal:'summon',    txt:'재료를 소환하세요',                         base:true, cnt:()=>((S.tut&&S.tut.matN)||0) },
-  { k:'synth',   goal:1,  modal:'forge',     txt:'용광로에서 재료를 합성하세요',              base:true, cnt:()=>(S.stats.synths||0) },
-  { k:'form',    goal:1,  modal:'hero',      txt:'영웅 진영을 편성하고 저장하세요',           base:true, cnt:()=>((S.tut&&S.tut.formN)||0) },
+  /* ★ v5.112: 원작 STEP7 은 '영웅탭 → 합성'(조각→등급업→스킬 해금)이다. 종전의 '용광로 재료 합성'은
+     원작 온보딩에 없고, 정작 코어 성장축인 조각 합성을 튜토리얼이 한 번도 안 가르치고 있었다.
+     소환 자동해금(20조각 N등급)과 구분하려고 실제 합성 횟수(stats.fuses)로 판정한다. */
+  { k:'hfuse',   goal:1,  modal:'hero',      txt:'영웅 조각을 모아 영웅을 합성하세요',        base:true, cnt:()=>(S.stats.fuses||0),
+    subs:{ hero:'.hc-fuse:not([disabled])' } },
+  /* ★ v5.112: 원작 STEP8 은 '진영 편성 저장 + 투기장 입장' 두 가지다(0/2). 편성만 저장하고 끝나면
+     핵심 콘텐츠인 투기장을 온보딩에서 한 번도 못 보고 지나간다. 편성 후 손가락이 투기장으로 옮겨간다. */
+  { k:'form',    goal:2,  modal:()=>(((S.tut&&S.tut.formN)||0) ? 'arena' : 'hero'),
+    txt:'진영을 편성해 저장하고 투기장에 입장하세요', base:false,
+    cnt:()=>(((S.tut&&S.tut.formN)||0)?1:0) + ((S.stats.arenaEnters||0)?1:0),
+    subs:{ hero:'#formOpenBtn', formation:'.btn.gold' } },
   { k:'mission', goal:1,  modal:'',          txt:'미션 완료 보상을 수령하고 클래스를 선택하세요', base:false, cnt:()=>(S.classTrait?1:0) },
 ];
+/* ★ v5.112: 한 단계 안에서 목표가 둘 이상이면 지목 대상도 바뀐다(STEP8: 편성 → 투기장) */
+function tutModal(t){ return t ? (typeof t.modal==='function' ? t.modal() : t.modal) : ''; }
 function tutState(){
   if(!S.tut || typeof S.tut!=='object') S.tut={ base:{}, matBase:null, matN:0, formSig:'', formN:0 };
   if(!S.tut.base) S.tut.base={};
@@ -3278,7 +3296,11 @@ function showDialogue(lines, onDone){ _dlgQueue=lines.slice(); _dlgDone=onDone||
 function nextDialogue(){ if(!_dlgQueue.length){ $('#npc-layer').classList.add('hidden'); const d=_dlgDone; _dlgDone=null; if(d) d(); return; } $('#npcText').textContent=_dlgQueue.shift(); }
 // --- 손가락 포인터 (강제 유도) ---
 function clearFinger(){ document.querySelectorAll('.tut-highlight').forEach(e=>e.classList.remove('tut-highlight')); const f=$('#tutFinger'); if(f) f.remove(); }
-function pointFinger(modalKey){ clearFinger(); const t=document.querySelector(`[data-modal="${modalKey}"]`); if(!t) return; t.classList.add('tut-highlight');
+function pointFinger(modalKey){ pointFingerEl(document.querySelector(`[data-modal="${modalKey}"]`)); }
+/* ★ v5.112: 모달 안의 버튼도 짚는다. 하단 네비만 짚고 끝내면 모달을 연 순간
+   유도가 사라져 "그래서 뭘 누르라는 건데" 가 된다(원작은 매 단계 손가락 유지). */
+function pointFingerSel(sel){ const root=$('#modal-root'); if(!root||!root.classList.contains('on')) return; pointFingerEl(root.querySelector(sel)); }
+function pointFingerEl(t){ clearFinger(); if(!t) return; t.classList.add('tut-highlight');
   const f=el('div','tut-finger','👆'); f.id='tutFinger'; const r=t.getBoundingClientRect(), dr=$('#device').getBoundingClientRect();
   /* ★ v5.108: 두 rect 는 transform:scale 이 적용된 '화면 좌표'인데, 손가락은 #device 안(453 좌표계)에
      배치된다 → 배율로 나눠 되돌리지 않으면 화면이 작을수록 목표에서 점점 멀어진다. */
@@ -3292,13 +3314,16 @@ function renderTutorial(){
   const prog=clamp(_tutProg,0,t.goal), pct=Math.round(prog/t.goal*100);
   box.innerHTML=`<div class="ob-step">STEP ${S.tutStep+1}/${TUT.length}</div><div class="ob-txt">${t.txt}</div>`+
     `<div class="ob-prog"><span class="ob-bar"><i style="width:${pct}%"></i></span><span class="ob-n">${prog}/${t.goal}</span></div>`;
-  if(t.modal) pointFinger(t.modal); else clearFinger();
+  const mk=tutModal(t); if(mk) pointFinger(mk); else clearFinger();
 }
 // 모달 오픈은 더 이상 단계를 통과시키지 않는다 — 손가락 유도만 갱신한다(G-01).
 function tutorialProgress(modalKey){
   if(!S || S.seenTutorial) return;
-  const t=TUT[S.tutStep];
-  if(t && t.modal===modalKey) clearFinger();
+  const t=TUT[S.tutStep]; if(!t) return;
+  const sel = t.subs && t.subs[modalKey];
+  /* 모달 본문은 openModal 이 이 함수를 부른 뒤에 그려질 수 있으므로 한 틱 미룬다 */
+  if(sel){ setTimeout(()=>pointFingerSel(sel), 0); return; }
+  if(tutModal(t)===modalKey) clearFinger();
 }
 /* ★ B1/G-04: 미션 완료 보상 5칸 (모달 MODALS.missionReward 에서 렌더) */
 const MISSION_REWARDS = [
@@ -3343,6 +3368,11 @@ function introRewards(){
      - 재료소환권: 재료 소환 (1개)
      이 자원들이 없으면 튜토리얼이 중간에 막혀 신규 이탈. */
   matGain('흑염석', 20); S.stones = (S.stones||0) + 10; S.tickMat = (S.tickMat||0) + 10;
+  /* ★ v5.112: STEP7(영웅 합성)용 조각. 소환은 1회당 1~3개를 5개 직업에 무작위로 뿌리므로
+     R등급 요구치(50)를 튜토리얼 안에서 모으는 건 불가능하다 — 막히면 신규가 이탈한다.
+     시작 보유 영웅(HERO_001·002)의 직업에 요구치만큼 얹어 '모아서 합성'을 체험만 시킨다. */
+  ['HERO_001','HERO_002'].forEach(h=>{ const r=HERO_BY_ID[h]; if(!r) return;
+    S.shards[r.class_id]=(S.shards[r.class_id]||0)+HERO_SHARD_NEED.R; });
   _introActive=true; let i=0;
   (function showNext(){
     if(i>=rewards.length){ _introActive=false; startGuidedTutorial(); return; }
@@ -3945,11 +3975,11 @@ const MODALS = {
     b.appendChild(grid);
     const aw=el('div'); aw.style.marginTop='12px'; aw.innerHTML=`<div class="hr"></div>`;
     const row=el('div','btnrow');
-    const eb=el('button','btn wide','🛡️ 장비 착용창'); eb.onclick=()=>openModal('equip');
+    const eb=el('button','btn wide','🛡️ 장비 착용창'); eb.id='eqOpenBtn'; eb.onclick=()=>openModal('equip');
     const ab=el('button','btn wide gold','⚡ 각성'); ab.onclick=()=>openModal('awaken');
     row.append(eb,ab); aw.appendChild(row); b.appendChild(aw);
     // ★ G-52: 최하단 [진영 선택] → formation 모달
-    const fb=el('button','btn wide gold','⚔️ 진영 선택'); fb.style.marginTop='8px';
+    const fb=el('button','btn wide gold','⚔️ 진영 선택'); fb.id='formOpenBtn'; fb.style.marginTop='8px';
     fb.onclick=()=>openModal('formation'); b.appendChild(fb);
   }},
 
@@ -4112,7 +4142,11 @@ const MODALS = {
     // 10번째 슬롯 — 벨트(중앙 하단)
     const beltWrap=el('div','eq-beltrow'); beltWrap.appendChild(mkSlot('벨트',['벨트'])); center.appendChild(beltWrap);
     const fn=el('div','eq-fn5');
-    [['강화','⚒️',()=>{ if(!S.equips.length){toast('장비 없음 · 대장간에서 제작');return;} openEnhance(S.equips[0]); }],
+    /* ★ v5.112: 종전엔 무조건 S.equips[0] — 착용 중인 장비가 아니라 보유 목록 첫 칸을 열었다.
+       원작 STEP4 는 '장착한 장비를 강화'다. 착용분 우선, 없으면 첫 장비로 폴백. */
+    [['강화','⚒️',()=>{ if(!S.equips.length){toast('장비 없음 · 대장간에서 제작');return;}
+        const tgt=S.equips.find(x=>x.equipped && (!x.heroId || x.heroId===cur.hero_id)) || S.equips.find(x=>x.equipped) || S.equips[0];
+        openEnhance(tgt); }],
      ['스탯','📊',()=>toast(`전투력 ${fmt(totalCP())}`)],
      ['각성','⚡',()=>openModal('awaken')],
      ['스킬','✨',()=>toast('스킬은 등급업(합성) 시 해금')]].forEach(([t,ic,cb])=>{ const rb=el('div','round-btn'); rb.innerHTML=`<span class="gi">${eImg(ic,1.5)}</span><span>${t}</span>`; rb.onclick=cb; fn.appendChild(rb); });
@@ -4652,7 +4686,11 @@ const MODALS = {
       if(!arr.length){ list.appendChild(el('div','hint',`${S.invTab} 탭에 미장착 장비가 없습니다.`)); return; }
       arr.slice(0,16).forEach(e=>{ const c=el('div','cell gframe grade-'+e.grade); c.style.position='relative'; c.style.setProperty('--gc',GRADES[e.grade].color);
         c.innerHTML=`<div class="gtag">${GRADES[e.grade].name}</div><div class="ei">${equipImg(e.slot,2)}</div><div class="cn">${e.slot}</div>${e.enh?`<div class="lvl">+${e.enh}</div>`:''}`;
-        c.onclick=()=>itemDetail(e, cur && cur.hero_id); list.appendChild(c); });
+        /* ★ v5.112: 종전 `cur && cur.hero_id` — 이 스코프에 cur 이 없어 클릭 즉시
+           ReferenceError 로 죽었다(장비를 눌러도 아무 반응이 없음). 인벤토리에는
+           선택된 영웅이라는 개념이 없으므로 heroId 는 null 이 정답이다. itemDetail 의
+           v5.81 가드가 "영웅 착용창에서 장착" 으로 유도한다. */
+        c.onclick=()=>itemDetail(e, null); list.appendChild(c); });
     }
     TABS.forEach(([k,label])=>{ const t=el('div','inv-tab'+(S.invTab===k?' on':''),label);
       t.onclick=()=>{ S.invTab=k; tb.querySelectorAll('.inv-tab').forEach(x=>x.classList.remove('on')); t.classList.add('on'); drawList(); }; tb.appendChild(t); });
@@ -6318,7 +6356,9 @@ function heroRevealFx(list, gained){
 /* ★ v5.5: 원작 투기장 매치 제한시간은 2:00 이다(전량판독 159행, 01:58→01:49 직접 관찰).
    우리는 20 초로 1/6 이었고, 짧게 잡은 결재 근거가 기획서 어디에도 없었다.
    제한시간은 '상한'이라 승부가 나면 그 전에 끝난다 — 늘려도 매 판이 2분이 되지는 않는다. */
-const ARENA_DUR = 120;   // 1매치 제한 시간(초) — 헤더 mm:ss 와 동일 소스
+/* ★ v5.112: 120 → 60. 다른 전투가 15~60초인데 투기장만 2분이라 3v3 대치가 늘어지고
+   루즈했다(대표 지적). 헤더 mm:ss·종료 판정 모두 이 상수 하나를 본다. */
+const ARENA_DUR = 60;    // 1매치 제한 시간(초) — 헤더 mm:ss 와 동일 소스
 /* ★ B6/G-88·G-90: 랭킹 리스트 행 생성. 내 순위가 5위 이내로 올라와도 NPC 와 순위가 겹치지 않게 민다.
    ★ N2/G-93: 돋보기(유저 정보) 팝업이 요구하는 필드(길드·서버·ID)를 행에 같이 실어 보낸다.
      원작 ID 는 ISO 타임스탬프 문자열(예: 2026-05-02T23:40:25.551Z)이라 계정 생성 시각으로 읽힌다 →
@@ -6407,6 +6447,7 @@ function arenaHeadHide(){
   const h=$('#ar-head'); if(h) h.remove();
 }
 function arenaFight(){
+  S.stats.arenaEnters=(S.stats.arenaEnters||0)+1;        // ★ v5.112: 튜토 STEP8 실측
   if(Battle.inDungeon && Battle.inDungeon()){ toast('전투 진행 중'); return; }
   /* ★ N2: 매칭 기준 전투력을 '보유 전체(totalCP)'에서 '실제 출전하는 PVP 4인'으로 바꾼다.
      원작 투기장은 상대의 4인 편성과 겨루는데, 종전 기준은 보유 영웅이 늘수록 상대만 강해져
