@@ -1,1 +1,12 @@
+# 작업 원본(공개 배포에 불필요)
 *.psd
+*.ai
+*.clip
+
+# 도구
+node_modules/
+.DS_Store
+Thumbs.db
+
+# 내부 문서·리서치는 이 공개 저장소에 올리지 않는다 (구 개발 저장소 docs/ 참조)
+docs/

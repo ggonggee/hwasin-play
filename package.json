@@ -1,0 +1,18 @@
+{
+  "name": "hwasin-play",
+  "version": "5.112.0",
+  "private": true,
+  "description": "결정의 시대(Age of Decision) — 제작·수집 방치형 RPG (바닐라 JS, 빌드 도구 없음). 이 저장소가 개발 원본이자 GitHub Pages 배포본이다.",
+  "type": "module",
+  "scripts": {
+    "dev": "python -m http.server 8765 --directory .",
+    "verify": "node verify.mjs",
+    "smoke": "node smoke-test.mjs",
+    "icons": "node icon-pack.mjs",
+    "check": "node --check game.js && node verify.mjs && node smoke-test.mjs",
+    "deploy": "npm run check && git push origin main"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

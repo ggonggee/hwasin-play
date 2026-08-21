@@ -1,0 +1,18 @@
+# 에디터 공통 설정 — .gitattributes 의 LF 강제와 짝을 이룬다.
+# (Windows 환경에서 CRLF 가 섞이면 검증 스크립트·diff 가 지저분해진다)
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+[*.md]
+# 마크다운은 줄 끝 공백 2칸이 줄바꿈 의미라 보존한다
+trim_trailing_whitespace = false
+
+[*.py]
+indent_size = 4

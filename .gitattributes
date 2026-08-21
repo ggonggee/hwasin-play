@@ -1,0 +1,11 @@
+# 실행 스크립트·설정은 LF 강제 — Windows에서 git autocrlf가 CRLF로 바꾸면
+# CR(제어문자)을 거부하는 도구(Claude Code Workflow 검증기 등)와 충돌해 자동화가 멈춘다.
+# 표준 출처: 회사 OS(20260721_AIGameCompany) — LESSONS.md 2026-07-26
+*.js text eol=lf
+*.mjs text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.sh text eol=lf
+*.lua text eol=lf
