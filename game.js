@@ -58,13 +58,11 @@ const HERO_ROSTER = (()=>{
   return out;
 })();
 const HERO_BY_ID = {}; HERO_ROSTER.forEach(h=>HERO_BY_ID[h.hero_id]=h);
-/* ★ v5.83: 원작(벤치마크) 실측 기준 합성 조각 수량.
-   N→R 진화(=R 해금): 50조각
-   R→E 진화(=E 해금): 600조각
-   E→L 진화(=L 해금): 1800조각
-   N 등급은 소환으로 바로 획득하므로 합성 불가(20 유지 — 소환 가챠용 최소값).
-   대표 확인: 2026-08-10, 원작 인게임 합성 화면 실측. */
-const HERO_SHARD_NEED = { N:20, R:50, E:600, L:1800 };   // 등급별 합성 요구 조각 (원작 실측)
+/* ★ v5.126: 불칸 유사성 감사(20260822) A급 #3 — 원작 실측 수치(등급별 20·50·600·1800조각)를 그대로
+   이식했던 것을 폐기하고 독자 곡선으로 재설계했다. ⚠임의수치 — 추후 밸런스 담당이 시뮬로 재조정할 것.
+   N→R 진화(=R 해금): 80조각 / R→E 진화(=E 해금): 400조각 / E→L 진화(=L 해금): 1200조각
+   N 등급은 소환으로 바로 획득하므로 합성 불가(25 유지 — 소환 가챠용 최소값, 원작과 다른 값으로 교체). */
+const HERO_SHARD_NEED = { N:25, R:80, E:400, L:1200 };   // 등급별 합성 요구 조각 (★임의수치 — 불칸 값 아님)
 /* ★ B7/F1 · G-102 결정: 상점 '영웅' 탭 = 개별 영웅 조각 판매 (직업 5종 판매 → 폐기).
    [판매 종수 = 14종] 원작 재판독 exactCount=14 (추천 탭 요약·영웅 탭 상세 두 곳에서 동일 14종·동일 순서 재현).
    [선정 기준 = hero_id 채번 오름차순 상위 14종 (HERO_001~HERO_014)]
@@ -600,22 +598,21 @@ const TIERS = ['브론즈','실버','골드','플래티넘','다이아몬드','�
      따라서 이 배열은 이번 배치에서도 교체하지 못한다(원작 티어표 스샷 확보 시 이 배열만 교체). */
 const TIER_PTS = [0, 500, 1000, 1500, 2000, 2500, 3000];
 function arenaTierOf(pts){ let t=0; for(let i=0;i<TIER_PTS.length;i++){ if(pts>=TIER_PTS[i]) t=i; } return t; }
-/* ★ B6/G-84·G-85·G-86: 투기장 보상표 3종 (행수 9 / 13 / 7)
-   ★ N2: 원작 3탭을 전량 재판독 — 보상(9행)·매일 보상(7행)은 값·순서까지 완전 일치했고,
-     버프 탭만 마지막 '31~40위 5%' 행이 빠져 있어 12행 → 13행으로 보정했다.
-     원작 1~3위 라벨 자리에는 서버 1~3위 유저의 고유 칭호가 박혀 있으나(타사 IP) 우리는 '1위/2위/3위'로 둔다. */
+/* ★ v5.126: 불칸 유사성 감사(20260822) A급 #2(최우선)·#44·#45 — 투기장 보상표 3종(9/13/7행)이
+   불칸 실측과 값·순서까지 완전 일치했던 것을 폐기하고 값을 재설계했다. ⚠임의수치 — 추후 밸런스
+   담당이 재조정. 행수(9/13/7)·라벨 구간·정렬(내림차순)은 UI 구조라 유지하되 수치만 바꿨다. */
 const ARENA_DICE_ROWS = [
-  ['1위','X500'],['2위','X350'],['3위','X250'],['4~10위','X150'],['11~15위','X100'],
-  ['16~20위','X50'],['21~30위','X25'],['31~40위','X10'],['참여한 모든 유저','X50'],
+  ['1위','X400'],['2위','X300'],['3위','X220'],['4~10위','X130'],['11~15위','X90'],
+  ['16~20위','X60'],['21~30위','X30'],['31~40위','X15'],['참여한 모든 유저','X40'],
 ];
 const ARENA_GBUFF_ROWS = [
-  ['1위',100],['2위',80],['3위',70],['4위',60],['5위',50],['6위',45],
-  ['7위',40],['8위',35],['9위',30],['10~14위',25],['15~20위',15],['21~30위',10],
-  ['31~40위',5],   // ★ N2: 실측 13행 — 종전 12행에서 누락돼 있던 마지막 행
+  ['1위',90],['2위',75],['3위',65],['4위',58],['5위',50],['6위',44],
+  ['7위',38],['8위',33],['9위',28],['10~14위',22],['15~20위',14],['21~30위',8],
+  ['31~40위',4],
 ];
 const ARENA_TIER_ROWS = [
-  ['레전더리',30000000],['마스터',15000000],['다이아몬드',10000000],['플래티넘',5000000],
-  ['골드',2000000],['실버',1000000],['브론즈',500000],
+  ['레전더리',25000000],['마스터',12000000],['다이아몬드',8000000],['플래티넘',4000000],
+  ['골드',1600000],['실버',800000],['브론즈',400000],
 ];
 /* ★ N2: 주간 리셋(월요일 12시) 직후의 내 순위 — 신규 계정과 같은 자리로 되돌린다(freshState 와 동일 값). */
 const ARENA_RANK_RESET = 1088;
@@ -664,17 +661,19 @@ const GRAYSHOP = [
   { t:'영웅 기록서 1권',     ic:'📕', cost:900,  give:()=>{ S.records=(S.records||0)+1; } },
 ];
 
-/* ★ B7/G-99: 루비 충전 4단계 (기존 5단계 중 1500/24,000원 삭제) */
+/* ★ v5.126: 불칸 유사성 감사(20260822) A급 #1(최우선) — 불칸의 실제 상용 결제가(5,500/11,000/44,000/
+   119,000원)를 그대로 복제했던 표를 폐기. 수량·가격 전부 재설계했다. ⚠임의수치 — 추후 비즈니스부가
+   실제 ARPPU·플랫폼 수수료를 반영해 재조정할 것. (기존 B7/G-99: 루비 충전 4단계 구성은 유지) */
 const RUBYPACKS = [
-  { ruby:300,  won:'5,500원' },  { ruby:650,  won:'11,000원' },
-  { ruby:2800, won:'44,000원' }, { ruby:7500, won:'119,000원' },
+  { ruby:260,  won:'4,900원' },  { ruby:580,  won:'9,900원' },
+  { ruby:2400, won:'39,000원' }, { ruby:6200, won:'99,000원' },
 ];
-/* '매월 루비 2배' 프로모 4행 — 동일 가격, 지급량 2배 상당 */
+/* '매월 루비 2배' 프로모 4행 — 동일 가격, 지급량 2배 상당 (★임의수치, RUBYPACKS 신규값 기준) */
 const RUBYPROMO = [
-  { ruby:600,  won:'5,500원' },  { ruby:1300, won:'11,000원' },
-  { ruby:5600, won:'44,000원' }, { ruby:15000, won:'119,000원' },
+  { ruby:520,  won:'4,900원' },  { ruby:1160, won:'9,900원' },
+  { ruby:4800, won:'39,000원' }, { ruby:12400, won:'99,000원' },
 ];
-const RUBY_NOTICE = '청약 철회는 구매일로부터 7일 이내 가능합니다 [일부 사용 및 환수가 안되는 시점시 불가]';
+const RUBY_NOTICE = '구매 후 7일 이내에는 청약을 철회할 수 있습니다 [단, 이미 일부를 사용했거나 되돌릴 수 없는 경우는 제외]';
 
 /* ★ B7/G-93: 골드상점 7항목 = 골드 결제 5 + 루비 환전 2 */
 const GOLDSHOP = [
@@ -686,7 +685,10 @@ const GOLDSHOP = [
   { t:'골드 10,000,000',   ic:'🪙', cur:'ruby', cost:300,  give:()=>{ addGold(10000000); } },
   { t:'골드 200,000,000 + 전설 망치 20', ic:'🪙', cur:'ruby', cost:2800, give:()=>{ addGold(200000000); S.hammers=(S.hammers||0)+20; } },
 ];
-const GOLD_CAP_NOTICE = '골드 최대 보유량은 3,000,000,000입니다 [보유량을 넘어갈 시 최대 보유량으로 제한됩니다]';
+/* ★ v5.126: 불칸 유사성 감사 A급 #37 — 원작과 완전 동일했던 상한(30억)을 변경. ⚠임의수치. addGold()의
+   실제 클램프 값도 GOLD_CAP 상수로 통일해 두 곳이 다시 어긋나지 않게 했다. */
+const GOLD_CAP = 5_000_000_000;
+const GOLD_CAP_NOTICE = `골드는 최대 ${GOLD_CAP.toLocaleString('ko-KR')}까지 쌓입니다 [그 이상은 자동으로 최대치까지만 채워집니다]`;
 
 /* ★ B7/G-94: 재료상점 — 9종 × (1개 / 5개) = 18항목, 루비 결제 */
 const MATSHOP = [
@@ -1021,7 +1023,7 @@ const TITLES = [
   /* ---- R (9) — 원작 6~14 ---- */
   { id:'clumsy',     g:'R',  n:'설익은 손',    fx:'제작 시간 -5%',        e:{ctime:-0.05},
     cond:'제작 5연속 실패',                                 have:()=>titleStat('craftFailBest')>=5 },
-  // ★ N3: 원작 조건문에 '(해골 장비 제외)' 부기가 붙어 있다(숙련·행운·신의 손 3종 공통) → 문구·집계 양쪽 반영. isSkullGear() 참조
+  // ★ N3: 원작 조건문에 '(해골 장비 제외)' 부기가 붙어 있다(숙달된 손·행운의 인장·축복받은 손 3종 공통) → 문구·집계 양쪽 반영. isSkullGear() 참조
   { id:'skilled',    g:'R',  n:'숙달된 손',    fx:'제작 확률 +2%p',       e:{crate:0.02},
     cond:'영웅 등급 이상 장비 제작 5연속 성공 (해골 장비 제외)',  have:()=>titleStat('craftWinBest')>=5 },
   // 원작은 특정 최상위 보스 던전(원작 고유명사)을 지목 → 결정의 시대의 레전더리 보스 소환(몽마·수호거상) 클리어로 치환
@@ -1167,7 +1169,7 @@ const NOTICES = [
   { cat:'[점검]', ic:'🛠️', t:'주간 랭킹 정산 정기 점검 안내', d:'2026-07-27',
     body:'군주님들께 알립니다.<br><br>매일 오전 <b>10:00 ~ 12:00</b> 사이 서버 랭킹 정산 점검이 진행됩니다. 점검 시간 동안에는 월드보스·길드 레이드·점령전 입장이 제한되며, 진행 중이던 전투는 자동으로 종료되고 보상은 그대로 지급됩니다.<br><br>길드 랭킹은 <b>매주 월요일 오전 11시</b>에 초기화됩니다. 초기화 직전에 획득한 기여도는 정산에 반영되지 않을 수 있으니 여유를 두고 참여해 주시기 바랍니다.<br><br>점검으로 불편을 드려 죄송합니다.' },
   { cat:'[이벤트]', ic:'🎉', t:'매월 루비 2배 프로모션', d:'2026-07-20',
-    body:'화로에 불을 지필 시간입니다.<br><br>기간 중 루비 상품을 구매하시면 동일한 가격으로 <b>2배의 루비</b>를 지급받습니다. 계정당 각 상품 1회씩 적용되며, 프로모션 상품은 상점 루비 탭에서 초록 테두리로 표시됩니다.<br><br>청약 철회는 구매일로부터 7일 이내 가능합니다. [일부 사용 및 환수가 안되는 시점시 불가]' },
+    body:'화로에 불을 지필 시간입니다.<br><br>기간 중 루비 상품을 구매하시면 동일한 가격으로 <b>2배의 루비</b>를 지급받습니다. 계정당 각 상품 1회씩 적용되며, 프로모션 상품은 상점 루비 탭에서 초록 테두리로 표시됩니다.<br><br>구매 후 7일 이내에는 청약을 철회할 수 있습니다. [단, 이미 일부를 사용했거나 되돌릴 수 없는 경우는 제외]' },
   { cat:'[업데이트]', ic:'📜', t:'결정의 시대 데모 v0.1.0', d:'2026-07-15',
     body:'대장간의 불이 처음으로 타올랐습니다.<br><br>제작·수집 방치형 RPG <b>결정의 시대</b>의 첫 데모가 공개되었습니다. 길잡이 9단계 제작 체인, 요일던전, 투기장, 길드 점령전이 포함되어 있습니다.<br><br>데모 기간 동안의 모든 진행 상황은 정식 서비스로 이관되지 않습니다. 부담 없이 즐겨 주세요.' },
 ];
@@ -2913,7 +2915,7 @@ function arenaGoldBuffPct(){
 function addGold(n, raw){
   // ★ F2: 칭호의 '몬스터 골드 획득량 +X%' 는 골드 획득 단일 관문인 여기서 한 번만 곱한다.
   if(!raw) n = n * (1 + arenaGoldBuffPct()/100) * titleGoldMul();
-  S.gold = Math.min(3_000_000_000, S.gold + n);
+  S.gold = Math.min(GOLD_CAP, S.gold + n);
 }
 // ★ B7/G-100: '제작 시간 -50%' 구독 버프 배율 (상점 버프탭에서 구매, 30일)
 //   ★ F2: 칭호의 '제작 시간 -X%' 도 같은 관문에서 곱한다(제작 시작 시점의 endAt 산출에 사용).
@@ -3490,16 +3492,19 @@ function startGuidedTutorial(){
    종전엔 배너·퀘스트가 '잿불 지팡이 제작'이라 해놓고 대장간에는 '비전 지팡이'가 있었다.
    유저가 뭘 만들어야 하는지 두 화면이 서로 다른 이름을 부르는 상태였다(대표 지적).
    판정도 slot 으로 하므로, 이제 표기와 판정이 같은 문자열 하나를 본다 — 다시 어긋날 수 없다. */
+/* ★ v5.126: 불칸 유사성 감사 A급 #6 — 보상 수량(20/100/350/350/1000/1000/25,000,000/20/200)이
+   불칸 실측과 완전 일치했던 것을 폐기하고 재설계했다. 9단계 순서·아이템(구조)은 그대로 두고
+   수량만 바꿨다 — 구조 개편은 컨셉 결정 후 별도 작업. ⚠임의수치 — 추후 밸런스 재조정 대상. */
 const GUIDE_CHAIN=[
-  { cat:'무기',   slot:'비전 지팡이', goalIcon:'🪄', rewardIcon:'🎟️', rewardQty:20,       rw:()=>{ S.tickHero+=20; } },
-  { cat:'방어구', slot:'방패',        goalIcon:'🛡️', rewardIcon:'📦', rewardQty:100,      rw:()=>{ S.tickMat+=100; } },
-  { cat:'방어구', slot:'투구',        goalIcon:'⛑️', rewardIcon:'🪨', rewardQty:350,      rw:()=>{ S.stones+=350; } },
-  { cat:'방어구', slot:'상의',        goalIcon:'🥼', rewardIcon:'🪨', rewardQty:350,      rw:()=>{ S.stones+=350; } },
-  { cat:'방어구', slot:'하의',        goalIcon:'👖', rewardIcon:'🪨', rewardQty:1000,     rw:()=>{ S.stones+=1000; } },
-  { cat:'방어구', slot:'신발',        goalIcon:'🥾', rewardIcon:'📜', rewardQty:1000,     rw:()=>{ S.craftScroll+=1000; } },
-  { cat:'장신구', slot:'반지',        goalIcon:'💍', rewardIcon:'🪙', rewardQty:25000000, rw:()=>{ addGold(25000000); } },
-  { cat:'장신구', slot:'목걸이',      goalIcon:'📿', rewardIcon:'🔨', rewardQty:20,       rw:()=>{ S.hammers+=20; } },
-  { cat:'특수',   slot:'고서',        goalIcon:'📖', rewardIcon:'🎲', rewardQty:200,      rw:()=>{ S.dice+=200; } },
+  { cat:'무기',   slot:'비전 지팡이', goalIcon:'🪄', rewardIcon:'🎟️', rewardQty:24,       rw:()=>{ S.tickHero+=24; } },
+  { cat:'방어구', slot:'방패',        goalIcon:'🛡️', rewardIcon:'📦', rewardQty:90,       rw:()=>{ S.tickMat+=90; } },
+  { cat:'방어구', slot:'투구',        goalIcon:'⛑️', rewardIcon:'🪨', rewardQty:300,      rw:()=>{ S.stones+=300; } },
+  { cat:'방어구', slot:'상의',        goalIcon:'🥼', rewardIcon:'🪨', rewardQty:320,      rw:()=>{ S.stones+=320; } },
+  { cat:'방어구', slot:'하의',        goalIcon:'👖', rewardIcon:'🪨', rewardQty:850,      rw:()=>{ S.stones+=850; } },
+  { cat:'방어구', slot:'신발',        goalIcon:'🥾', rewardIcon:'📜', rewardQty:800,      rw:()=>{ S.craftScroll+=800; } },
+  { cat:'장신구', slot:'반지',        goalIcon:'💍', rewardIcon:'🪙', rewardQty:18000000, rw:()=>{ addGold(18000000); } },
+  { cat:'장신구', slot:'목걸이',      goalIcon:'📿', rewardIcon:'🔨', rewardQty:15,       rw:()=>{ S.hammers+=15; } },
+  { cat:'특수',   slot:'고서',        goalIcon:'📖', rewardIcon:'🎲', rewardQty:160,      rw:()=>{ S.dice+=160; } },
 ];
 /* 표기는 언제나 실제 제작 아이템명 하나에서 나온다 */
 function guideName(g){ return g ? g.slot : ''; }
@@ -3535,7 +3540,9 @@ function guideCheck(ev, data){
   S.guideProg=0; S.guideStep++; sfx('win');
   try{ if(g.rw) g.rw(); }catch(e){}
   toast(`길잡이 ${s+1}단계 완료! ${g.rewardIcon} X${fmt(g.rewardQty)}`);
-  if(S.guideStep>=GUIDE_CHAIN.length){ sysLog('길잡이 퀘스트 9단계 완료시 약탈 해금'); toast('길잡이 퀘스트 9단계 완료 · 약탈 해금'); }
+  // ★ v5.126: 불칸 유사성 감사 A급 #13 — 원작 시스템 공지 문구를 토씨까지 그대로 썼던 것을 재작성
+  // (감사 문서 §2.2 #13 참조). 게이팅 조건(9단계 완료→약탈 해금)은 유지, 문구만 바꿨다.
+  if(S.guideStep>=GUIDE_CHAIN.length){ sysLog('길잡이 아홉 걸음을 모두 마치면 약탈의 문이 열립니다.'); toast('길잡이 완주 · 약탈 해금'); }
   updateGuideBanner(); refreshHUD();
 }
 
@@ -3882,7 +3889,7 @@ const MODALS = {
       const inst=el('button','btn gold','즉시 완성');
       inst.onclick=()=>{ b2Confirm('즉시 완성',
         `<div class="big">제작을 즉시 완료 하시겠습니까?</div>
-         <div class="b2-warnline">*제작 실패 확률은 똑같이 존재합니다*</div>
+         <div class="b2-warnline">*시간만 건너뛸 뿐, 실패할 확률은 그대로입니다*</div>
          <div style="margin-top:6px"><span style="font-size:26px">📜</span> <b style="color:var(--g-legend)">30</b> <span class="small mut">(보유 ${fmt(S.craftScroll)})</span></div>`,
         ()=>{ if(!S.craft) return; if(S.craftScroll<30){ toast('제작서가 부족합니다.'); return; }
               S.craftScroll-=30; S.craft.endAt=Date.now(); resolveCraft(); }); };
@@ -4256,7 +4263,7 @@ const MODALS = {
     const mid=el('div','round-btn mid'); mid.innerHTML='<span class="gi">'+eImg('🎲',1.6)+'</span>';
     mid.onclick=()=>{ sfx('tap'); openSub('optionReroll', cur.hero_id); }; fn.appendChild(mid);   // ★ v5.1 착용창 위 오버레이
     center.appendChild(fn); doll.append(colL,center,colR); b.appendChild(doll);
-    b.appendChild(el('div','warn','⚠ 장착 시 기존 아이템 파괴 · 강화 실패 시 파괴(파괴방지: 망치 / 하락방지: 하락 방지권)'));
+    b.appendChild(el('div','warn','⚠ 새 장비를 걸치면 같은 부위의 낡은 장비는 화로에 녹아 사라집니다 · 강화 실패로도 파괴될 수 있습니다(방지: 망치 / 단계 유지: 하락 방지권)'));
     b.appendChild(el('div','small mut',`보유 장비 ${S.equips.length}종 (탭하여 강화)`));
     const tray=el('div','grid c5'); tray.style.marginTop='6px';
     if(!S.equips.length) tray.appendChild(el('div','hint','아직 장비가 없습니다. 대장간(⚒️)에서 제작하세요.'));
@@ -6195,14 +6202,16 @@ function itemDetail(e, heroId){ _itemDetailHeroId=heroId||null;
     + (sc.special?`<div class="ic-opt opt-sp">${sc.special}</div>`:'');
   b.appendChild(card);
   b.appendChild(el('div','small mut center',itemFlavor(e.slot)));
-  b.appendChild(el('div','warn','⚠ *장착시 기존 아이템이 파괴됩니다.*'));
+  // ★ v5.126: 불칸 유사성 감사 A급 #23 — 원작 경고문을 별표 마크업까지 그대로 썼던 것을 재작성
+  // (감사 문서 §2.3 #23 참조). 규칙(장착 시 같은 부위 기존 장비 파괴)은 유지.
+  b.appendChild(el('div','warn','⚠ *새 장비를 걸치면 같은 부위의 낡은 장비는 사라집니다.*'));
   const row=el('div','btnrow'); row.style.marginTop='8px';
   const eq=el('button','btn gold wide', e.equipped?'장착됨':'장착');
   eq.onclick=()=>{ if(e.equipped){ toast('이미 장착됨'); return; }
     /* ★ v5.81: 영웅 귀속 없는 착용 방지 — 인벤토리에서 heroId 없이 착용하면
        모든 영웅에게 적용되는 버그. 영웅 선택창(equip 모달)을 먼저 열도록 유도. */
     if(!_itemDetailHeroId){ toast('영웅 착용창에서 장비를 장착해 주세요'); openModal('equip'); return; }
-    showConfirmDialog({ title:'장착', warn:'*장착시 기존 아이템이 파괴됩니다.*', msg:'장착 하시겠습니까?', yes:'장착', no:'취소',
+    showConfirmDialog({ title:'장착', warn:'*새 장비를 걸치면 같은 부위의 낡은 장비는 사라집니다.*', msg:'장착 하시겠습니까?', yes:'장착', no:'취소',
       onYes:()=>{
         /* ★ v5.71→v5.81: 원작처럼 착용 시 같은 부위 기존 장비는 파괴(삭제).
            ★ v5.81: 부위 매칭을 slotSchema(부위 추출) 기준으로 통일.
@@ -6248,7 +6257,7 @@ function openEnhance(e){
   b.appendChild(cnt);
   b.appendChild(el('div','stat-line',`<span>성공 확률</span><span class="v" style="color:#5ecb6a">${Math.round(p*100)}%</span>`));
   b.appendChild(el('div','stat-line',`<span>강화 비용</span><span class="v" style="color:#f0cd82">골드 ${fmt(cost)} · 강화석 ${stoneCost}</span>`));
-  b.appendChild(el('div','warn','⚠ 실패 시 단계 하락 · +11 이상은 장비 파괴 위험'));
+  b.appendChild(el('div','warn','⚠ 벼림이 실패하면 단계가 내려가고, +11부터는 장비 자체가 부서질 수 있습니다'));
   // 보호 토글 2종 — 강화 레벨 무관 상시 노출
   let useHammer=false, useWard=false;
   const hr=el('div','pack'); hr.innerHTML=`<div class="pic">${eImg("🔨",2)}</div><div class="info"><div class="t">파괴 보호</div><div class="d">실패 파괴 시 ${prot.label} ${prot.n}개 소모로 방지 · 보유 ${fmt(protHave())}</div></div>`;
@@ -6279,7 +6288,7 @@ function openEnhance(e){
 }
 
 /* ------- 제작 결과 ------- */
-/* ★ N3: 제작 성공 스트릭 칭호(숙련·행운·신의 손)의 원작 조건 부기 '(해골 장비 제외)' 실집계용 판정.
+/* ★ N3: 제작 성공 스트릭 칭호(숙달된 손·행운의 인장·축복받은 손)의 원작 조건 부기 '(해골 장비 제외)' 실집계용 판정.
    결정의 시대의 제작 목록에는 현재 해골 계열 장비가 없어 상시 false 지만, 규칙을 코드에 고정해 둔다. */
 function isSkullGear(c){
   const nm = String((c&&(c.slot||c.name))||'');
@@ -6294,7 +6303,7 @@ function resolveCraft(forceSuccess){
   /* ★ F2 → N3 갱신: 제작 계열 칭호는 누적이 아니라 '연속(스트릭)' 조건이다.
      · 실패 스트릭 5/7/10/15 → 제작 시간 단축 칭호
      · '영웅 등급 이상' 장비 제작 성공 스트릭 5/10/15 → 제작 확률 칭호
-       ★ N3 실측: 원작 조건문 3종(숙련·행운·신의 손) 모두 끝에 **'(해골 장비 제외)'** 부기가 붙는다.
+       ★ N3 실측: 원작 조건문 3종(숙달된 손·행운의 인장·축복받은 손) 모두 끝에 **'(해골 장비 제외)'** 부기가 붙는다.
          결정의 시대에는 현재 해골 계열 제작 장비가 없어 실제 제외 대상이 0건이지만, 규칙이 문구로만 남으면
          나중에 해골 장비를 추가했을 때 조용히 어긋난다 → isSkullGear() 로 집계에서 실제로 뺀다.
          (제외 대상은 성공 스트릭을 **올리지도 끊지도 않는다** — 영웅등급 미만 제작과 같은 취급) */
@@ -6806,7 +6815,7 @@ function showDungeonResult(cfg, win, stats){
     gw.appendChild(row); b.appendChild(gw);
   }
   // ★ B5/G-80: [확인] 버튼과 3초 자동퇴장이 병존하던 구조 → 버튼 제거, 안내 텍스트만 남긴다.
-  b.appendChild(el('div','center small mut','*3초후 자동으로 퇴장됩니다*'));
+  b.appendChild(el('div','center small mut','*3초 뒤 자동으로 물러납니다*'));
   $('#modal-root').classList.add('on'); currentModal='dgResult';
   setTimeout(()=>{ if(currentModal!=='dgResult') return;
     if(cfg.autoNext && cfg.autoNext()) return;   // ★ B5/G-67: 골드던전 '자동 입장' 연전
