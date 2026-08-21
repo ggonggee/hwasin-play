@@ -2112,7 +2112,11 @@ const Battle = (()=>{
     // 몬스터 반격 — 홈은 영웅 중앙 인접 시, 던전은 전열 도달(W*0.26) 시. 상대가 부대보다 강할수록 아프다.
     {
       const cpRef = (mode==='dungeon'&&dg)? dg.foeCP : tierDef().cp;
-      const foeMul = (mode==='dungeon'&&dg) ? (dg.dmgMul||1) : 1;   // ★ N2: '모든 데미지'라 반격도 함께 감소
+      /* ★ N2: '모든 데미지'라 반격도 함께 감소.
+         ★ v5.117: 서든데스 가중도 함께 곱한다. 아군 출력에만 붙이면 PvE 콘텐츠로 규칙을 확장할 때
+         "양측 피해가 커진다"는 안내와 달리 아군만 강해지는 편향이 생긴다(현재 투기장은 foes[] 경로라
+         이 줄을 타지 않지만, 확장을 미리 안전하게 만들어 둔다). */
+      const foeMul = (mode==='dungeon'&&dg) ? (dg.dmgMul||1)*(dg.otMul||1) : 1;
       const alive=heroes.filter(h=>!h.dead);
       if(alive.length) mobs.forEach(m=>{
         /* ★ 홈: 영웅 중앙 기준 근접(거리<70) 시 반격 — stand-off(60) 밖 약간에서 때림. 던전: 전열 도달(W*0.26). */

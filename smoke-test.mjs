@@ -298,6 +298,13 @@ step('서든데스 — 임계 전 1배, 이후 계단식 가중', ()=>{
   if(Math.abs(c-expect)>0.35) throw new Error(`곡선 이탈: 임계+10초 ${c.toFixed(2)} (기대 ${expect.toFixed(2)})`);
   console.log(`     ${seen.map(x=>x[0]+' x'+x[1].toFixed(2)).join(' → ')}`);
 });
+step('서든데스 — 몬스터 반격에도 같은 가중이 붙는다(양측 대칭)', ()=>{
+  /* 아군 출력에만 붙으면 PvE 로 확장할 때 편향이 생긴다 — 코드 경로를 문자열로 못박는다 */
+  const src=fs.readFileSync(D+'game.js','utf8');
+  const m=src.match(/const foeMul = \(mode==='dungeon'&&dg\) \? ([^;]+);/);
+  if(!m) throw new Error('몬스터 반격 배율 라인을 찾지 못했다');
+  if(m[1].indexOf('otMul')<0) throw new Error('몬스터 반격에 가중(otMul)이 빠져 있다: '+m[1]);
+});
 step('서든데스 미지정 전투는 영향 없음', ()=>{
   const B=ev('Battle');
   B.startDungeon({ name:'검증2', foeCP:1000, kind:'mobs', count:5, dur:60, onEnd:()=>{} });
