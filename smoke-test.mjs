@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 const D = path.dirname(fileURLToPath(import.meta.url)) + '/';
 const js=fs.readFileSync(D+'game.js','utf8');
 const html=fs.readFileSync(D+'index.html','utf8');
+const css=fs.readFileSync(D+'style.css','utf8');   // ★ v5.127: 금칙 스캐너 [9]가 3번째 배포 파일로 사용
 
 // index.html 의 id / class / data-modal 를 그대로 반영한 얕은 노드 트리
 const idAttrs=[...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);
@@ -475,45 +476,90 @@ step('save→JSON 직렬화 왕복 무손실', ()=>{
   JSON.parse(raw);
 });
 
-console.log('\n[9] 불칸 유사성 회귀 가드 (금칙 스캐너)');
-/* ★ v5.126: 20260822 유사성 감사(docs/design/20260822-유사성감사-불칸제거대상.md)에서 제거한
-   불칸 원작 문구·닉네임·수치 시그니처가 game.js/index.html 에 다시 나타나면 실패시킨다.
-   목록은 배열이라 추후 항목 추가가 쉽다. 단일 리터럴은 substring, 조합 시그니처(가격표·수치객체
-   등은 개별 값이 우연히 재사용될 수 있어)는 all[] 로 '전부 동시에 존재할 때만' 실패 처리한다. */
-const BANNED_SIGNATURES = [
-  // 문구 — 원작 시스템 문구를 토씨 그대로 썼던 것들 (감사 항목 4)
-  { label:'서버선택 경고문(원작 그대로)',        any:['선택한 서버는 바꿀 수 없습니다'] },
-  { label:'서버입장 확인 경고문(원작 그대로)',    any:['선택한 서버는 변경할 수 없습니다'] },
-  { label:'부활 팝업 문구(원작 그대로)',          any:['부활시 몬스터', '초 후 자동 재소환'] },
-  { label:'장착 파괴 경고문(원작 그대로)',        any:['장착시 기존 아이템이 파괴됩니다', '장착 시 기존 아이템 파괴'] },
-  { label:'즉시완성 경고문(원작 그대로)',         any:['제작 실패 확률은 똑같이 존재합니다'] },
-  { label:'자동퇴장 문구(원작 그대로, 초후 붙여쓰기)', any:['3초후 자동으로 퇴장됩니다'] },
-  { label:'약탈 해금 시스템 공지(원작 그대로)',   any:['길잡이 퀘스트 9단계 완료시 약탈 해금'] },
-  { label:'루비 청약철회 문구(원작 그대로)',      any:['일부 사용 및 환수가 안되는 시점시 불가'] },
-  { label:'골드상한 고지문(원작 30억 그대로)',    any:['골드 최대 보유량은 3,000,000,000입니다'] },
-  // 닉네임 — 원작 실제 유저 닉네임 (감사 항목 5)
-  { label:'원작 유저 닉네임 잔존',                any:['민건79','궁듸','혐이','카마엘'] },
-  // 칭호 — 원작 고유 명칭 (감사 항목 6)
-  { label:'원작 칭호 고유명 잔존',                any:['똥손','신의손'] },
-  // 수치 조합 — 개별 값이 아니라 '조합'이 원작과 일치할 때만 실패 (감사 항목 1·3)
-  { label:'루비 결제가 4종 조합(불칸 실제 가격)', all:['5,500원','11,000원','44,000원','119,000원'] },
-  { label:'골드 상한 상수(원작 30억, 언더스코어 표기)', any:['3_000_000_000'] },
-  { label:'영웅 조각 요구량 조합(불칸 실측 {20,50,600,1800})', all:['N:20','R:50','E:600','L:1800'] },
-  // 투기장 보상표 — 값·순서 조합 (감사 항목 2, 최우선)
-  { label:'투기장 랭킹 보상 3종 조합(불칸 실측 X500/X350/X250)', all:['X500','X350','X250'] },
-];
-step('금칙 시그니처 스캔', ()=>{
-  const hay = js + '\n' + html;
+console.log('\n[9] 유사성 회귀 가드 (금칙 스캐너 — L1 자기고백 토큰 + 축자/수치 시그니처)');
+/* ★ v5.126 도입, v5.127 확장(QA 검증계획 20260822-유사성제거-검증계획.md §2 A-0 반영).
+   목록 정본은 코드에 나열하지 않고 ip-banlist.json(스캔 대상 제외 경로) 한 곳에 둔다 — §2-4-c
+   "금칙 목록을 코드 주석에 나열하지 않는다, 자기 가드에 걸린다"를 따른다(game.js:38 사고 재발 방지).
+   L1 = 배포 3파일에 남아있으면 안 되는 자기고백 토큰(원작/벤치마크/전량판독/갭스펙/화면지도/불칸 등).
+   verbatim_signatures = 라운드1에서 다룬 축자 문구·수치 조합. 단일 리터럴은 substring, 조합
+   시그니처(가격표·수치객체 등은 개별 값이 우연히 재사용될 수 있어)는 all[] 로 '전부 동시에
+   존재할 때만' 실패 처리한다. */
+const BANLIST = JSON.parse(fs.readFileSync(D+'ip-banlist.json','utf8'));
+const SCAN_TARGETS = [ ['game.js', js], ['index.html', html], ['style.css', css] ];
+
+/* 유니코드 정규화(NFC) 후 비교 — 원본 파일이 NFD(자모 분해)로 저장돼도 놓치지 않는다.
+   (QA §2-5-3: "NFD 분해 한글" 정규화 누락은 스캐너가 조용히 0건을 내는 유형의 사고다) */
+function norm(s){ return String(s).normalize('NFC'); }
+
+function scanOne(hay){
   const hits = [];
-  BANNED_SIGNATURES.forEach(sig=>{
+  BANLIST.l1_self_incrimination_tokens.forEach(tok=>{
+    if(norm(hay).includes(norm(tok))) hits.push(`L1 자기고백 토큰 "${tok}"`);
+  });
+  BANLIST.verbatim_signatures.forEach(sig=>{
     if(sig.any){
-      const found = sig.any.filter(s=>hay.includes(s));
+      const found = sig.any.filter(s=>norm(hay).includes(norm(s)));
       if(found.length) hits.push(`${sig.label} → "${found.join('", "')}"`);
     } else if(sig.all){
-      if(sig.all.every(s=>hay.includes(s))) hits.push(`${sig.label} → 전부 존재: "${sig.all.join('", "')}"`);
+      if(sig.all.every(s=>norm(hay).includes(norm(s)))) hits.push(`${sig.label} → 전부 존재: "${sig.all.join('", "')}"`);
     }
   });
-  if(hits.length) throw new Error('금칙 시그니처 재발견:\n     - ' + hits.join('\n     - '));
+  return hits;
+}
+
+/* ★ 카나리 자가검증 (QA §2-5, 필수) — "차단형 장치는 조용히 고장 난다."
+   본 스캔 전에, 스캐너 로직이 위반을 실제로 잡아내는지 먼저 확인한다. 카나리 텍스트는 배너리스트에서
+   런타임에 값을 뽑아 조립한다(파일에 금칙어를 리터럴로 적지 않는다 — HANDBOOK 8장 원칙과 동일).
+   3건(L1 토큰 · verbatim any · verbatim all 조합) 중 하나라도 미검출이면 스캐너 자체 고장으로 보고
+   본 스캔에 들어가지 않는다(종료코드 2). NFD(자모 분해) 이형도 섞어 정규화 누락을 함께 확인한다. */
+function runCanarySelfCheck(){
+  const l1Sample = BANLIST.l1_self_incrimination_tokens[0];                 // 예: '원작'
+  const anySig = BANLIST.verbatim_signatures.find(s=>s.any);
+  const allSig = BANLIST.verbatim_signatures.find(s=>s.all);
+  const l1SampleNFD = l1Sample.normalize('NFD');                             // 자모 분해 이형
+  const canaryText = [
+    '__CANARY_FIXTURE__ 이 문자열은 배포되지 않는다.',
+    `[L1] ${l1Sample} / NFD이형: ${l1SampleNFD}`,
+    `[ANY] ${anySig.any[0]}`,
+    `[ALL] ${allSig.all.join(' / ')}`,
+  ].join('\n');
+  const hits = scanOne(canaryText);
+  const gotL1   = hits.some(h=>h.includes(`"${l1Sample}"`));
+  const gotAny  = hits.some(h=>h.startsWith(anySig.label));
+  const gotAll  = hits.some(h=>h.startsWith(allSig.label));
+  const gotNFD  = norm(canaryText).includes(norm(l1Sample)) && canaryText.includes(l1SampleNFD); // NFD 원문이 정규화로도 잡히는지
+  const results = { L1:gotL1, ANY:gotAny, ALL:gotAll, NFD정규화:gotNFD };
+  const allOk = Object.values(results).every(Boolean);
+  return { allOk, results };
+}
+
+const canary = runCanarySelfCheck();
+const canaryOkCount = Object.values(canary.results).filter(Boolean).length;
+const canaryTotal = Object.keys(canary.results).length;
+console.log(`  카나리 자가검증: ${canaryOkCount}/${canaryTotal} 검출 (${JSON.stringify(canary.results)})`);
+if(!canary.allOk){
+  console.log('\n❌ 스캐너 자체 고장 — 카나리가 검출되지 않았다. 이 스캐너의 "0건" 결과는 신뢰할 수 없다.');
+  console.log('   본 스캔을 실행하지 않고 즉시 종료한다(QA 검증계획 §2-6: 종료코드 2).');
+  process.exit(2);
+}
+
+/* 대상 파일이 0개(또는 빈 파일)면 성공이 아니라 스캐너 고장이다 — 과거 절대경로 하드코딩으로
+   "복사본을 검사한다고 믿으며 원본을 검사한" 사고가 있었다(§2-6). 같은 유형의 사고를 여기서도 막는다. */
+const emptyTargets = SCAN_TARGETS.filter(([,content])=>!content || content.length===0);
+if(SCAN_TARGETS.length===0 || emptyTargets.length>0){
+  console.log('\n❌ 스캔 대상 파일이 0개이거나 비어 있다 — 종료코드 2.');
+  process.exit(2);
+}
+
+const totalLines = SCAN_TARGETS.reduce((n,[,c])=>n+c.split('\n').length, 0);
+console.log(`  스캔 파일 ${SCAN_TARGETS.length}개(${SCAN_TARGETS.map(([n])=>n).join(', ')}) · 총 라인 ${totalLines} · 화이트리스트 0건`);
+
+step('금칙 스캔 (L1 자기고백 토큰 + 축자/수치 시그니처)', ()=>{
+  const allHits = [];
+  SCAN_TARGETS.forEach(([name, content])=>{
+    scanOne(content).forEach(h=>allHits.push(`[${name}] ${h}`));
+  });
+  if(allHits.length) throw new Error('금칙 재발견:\n     - ' + allHits.join('\n     - '));
 });
 
 console.log('\n=================== 결과 ===================');

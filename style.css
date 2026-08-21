@@ -1,6 +1,6 @@
 /* =========================================================================
    결정의 시대 (Age of Decision) — 2D HTML 게임 / 디자인 시스템 v2
-   레퍼런스(벤치마크 방치 RPG) 화면 구조를 결정의 시대 오리지널로 재현한 다크판타지 대장간 룩.
+   업계 방치형 RPG 장르의 화면 구조를 폭넓게 참고해 결정의 시대 오리지널로 만든 다크판타지 대장간 룩.
    타사 명칭·아트 자산 미사용. 재현 근거: docs/design/20260725-화신-UI재현카탈로그.md
    ========================================================================= */
 
@@ -18,7 +18,7 @@
   /* 타이포 스케일 — 40대 노안 기준. 본문 14px 최소. 토큰화(v5.9.1). */
   /* 타이포 스케일 — 453×852 내부 기준. transform:scale 로 화면에 맞춰 확대 표시됨.
      ★ v5.110 전면 상향(+18~27%). 근거: 무대는 폰에서 0.75~0.86배로 축소돼 표시되므로
-     내부 14px 는 실제 폰 화면에서 11~12px 로 떨어진다 — 레퍼런스(벤치마크 원작)나 동종 웹게임의
+     내부 14px 는 실제 폰 화면에서 11~12px 로 떨어진다 — 동종 웹게임의
      본문이 실측 14~16px 인 것에 비해 확연히 작았다. 내부 기준을 올려 실기기에서
      본문이 13~14px 대로 오게 맞춘다. 기기별 편차 없이 모든 화면에 동일 적용. */
   --fs-xs: 14px;   /* 배지/태그/장식 */
@@ -364,7 +364,7 @@ body{
 .pack .price{ font-size:var(--fs-base); font-weight:800; color:#f0cd82; white-space:nowrap; }
 
 /* ★ B7/F1 — 상점 '영웅' 탭 개별 영웅 조각 카드 (2열 그리드 · 리본 2단가)
-   원작 재판독 cardLayout: 컬러 리본 헤더 → 좌 초상 / 우 명칭+가격 → 폭 전체 [구매] 1개 */
+   cardLayout: 컬러 리본 헤더 → 좌 초상 / 우 명칭+가격 → 폭 전체 [구매] 1개 */
 .shard-grid{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px; margin-top:8px; }
 .shard-card{ display:flex; flex-direction:column; overflow:hidden; border-radius:9px;
   background:linear-gradient(180deg,#20180f,#140f0a); border:1px solid var(--frame-dk); }
@@ -539,7 +539,7 @@ body{
   width:38px; height:38px; z-index:2; border-color:var(--g-legend); }
 .eq-fn5 .round-btn.mid .gi{ font-size:var(--fs-xl); }
 
-/* [N1] 장비 옵션 재설정(주사위 리롤) — 갭스펙 §5-4 해소
+/* [N1] 장비 옵션 재설정(주사위 리롤)
    근거: 04_장비_인벤토리/주사위 버튼을 누른화면/그 주사위 버튼을 누른 직후 화면1~5.png */
 .rr-spent{ text-align:center; font-size:var(--fs-md); font-weight:800; color:var(--txt-hi); letter-spacing:.03em;
   padding:5px 0; border:1px solid var(--frame); border-radius:8px;
@@ -653,12 +653,12 @@ body{
 .titlecard .tc-top .titlecap{ white-space:normal; text-align:right; }
 .titlecard .tc-cond{ margin-top:5px; padding-top:5px; border-top:1px dashed var(--frame-dk);
   text-align:center; font-size:var(--fs-sm); color:var(--txt-dim); }
-/* ★ N3: 보유 칭호 카드의 접었다 펴는 '조건' 서브텍스트 (원작 카드 구조) */
+/* ★ N3: 보유 칭호 카드의 접었다 펴는 '조건' 서브텍스트 */
 .pack .tc-more{ font-size:var(--fs-xs); color:var(--frame-lit); cursor:pointer; white-space:nowrap; }
 .pack .tc-cond{ margin-top:4px; padding-top:4px; border-top:1px dashed var(--frame-dk);
   font-size:var(--fs-xs); color:var(--txt-dim); line-height:1.45; }
 
-/* 세트효과 도감 — 세로 스크롤 카드 리스트 (★ A2: 원작은 그리드가 아니라 카드 1장씩 세로 나열).
+/* 세트효과 도감 — 세로 스크롤 카드 리스트 (★ A2: 그리드가 아니라 카드 1장씩 세로 나열하는 설계).
    카드 = 상단 석재 명판(세트명) + 임계값(N세트) 블록 반복. '작열'만 블록이 3개다. */
 .setcard{ border:1px solid var(--frame-dk); border-radius:8px; background:rgba(0,0,0,.24);
   padding:8px 10px 9px; margin:8px 0; }
@@ -947,7 +947,7 @@ body{
 .pw-toggle:active{ filter:brightness(1.3); }
 
 /* --- ★ N3/§7-9: 절전 오버레이 (실측 8장 반영) ---
-   오버레이는 #home 기준 절대배치이며 **채팅 상단까지만** 덮는다(원작도 절전 중 채팅이 살아 있다).
+   오버레이는 #home 기준 절대배치이며 **채팅 상단까지만** 덮는다(절전 중에도 채팅은 살아 있게 한다).
    하단 내비는 .pw-swipe(모루 스와이프 바)가 덮는다. 해제는 오른쪽 스와이프. */
 .pw-ovl{ position:absolute; left:0; right:0; top:0; z-index:30; overflow:hidden;
   background:linear-gradient(180deg,#0a0806,#0e0b08); border-bottom:1px solid #241c12;
@@ -977,7 +977,7 @@ body{
 .pw-ovl .pw-cv{ font-size:var(--fs-md); font-weight:800; color:var(--gold); }
 .pw-ovl .pw-ct{ font-size:var(--fs-xs); color:var(--txt-dim); margin-top:2px; }
 .pw-ovl .pw-ct b{ color:#cdbf9f; }
-/* 절전 중에는 하단 내비 7메뉴가 통째로 사라진다(원작 실측) — 자리(높이)는 유지해 레이아웃이 튀지 않게 한다 */
+/* 절전 중에는 하단 내비 7메뉴가 통째로 사라진다 — 자리(높이)는 유지해 레이아웃이 튀지 않게 한다 */
 #home.pw-on #navbar{ visibility:hidden; }
 /* ★ v5.24: "밀어서 해제" 슬라이더 — 트랙 전체 폭, 모루를 끝까지 밀면 해제.
    기존 2칸(빈슬롯+모루) 구조를 폐기. 직관적인 slide-to-unlock 패턴. */
@@ -1027,7 +1027,7 @@ body{
 .ar-info:active{ filter:brightness(1.3); }
 .ar-info.on{ color:#1a120a; background:linear-gradient(180deg,#f0cd82,#c79a3c); border-color:#f0cd82; }
 
-/* ★ N2: ⓘ 안내 — 원작은 다이얼로그가 아니라 리스트 자리를 덮는 인패널 박스(적색 3줄) */
+/* ★ N2: ⓘ 안내 — 다이얼로그가 아니라 리스트 자리를 덮는 인패널 박스(적색 3줄) */
 .ar-infobox{ border:1px solid var(--frame); border-radius:6px; padding:9px 8px; min-height:120px;
   background:linear-gradient(180deg,rgba(30,22,14,.9),rgba(14,10,6,.9)); }
 .ar-infoline{ font-size:var(--fs-sm); line-height:1.6; color:var(--txt-hi); margin-bottom:9px; }
@@ -1044,7 +1044,7 @@ body{
   border:1px solid #4e7c4e; border-radius:8px; background:linear-gradient(180deg,rgba(30,40,26,.8),rgba(12,16,10,.8)); }
 .ui-mid{ display:flex; align-items:flex-start; justify-content:space-between; gap:6px; font-size:var(--fs-sm); color:var(--txt); }
 .ui-mid .ui-right{ text-align:right; }
-/* ★ v4.8: 서버 줄은 일반 텍스트색. 적색(--bad)은 '약탈 활성화' 태그 전용이다(원작 실측). */
+/* ★ v4.8: 서버 줄은 일반 텍스트색. 적색(--bad)은 '약탈 활성화' 태그 전용이다. */
 .ui-mid .ui-sv{ color:var(--txt-dim); }
 .ui-mid .ui-tag{ color:var(--bad); font-weight:700; margin-top:2px; }
 .ui-id{ display:flex; align-items:center; justify-content:space-between; gap:6px; margin-top:8px; padding-top:6px;
@@ -1258,12 +1258,12 @@ body{
 @keyframes curBump{ 0%{transform:scale(1)} 35%{transform:scale(1.18); color:#ffe6a8} 100%{transform:scale(1)} }
 .cur-bump{ display:inline-block; animation:curBump .42s ease-out; }
 
-/* ── v4.7 몬스터 카드 드랍 아이콘 그리드 (원작: 일반3·희귀3·영웅4·레전더리6) ── */
+/* ── v4.7 몬스터 카드 드랍 아이콘 그리드 (일반3·희귀3·영웅4·레전더리6) ── */
 .mdrops{ display:flex; flex-wrap:wrap; gap:3px; margin-top:4px; }
 .mdrop{ width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center;
   font-size:var(--fs-base); border:1px solid #3a2d18; border-radius:4px; background:rgba(0,0,0,.32); }
 
-/* ══ v5.0 상점 카드 골격 (원작: 리본 헤더 + 좌우 2단 프레임) ══
+/* ══ v5.0 상점 카드 골격 (리본 헤더 + 좌우 2단 프레임) ══
    좌 = 아이콘 위 / 구매 버튼 아래, 우 = 품명 위 / 수량·가격 아래. */
 .shop-card{ display:flex; flex-direction:column; overflow:hidden; border-radius:9px; margin-bottom:8px;
   border:1px solid var(--frame-dk); background:linear-gradient(180deg,#1a140c,#0d0906); }
@@ -1279,7 +1279,7 @@ body{
 .shop-card .sh-t{ font-size:var(--fs-base); font-weight:700; color:var(--txt-hi); }
 .shop-card .sh-d{ font-size:var(--fs-sm); color:#a99a7d; line-height:1.45; }
 
-/* ══ v5.1 하위 화면 오버레이 (원작: 부모 모달 위에 얹히고 가장자리로 부모가 비친다) ══
+/* ══ v5.1 하위 화면 오버레이 (부모 모달 위에 얹히고 가장자리로 부모가 비치는 설계) ══
    b2-ovl(확인 팝업)보다 크고 스크롤 가능한 패널. z-index 는 b2-ovl(30) 아래에 둬서
    오버레이 안에서 뜨는 확인 팝업이 다시 그 위에 올라오게 한다. */
 .sub-ovl{ position:absolute; inset:0; z-index:28; display:flex; align-items:center; justify-content:center;
@@ -1296,7 +1296,7 @@ body{
 .sub-pop .sub-x:active{ transform:translateY(-50%) scale(.92); }
 .sub-pop .sub-body{ flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; padding:10px; }
 
-/* ══ v5.3 코스튬 마스터-디테일 (원작: 상단 프리뷰 고정 + 하단 2열 이름 버튼) ══ */
+/* ══ v5.3 코스튬 마스터-디테일 (상단 프리뷰 고정 + 하단 2열 이름 버튼) ══ */
 .cos-pane{ border:1px solid var(--frame-dk); border-radius:9px; padding:9px;
   background:linear-gradient(180deg,#1e1710,#100b06); }
 .cos-pane.locked{ opacity:.82; }
@@ -1312,7 +1312,7 @@ body{
 .cos-item.locked{ color:#6f6552; }
 .cos-item.worn::after{ content:' ●'; color:var(--ok); }
 
-/* ══ v5.3 마을 2열 카드 (원작: 건물별 전용 재료·다른 버튼 라벨) ══ */
+/* ══ v5.3 마을 2열 카드 (건물별 전용 재료·다른 버튼 라벨) ══ */
 .vil-grid{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
 .vil-card{ display:flex; flex-direction:column; align-items:center; gap:3px; padding:10px 8px;
   border:1px solid var(--frame-dk); border-radius:9px; background:linear-gradient(180deg,#1e1710,#100b06); }
