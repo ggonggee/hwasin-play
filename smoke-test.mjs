@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import vm from 'node:vm';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 /* ★ 스크립트 자기 위치 기준으로 소스를 찾는다.
    종전에는 원본 저장소 절대경로가 하드코딩돼 있어, 다른 폴더로 복사한 뒤 검증을 돌려도
@@ -562,6 +563,117 @@ step('금칙 스캔 (L1 자기고백 토큰 + 축자/수치 시그니처)', ()=>
     scanOne(content).forEach(h=>allHits.push(`[${name}] ${h}`));
   });
   if(allHits.length) throw new Error('금칙 재발견:\n     - ' + allHits.join('\n     - '));
+});
+
+console.log('\n[10] M1 결정론 검증 (전투 결정론 리팩터 — 명문 상세기획 §3.1/§3.2, G1심사 §4-3 D1~D5)');
+/* ★ M1 완료기준은 5개 전부 자동 검증(G1심사 §4-3): D1 동일시드 100회 해시 동일 / D2 다른 시드
+   20개는 전부 다른 해시 / D3 프레임 교란 내성 / D4 헤드리스=실시간 동치 / D5 비시드 난수 잔존 0.
+   시나리오는 신규 세이브 기본 파티(HERO_001/002, Lv1) vs 몹 40체 던전 — 스폰 타이밍·크리티컬·
+   데미지 변주·반격 대상 선정 등 RNG 표면을 두루 지나가도록 count/dur을 여유 있게 잡았다. */
+const D_SCENARIO = { name:'M1검증', foeCP:1400, kind:'mobs', count:40, dur:90 };
+const D_MAX_TICKS = 3000;   // 90초×20Hz=1800틱 상한 + 여유
+
+function freshBattle(){
+  store.delete('hwasin_save_v1'); ev('load')();
+  return ev('Battle');
+}
+/* seed → {hash, detail} : 승패·던전 보상 로그·RNG 소비 체크섬(뽑힌 값의 순서까지 반영)을 묶어
+   해시 하나로 비교한다. driver(B)가 프레임을 어떻게 쪼개 넣든 동일 시드면 동일 해시가 나와야 한다. */
+/* ★ 디버그로 잡은 실제 원인(게임 코드 버그 아님, 테스트 하네스 버그): layoutHeroes()의 1인 홈
+   서바이벌 분기(isHuntSolo() = !partySrc && mode==='hunt')는 "이전 던전이 끝나 mode가 hunt로
+   돌아왔는가"에 좌우된다. setPartySource(null)로 매 런 초기화하면 첫 런은 우연히 mode='dungeon'
+   잔존이라 3인, 이후 모든 런은 mode='hunt' 로 복귀해 있어 1인으로 굳어버려 "같은 시드인데
+   구성원 수가 다른" 교란이 생겼다. 아레나가 하듯 party 함수 자체를 소스로 넘겨(non-null)
+   mode 잔존과 무관하게 항상 3인 편성이 나오게 고정한다. */
+const partyFn = ev('party');
+function runSeeded(seed, driver){
+  const B = freshBattle();
+  B.setSeed(seed);            // ★ layoutHeroes()보다 반드시 먼저 — 이후 모든 소비가 이 시드에서 나온다
+  B.setPartySource(partyFn);  // non-null 소스 — mode 잔존과 무관하게 항상 party() 3인 경로
+  let result = null;
+  B.startDungeon(Object.assign({}, D_SCENARIO, { onEnd:(win, info)=>{ result = { win, dmg:info.dmg, kills:info.kills, wave:info.wave }; } }));
+  driver(B);
+  if(!result) throw new Error(`시드 ${seed}: 던전이 완주되지 않음(맥스 틱 초과 의심)`);
+  const detail = { seed, win:result.win, dmg:result.dmg, kills:result.kills, wave:result.wave,
+    rngChecksum:B.rngChecksum(), rngDrawCount:B.rngDrawCount() };
+  const hash = crypto.createHash('sha256').update(JSON.stringify(detail)).digest('hex').slice(0,16);
+  return { hash, detail };
+}
+const driverPlain = (B)=>{ const r=B.runUntilDone(D_MAX_TICKS); if(!r.finished) throw new Error('runUntilDone 맥스 틱 초과'); };
+function driverJitter(sliceFn){
+  return (B)=>{
+    let iter=0;
+    while(B.inDungeon() && iter<200000){ B.pumpFrame(sliceFn()); iter++; }
+    if(B.inDungeon()) throw new Error('프레임 교란 드라이버가 완주하지 못함');
+  };
+}
+const driverRealtime60fps = driverJitter(()=>1/60);   // ★ D4: '실시간'의 대리 — 60Hz rAF와 동일한 프레임 간격으로 pumpFrame
+
+step('D1 · 동일 시드 100회 실행 → 해시 100% 동일', ()=>{
+  const seed = 0xC0FFEE;
+  const firstR = runSeeded(seed, driverPlain);
+  const seen = new Map([[firstR.hash, firstR.detail]]);
+  // 실패 시 즉시 원인 진단이 가능하도록, 갈라진 해시의 상세를 남긴다(무엇이 달라졌는지: win/dmg/kills/체크섬).
+  for(let i=1;i<100;i++){
+    const r = runSeeded(seed, driverPlain);
+    if(!seen.has(r.hash)){ seen.set(r.hash, r.detail); console.log(`     불일치 발견 run#${i}: `+JSON.stringify(r.detail)); }
+  }
+  if(seen.size!==1){ console.log('     기준(run#0): '+JSON.stringify(firstR.detail)); throw new Error(`100회 중 서로 다른 해시 ${seen.size}종 발생 (시드=${seed})`); }
+  console.log(`     시드 0x${seed.toString(16)} · 100회 해시 = ${firstR.hash} (전부 동일)`);
+});
+
+step('D2 · 서로 다른 시드 20개 → 서로 다른 해시(중복 0)', ()=>{
+  const seeds = Array.from({length:20}, (_,i)=> (0x1000 + i*0x9E3779B1) >>> 0);
+  const hashes = seeds.map(s=>runSeeded(s, driverPlain).hash);
+  const dup = hashes.filter((h,i)=>hashes.indexOf(h)!==i);
+  if(dup.length) throw new Error(`시드 20개 중 해시 중복 발생: ${dup.join(', ')}`);
+  if(new Set(hashes).size!==20) throw new Error('해시 집합 크기가 20이 아님');
+  console.log(`     시드 20개 → 해시 20종 전부 상이 (예: ${hashes[0]}, ${hashes[1]}, …)`);
+});
+
+step('D3 · 프레임 교란 내성 (16ms/50ms/랙스파이크/무작위 분할이 섞여도 같은 시드=같은 결과)', ()=>{
+  const seed = 0x5EED5EED;
+  const base = runSeeded(seed, driverPlain).hash;
+  const variants = {
+    '16ms 고정(≈60fps)': driverJitter(()=>1/60),
+    '50ms 고정(=FIXED_DT)': driverJitter(()=>1/20),
+    '랙스파이크 250ms 간간이': driverJitter(()=>{ variantTick++; return (variantTick%37===0) ? 0.25 : 1/60; }),
+    '무작위 분할(1ms~90ms)': driverJitter(()=>0.001 + Math.random()*0.089),
+  };
+  let variantTick = 0;
+  for(const [label, drv] of Object.entries(variants)){
+    variantTick = 0;
+    const h = runSeeded(seed, drv).hash;
+    if(h!==base) throw new Error(`프레임 슬라이싱[${label}]에서 해시 불일치: ${h} ≠ 기준 ${base}`);
+  }
+  console.log(`     기준 해시 ${base} · 슬라이싱 4종(60fps/20Hz/랙스파이크/무작위) 전부 일치`);
+});
+
+step('D4 · 헤드리스 완주(runUntilDone) = 실시간 프레임 펌프(pumpFrame·60fps 대리) 동일 해시', ()=>{
+  const seed = 0xABCD1234;
+  const headless = runSeeded(seed, driverPlain).hash;
+  const realtime = runSeeded(seed, driverRealtime60fps).hash;
+  if(headless!==realtime) throw new Error(`헤드리스 ${headless} ≠ 실시간(60fps 펌프) ${realtime}`);
+  console.log(`     헤드리스 = 실시간(60fps 대리) = ${headless}`);
+});
+
+step('D5 · 전투 스텝 중 비시드 Math.random 직접 호출 0건 (연출/보상 지대 제외, 후킹 검사)', ()=>{
+  const B = freshBattle();
+  B.setSeed(0x0D5);
+  B.setPartySource(partyFn);
+  const violations = [];
+  const origRandom = Math.random;
+  Math.random = function(){
+    if(!B.isCosmeticZone()) violations.push((new Error().stack||'').split('\n')[2] || '(위치 미상)');
+    return origRandom.call(Math);
+  };
+  try{
+    B.startDungeon(Object.assign({}, D_SCENARIO, { onEnd:()=>{} }));
+    const r = B.runUntilDone(D_MAX_TICKS);
+    if(!r.finished) throw new Error('D5 시나리오가 맥스 틱 내에 완주되지 않음');
+  } finally { Math.random = origRandom; }
+  if(violations.length) throw new Error(`비시드 Math.random 직접 호출 ${violations.length}건 감지:\n     - ` + violations.slice(0,5).join('\n     - '));
+  console.log(`     헤드리스 전투 1회(${D_SCENARIO.count}체 던전) 동안 Math.random 비지정 호출 0건 확인`);
 });
 
 console.log('\n=================== 결과 ===================');

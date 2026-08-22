@@ -1583,6 +1583,48 @@ function heroPortrait(heroId, size){
 const Battle = (()=>{
   let cv, ctx, W=0, H=0, dpr=1;
   let heroes=[], mobs=[], fx=[], drops=[], wave=1, spawnT=0, last=0, running=false, shake=0, lastBossWave=0;
+  /* ★ M1(결정론 리팩터, 20260822 명문 상세기획 §3.2 / G1심사 §4-2): 전투 전용 시드 PRNG.
+     PD 1순위안은 "rnd()/ri()/pick() 의 난수원 자체를 스왑"(호출부 무수정)이었으나, 그 방안은
+     "전투 중 다른 소비자가 같은 난수원을 뽑아 쓰면 즉시 깨진다"는 전제가 있고, PD는 그 전제가
+     확인 안 되면 전투 전용 래퍼로 가라고 명시했다(§4-2). 실측: gameLoop(하단)는 Battle 진행
+     여부와 무관하게 매 프레임 chatTick·idleTick 을 함께 돌려 전역 rnd()/ri()/pick() 을 계속
+     소비한다 — 즉 동시 소비자가 0 이 아님을 확인했다. 그래서 전투 전용 래퍼(bRnd/bRi/bPick)를
+     채택했고, 전역 rnd()/ri()/pick() 은 채팅·제작·소환 등 기존 소비자와 그대로 공유된다.
+     대상 범위: 시뮬레이션 상태(위치·타이밍·타겟팅·데미지·크리티컬·HP·승패·스폰 스케줄)에
+     되먹임하는 호출만 이 전용 RNG를 거친다(update() 도달 가능 경로 중 ~20곳 — 호출부 전수(최대
+     80곳)를 옮기지 않아도 결정론 증명엔 이걸로 충분하다). 연출용 랜덤(파티클 spark, 몬스터
+     스프라이트 랜덤 선택)과 킬 보상(골드·재료량)은 시뮬레이션 상태에 되먹임하지 않으므로
+     결정론 대상이 아니다(§3.2 "화면 흔들림처럼 순수 시각효과는 비결정적이어도 무방" 원칙을
+     보상/연출 전반에 동일 적용) — 단 update() 호출 스택 안에서 실행되므로 _cosmeticDepth 지대로
+     명시 표시해, 그 지대 밖에서 Math.random 이 불리면 회귀로 잡아내는 기계 검증(smoke-test.mjs,
+     M1 완료기준 D5)이 성립하게 했다. */
+  function makeSeededRng(seed){
+    let s = seed >>> 0;
+    return function(){                    // mulberry32
+      s = (s + 0x6D2B79F5) >>> 0;
+      let t = Math.imul(s ^ (s >>> 15), 1 | s);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  /* 기본 시드는 실행마다 고엔트로피로 잡는다 — 시드를 명시 지정하지 않은 일반 플레이의 체감
+     (예측 불가능한 난수)은 기존 Math.random 기반과 통계적으로 동일하다. setBattleSeed()로
+     명시 재시딩할 때만(검증·향후 원정 시드 재현) 결정론이 성립한다. */
+  let _battleRng = makeSeededRng((Date.now() ^ ((Math.random()*4294967296)>>>0)) >>> 0);
+  let _rngChecksum = 0, _rngDrawCount = 0;
+  function _draw01(){
+    const v = _battleRng();
+    _rngDrawCount++;
+    _rngChecksum = Math.imul(_rngChecksum ^ ((v*4294967296)>>>0), 0x01000193) >>> 0;  // FNV류 순환 체크섬 — 뽑힌 값의 순서까지 검증
+    return v;
+  }
+  function bRnd(a,b){ return a + _draw01()*(b-a); }
+  function bRi(a,b){ return Math.floor(bRnd(a,b+1)); }
+  function bPick(arr){ return arr[Math.floor(_draw01()*arr.length)]; }
+  function setBattleSeed(seed){ _battleRng = makeSeededRng(seed>>>0); _rngChecksum=0; _rngDrawCount=0; }
+  // 연출/보상 지대 — 시뮬레이션 상태에 되먹임하지 않는 Math.random 소비를 명시적으로 표시(D5 검증용).
+  let _cosmeticDepth = 0;
+  function cosmetic(fn){ _cosmeticDepth++; try{ return fn(); } finally{ _cosmeticDepth--; } }
   /* ★ v5.25: 몬스터 스프라이트 캐시 — assets/monsters/<name>.png 를 미리 로드.
      캔버스에 drawImage 로 그린다. 32x32 픽셀아트를 128x128 로 확대한 것이다. */
   const MON_IMG_CACHE = {};
@@ -1831,7 +1873,7 @@ const Battle = (()=>{
       return {
         hid:h.hero_id, job:h.job, cp:heroPower(h), dmgDone:0, lvl:h.level, grade:h.grade, name:h.name||h.job.name,
         x:cx, y:cy, baseX:cx, baseY:cy,
-        atkT: rnd(0,0.6), face:h.job.emoji, color:h.job.color, ranged:heroRanged(h.hero_id), lungeT:0,
+        atkT: bRnd(0,0.6), face:h.job.emoji, color:h.job.color, ranged:heroRanged(h.hero_id), lungeT:0,   /* ★ M1: 시드 RNG */
         hp:1, dead:false, respT:0,
         skillCD:[0,0,0,0],
         animFrame:0, animT:0, skillAnim:null, skillAnimT:0,  /* ★ v5.36: 스프라이트 애니메이션 */
@@ -1865,9 +1907,9 @@ const Battle = (()=>{
         hid:fh.hid, job:fh.job, name:fh.name, grade:fh.grade, lvl:fh.lvl,
         x: W*0.80 + (i%2)*20, y: H*(BAND_TOP+0.20) + i*(H*0.14),
         baseX: W*0.80 + (i%2)*20, baseY: H*(BAND_TOP+0.20) + i*(H*0.14),
-        atkT: rnd(0.5,1.5), lungeT:0, animFrame:0, animT:0, atkAnimT:0, skillAnim:null, skillAnimT:0,
+        atkT: bRnd(0.5,1.5), lungeT:0, animFrame:0, animT:0, atkAnimT:0, skillAnim:null, skillAnimT:0,   /* ★ M1: 시드 RNG */
         /* ★ v5.90: 아군과 동일한 cp + hp(비율) 구조 */
-        cp: foeCPperHero * rnd(0.85, 1.15),   /* 개별 편차 ±15% */
+        cp: foeCPperHero * bRnd(0.85, 1.15),   /* 개별 편차 ±15% — ★ M1: 시드 RNG */
         hp: 1, hpMax: 1,   /* 0~1 비율 (아군과 동일) */
         color:'#c8324b', face: fh.job.emoji, dead:false, respT:0, dmgDone:0,
         skillCD:[0,0,0,0], _lockTarget:null, _lockUntil:0, _row:3,
@@ -1895,23 +1937,26 @@ const Battle = (()=>{
        던전 이름에서 등급을 유추하여 MON_WORDS imgs에서 랜덤 선택.
        imgs가 없으면 기본 undead 이미지 사용. */
     let img='undead_102'; let shape='skull';
-    const allImgs = Object.values(MON_WORDS).flatMap(w=>w.imgs);
-    if(allImgs.length) img = pick(allImgs);
-    /* 던전 이름에 등급 힌트가 있으면 해당 등급에서 선택 */
-    const dgName = dg.name||'';
-    const gradeKey = ['레전더리','전설','L'].some(k=>dgName.includes(k)) ? 'L'
-                   : ['영웅','E'].some(k=>dgName.includes(k)) ? 'E'
-                   : ['희귀','R'].some(k=>dgName.includes(k)) ? 'R' : 'N';
-    if(MON_WORDS[gradeKey] && MON_WORDS[gradeKey].imgs.length) img = pick(MON_WORDS[gradeKey].imgs);
-    mobs.push({ name:dg.name, col:dg.col, shape:'skull', img, x:W+30, y:rnd(H*(BAND_TOP+0.02),H*BAND_BOT), vx:-rnd(16,26), hpMax:hp, hp:hp, r:ri(13,18), flash:0, atkT:rnd(0.8,1.4) });
+    /* ★ M1: 스프라이트 선택은 연출용(시뮬레이션 상태에 되먹임 없음) — cosmetic 지대에서 전역 pick() 유지 */
+    cosmetic(()=>{
+      const allImgs = Object.values(MON_WORDS).flatMap(w=>w.imgs);
+      if(allImgs.length) img = pick(allImgs);
+      /* 던전 이름에 등급 힌트가 있으면 해당 등급에서 선택 */
+      const dgName = dg.name||'';
+      const gradeKey = ['레전더리','전설','L'].some(k=>dgName.includes(k)) ? 'L'
+                     : ['영웅','E'].some(k=>dgName.includes(k)) ? 'E'
+                     : ['희귀','R'].some(k=>dgName.includes(k)) ? 'R' : 'N';
+      if(MON_WORDS[gradeKey] && MON_WORDS[gradeKey].imgs.length) img = pick(MON_WORDS[gradeKey].imgs);
+    });
+    mobs.push({ name:dg.name, col:dg.col, shape:'skull', img, x:W+30, y:bRnd(H*(BAND_TOP+0.02),H*BAND_BOT), vx:-bRnd(16,26), hpMax:hp, hp:hp, r:bRi(13,18), flash:0, atkT:bRnd(0.8,1.4) });   /* ★ M1: 시드 RNG */
   }
   function spawnDgBoss(){
     const hp=Math.max(300, dg.foeCP*0.5);
     /* ★ v5.85: 보스도 스프라이트 사용 */
     let img='undead_110';
-    const bossImgs = (MON_WORDS.L && MON_WORDS.L.imgs) || ['undead_110'];
-    img = pick(bossImgs);
-    mobs.push({ name:dg.name, col:dg.col, boss:true, shape:'boss', img, x:W+40, y:H*0.42, vx:-10, hpMax:hp, hp:hp, r:36, flash:0, atkT:rnd(0.8,1.4) });
+    /* ★ M1: 스프라이트 선택은 연출용 — cosmetic 지대에서 전역 pick() 유지 */
+    cosmetic(()=>{ const bossImgs = (MON_WORDS.L && MON_WORDS.L.imgs) || ['undead_110']; img = pick(bossImgs); });
+    mobs.push({ name:dg.name, col:dg.col, boss:true, shape:'boss', img, x:W+40, y:H*0.42, vx:-10, hpMax:hp, hp:hp, r:36, flash:0, atkT:bRnd(0.8,1.4) });   /* ★ M1: 시드 RNG */
   }
   function spawnMob(boss){
     const t=tierDef();
@@ -1921,22 +1966,23 @@ const Battle = (()=>{
     if(boss){
       // 홈 보스: 중앙 영웅 앞쪽에서 등장 (설계: 보스는 5웨이브마다 1체)
       const cx=W*HERO_CENTER_X, cy=H*HERO_CENTER_Y;
-      const ang=rnd(0,6.28), dist=Math.max(W,H)*0.55;
+      const ang=bRnd(0,6.28), dist=Math.max(W,H)*0.55;   /* ★ M1: 시드 RNG */
       const sx=clamp(cx+Math.cos(ang)*dist, 0, W), sy=clamp(cy+Math.sin(ang)*dist*0.6, H*0.3, H*0.92);
       const dx=cx-sx, dy=cy-sy, dl=Math.max(1,Math.hypot(dx,dy)), sp=8;
       mobs.push({ name:t.n+' 군주', col:t.c, boss:true, shape:'boss', img:t.img, x:sx, y:sy, vx:dx/dl*sp, vy:dy/dl*sp*0.6,
-        hpMax:t.hp*6, hp:t.hp*6, r:34, flash:0, atkT:rnd(1,2), homing:true, spd:sp });
+        hpMax:t.hp*6, hp:t.hp*6, r:34, flash:0, atkT:bRnd(1,2), homing:true, spd:sp });   /* ★ M1: 시드 RNG */
       return;
     }
     const cx=W*HERO_CENTER_X, cy=H*HERO_CENTER_Y;
-    const ang=rnd(0,6.28), dist=Math.max(W,H)*rnd(0.55,0.7);
+    const ang=bRnd(0,6.28), dist=Math.max(W,H)*bRnd(0.55,0.7);   /* ★ M1: 시드 RNG */
     const sx=clamp(cx+Math.cos(ang)*dist, 0, W), sy=clamp(cy+Math.sin(ang)*dist*0.6, H*0.3, H*0.92);
-    const dx=cx-sx, dy=cy-sy, dl=Math.max(1,Math.hypot(dx,dy)), sp=rnd(10,20);
+    const dx=cx-sx, dy=cy-sy, dl=Math.max(1,Math.hypot(dx,dy)), sp=bRnd(10,20);   /* ★ M1: 시드 RNG */
     mobs.push({ name:t.n, col:t.c, shape:t.shape, img:t.img, x:sx, y:sy,
-      vx:dx/dl*sp, vy:dy/dl*sp*0.6, hpMax:t.hp, hp:t.hp, r:ri(12,17), flash:0, atkT:rnd(0.8,1.6), homing:true, spd:sp });
+      vx:dx/dl*sp, vy:dy/dl*sp*0.6, hpMax:t.hp, hp:t.hp, r:bRi(12,17), flash:0, atkT:bRnd(0.8,1.6), homing:true, spd:sp });   /* ★ M1: 시드 RNG */
   }
   function dmgText(x,y,val,crit,color){ fx.push({ type:'dmg', x, y, val, t:0, crit, color: color||(crit?'#ffd36a':'#ffffff') }); }
-  function spark(x,y,color){ for(let i=0;i<7;i++){ const a=rnd(0,6.28),s=rnd(30,80); fx.push({type:'spark',x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,t:0,color}); } }
+  /* ★ M1: 파티클 물리(각도·속도)는 연출용 — 시뮬레이션 상태에 되먹임 없음. cosmetic 지대에서 전역 rnd() 유지 */
+  function spark(x,y,color){ cosmetic(()=>{ for(let i=0;i<7;i++){ const a=rnd(0,6.28),s=rnd(30,80); fx.push({type:'spark',x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,t:0,color}); } }); }
   function drop(x,y,kind){ // 우상단 재화 아이콘으로 흡수(lerp)
     const tx = kind==='gold'? W*0.62 : W*0.5, ty = -H*0.02;
     drops.push({ x, y, sx:x, sy:y, tx, ty, t:0, kind });
@@ -2012,10 +2058,10 @@ const Battle = (()=>{
          ★ v5.95: 이동 중(h._moving)에는 공격 불가 — 멈춰야 공격. */
       const arenaTargets = (mode==='dungeon'&&dg&&dg.kind==='arena') ? foes.filter(f=>!f.dead) : null;
       if(h.atkT<=0 && !h._moving && (mobs.length || (arenaTargets && arenaTargets.length))){
-        h.atkT = rnd(0.7,1.1);
-        const crit = Math.random()<0.22;
+        h.atkT = bRnd(0.7,1.1);   /* ★ M1: 시드 RNG — 공격 주기 */
+        const crit = _draw01()<0.22;   /* ★ M1: 시드 RNG — 크리티컬 판정 */
         const dgMul = (mode==='dungeon'&&dg) ? (dg.dmgMul||1)*(dg.otMul||1) : 1;   // ★ v5.117 가중 포함
-        const dmg = Math.max(1, Math.round(Math.max(10, partyCP*0.08)*(crit?1.8:1)*rnd(0.85,1.15)*dgMul));
+        const dmg = Math.max(1, Math.round(Math.max(10, partyCP*0.08)*(crit?1.8:1)*bRnd(0.85,1.15)*dgMul));   /* ★ M1: 시드 RNG — 데미지 변주 */
         h.dmgDone += dmg;
         /* ★ v5.36: 스킬 4종 — 단일/광역 혼합 + 스킬별 스프라이트 애니메이션.
            1차 (1.5쿨): 광역 (부채꼴 범위), Attack1 애니메이션
@@ -2136,7 +2182,7 @@ const Battle = (()=>{
         /* ★ 홈: 영웅 중앙 기준 근접(거리<70) 시 반격 — stand-off(60) 밖 약간에서 때림. 던전: 전열 도달(W*0.26). */
         const inRange = solo ? (Math.hypot(m.x-hcx, m.y-hcy) < 70) : (m.x<=W*0.26+2);
         if(inRange){ m.atkT-=dt;
-          if(m.atkT<=0){ m.atkT=rnd(1.1,1.7); const h=pick(alive);
+          if(m.atkT<=0){ m.atkT=bRnd(1.1,1.7); const h=bPick(alive);   /* ★ M1: 시드 RNG — 반격 주기·대상 */
             const r=(cpRef+300)/(partyCP+300);
             const hitF=clamp(0.035*Math.pow(r,1.7)*(m.boss?2.2:1), 0.004, 0.6)*foeMul;
             h.hp-=hitF; spark(h.x+8,h.y,'#e2504a'); dmgText(h.x+10,h.y-14,'-'+Math.max(1,Math.round(hitF*100)),false,'#ff7a6a');
@@ -2243,7 +2289,7 @@ const Battle = (()=>{
           }
           /* ★ v5.95: 적도 이동 중에는 공격 불가 — 멈춰야 공격 */
           if(f.atkT <= 0 && !f._moving){
-            f.atkT = rnd(0.8, 1.5);
+            f.atkT = bRnd(0.8, 1.5);   /* ★ M1: 시드 RNG */
             f.atkAnimT = 0.3;   /* ★ 공격 모션 0.3초 */
             /* 아군 중 살아있는 가장 가까운 영웅 공격 */
             const aliveHeroes = heroes.filter(h=>!h.dead);
@@ -2251,9 +2297,9 @@ const Battle = (()=>{
               const tgt = aliveHeroes.reduce((a,b)=> Math.hypot(b.x-f.x,b.y-f.y)<Math.hypot(a.x-f.x,a.y-f.y)?b:a);
               /* ★ v5.90: 아군과 동일한 공격 공식 — f.cp 기반 데미지.
                  아군: partyCP*0.08 → 적의 cp로 동일하게. dmgMul(0.5) 적용. */
-              const crit = Math.random()<0.22;
+              const crit = _draw01()<0.22;   /* ★ M1: 시드 RNG */
               const dmgMul = (dg.dmgMul||1)*(dg.otMul||1);   // ★ v5.117: 가중은 양측 동일
-              const dmg = Math.max(1, Math.round(Math.max(10, f.cp*0.08)*(crit?1.8:1)*rnd(0.85,1.15)*dmgMul));
+              const dmg = Math.max(1, Math.round(Math.max(10, f.cp*0.08)*(crit?1.8:1)*bRnd(0.85,1.15)*dmgMul));   /* ★ M1: 시드 RNG */
               /* 아군 HP(0~1) 감소 — 아군의 cp로 정규화 */
               const hpDmg = dmg / Math.max(1, tgt.cp) * 0.08;
               tgt.hp = Math.max(0, (tgt.hp||1) - hpDmg);
@@ -2276,7 +2322,7 @@ const Battle = (()=>{
       } else if(dg.kind==='mobs'){
         if(dg.killed>=dg.total){ endDungeon(true); return; }
         if(dg.timeLeft<=0){ endDungeon(false); return; }
-        if(spawnT<=0 && dg.spawned<dg.total && mobs.length<5){ spawnDgMob(); dg.spawned++; spawnT=rnd(0.4,0.9); }
+        if(spawnT<=0 && dg.spawned<dg.total && mobs.length<5){ spawnDgMob(); dg.spawned++; spawnT=bRnd(0.4,0.9); }   /* ★ M1: 시드 RNG */
       } else if(dg.kind==='wave'){
         // ★ B5/G-77: 웨이브 단위 제한시간. 그룹을 다 잡으면 웨이브가 오르고 60초가 다시 채워진다.
         dg.waveTimeLeft-=dt;
@@ -2285,7 +2331,7 @@ const Battle = (()=>{
           /* ★ v5.107: soloSurvival 모드는 spawnMob(사방→중앙), 일반은 spawnDgMob(우→좌) */
           if(spawnT<=0 && mobs.length<5){
             if(dg.soloSurvival) spawnMob(); else spawnDgMob();
-            dg.groupLeft--; dg.spawned++; spawnT=rnd(0.35,0.8);
+            dg.groupLeft--; dg.spawned++; spawnT=bRnd(0.35,0.8);   /* ★ M1: 시드 RNG */
           }
         } else if(mobs.length===0){
           dg.waveNo++; dg.waveTimeLeft=dg.waveDur;
@@ -2304,7 +2350,7 @@ const Battle = (()=>{
       //   ★ F2/A2: 칭호 '불씨의 벗' — 작열 8세트 달성 시 보유 적용(TITLES 주석 참조).
       const floor = 6 + Math.min(6, Math.floor(wave/3)) + titleSpawnBonus();
       const cap = Math.max(floor, (S.mobCount||30));
-      if(spawnT<=0 && mobs.length<cap){ spawnMob(); spawnT = rnd(0.4,1.0); }
+      if(spawnT<=0 && mobs.length<cap){ spawnMob(); spawnT = bRnd(0.4,1.0); }   /* ★ M1: 시드 RNG */
     }
     if(shake>0) shake-=dt;
     drops.forEach(d=>{ d.t+=dt*1.1; const e=clamp(d.t,0,1); const ease=e<0.5? e : e; d.x=d.sx+(d.tx-d.sx)*Math.pow(e,1.6); d.y=d.sy+(d.ty-d.sy)*Math.pow(e,1.6); });
@@ -2317,7 +2363,8 @@ const Battle = (()=>{
     m.hp -= dmg; dmgText(m.x, m.y-m.r-4, dmg, crit, color); m.flash = 0.12;
     if(crit){ shake=0.14; spark(m.x,m.y,color); }
     if(m.hp<=0){ const mx=m.x,my=m.y,boss=m.boss; mobs = mobs.filter(x=>x!==m); spark(mx,my,boss?'#ffd36a':'#ff8a3c');
-      if(boss){ shake=0.3; for(let i=0;i<12;i++) spark(mx+rnd(-22,22),my+rnd(-22,22),'#ffd36a'); } onKill(m,mx,my,boss); }
+      /* ★ M1: 사망 파티클 위치 지터는 연출용 — cosmetic 지대에서 전역 rnd() 유지 */
+      if(boss){ shake=0.3; cosmetic(()=>{ for(let i=0;i<12;i++) spark(mx+rnd(-22,22),my+rnd(-22,22),'#ffd36a'); }); } onKill(m,mx,my,boss); }
   }
   /* ★ v5.84: 투기장 적 영웅 피격 처리 — mobs가 아닌 foes에서 관리. */
   function hitFoe(f, dmg, crit, color){
@@ -2346,8 +2393,13 @@ const Battle = (()=>{
     } else toast('부대 전멸! 잠시 후 부활합니다');
     setTimeout(()=>{ if(mode==='dungeon') return; heroes.forEach(h=>{ h.dead=false; h.hp=1; h.respT=0; }); wave=1; }, 2400);
   }
+  /* ★ M1: onKill()은 킬 보상(골드·재료량)을 굴린다 — 시뮬레이션 상태(위치·HP·타이밍·승패)에
+     되먹임하지 않으므로 보상 RNG 만 cosmetic 지대로 명시 표시하고 전역 rnd/ri/Math.random을
+     그대로 쓴다. 단, 홈(비던전) 분기 아래쪽 경험치/레벨업 블록은 h.cp·partyCP·h.dead를 실제로
+     바꾸는 시뮬레이션 상태이므로(이 함수 안에서도!) cosmetic 지대 밖에 그대로 둔다 — 다만
+     그 블록엔 RNG가 전혀 없어(고정 수식) 결정론에는 영향 없다. */
   function onKill(m,mx,my,boss){
-    if(mode==='dungeon'&&dg){ dg.killed++; S.stats.kills++; sfx(boss?'legendary':'coin'); addGold(ri(200,600)); return; } // 던전 보상은 결과창에서 일괄
+    if(mode==='dungeon'&&dg){ dg.killed++; S.stats.kills++; sfx(boss?'legendary':'coin'); cosmetic(()=>addGold(ri(200,600))); return; } // 던전 보상은 결과창에서 일괄
     const t=tierDef();
     S.stats.kills++; sfx(boss?'legendary':'coin');
     /* ★ v5.30: 홈 AoE 다중 킬 골드 밸런스 — 마리당 골드가 실측 기준값(분당 18,885G)의
@@ -2357,28 +2409,31 @@ const Battle = (()=>{
        ★ v5.40: mobs.length 대신 S.mobCount(설정 마릿수) 사용 —
        onKill 시점엔 이미 죽은 몹이 빠져 있어 1/N 분배가 비일관적이었음. */
     const aoeGoldDiv = isHuntSolo() ? Math.max(1, (S.mobCount||30)) : 1;
-    addGold(Math.max(1, Math.round(((boss?8:1)*t.gold + ri(0,Math.round(t.gold*0.4))) / aoeGoldDiv))); drop(mx, my, 'gold');
-    // ★ 몬스터별 고정 드랍 — 이 몬스터가 떨구는 재료 등급은 정해져 있다
-    const dropBuff = holdOwn('nest') ? 1.15 : 1; // 점령전: 잿불 군락 드랍률 +15% (★ B8/G-109 holds 스키마 객체화)
-    // ★ F2: 칭호 효과 축에 '드랍률'은 없다 → 칭호(badhand) 분기를 제거하고 기본 확률로 되돌렸다.
-    const p = (boss?1:0.35) * dropBuff;
-    /* ★ v4.3: 등급 공용풀 폐지 → 사냥터마다 '여기서만 나오는 대표 재료'(t.mat)를 떨군다.
-       다음 티어로 올라갈 이유가 골드 배율뿐이 아니라 "그 재료가 여기서만 나온다"가 되도록. */
-    if(Math.random()<p){ matGain(t.mat, boss?ri(2,4):1); drop(mx-8,my,'mat'); }
-    /* ★ v5.111: 보조 고정 드랍 — 등급당 6번째 재료의 유일한 '지정 파밍' 경로(HUNT_TIERS 주석 참조).
-       대표 재료의 절반 확률로 둔다. 아래 10% 랜덤 드랍은 그대로 유지(다른 재료 보완용). */
-    if(t.mat2 && Math.random()<p*0.5){ matGain(t.mat2, boss?ri(1,2):1); drop(mx-8,my,'mat'); }
-    if(t.sub && Math.random()<0.25){ matGainGrade(t.sub, 1); }   // 하위 등급은 아무 재료나 소량
-    /* ★ v5.29: 같은 등급 랜덤 추가 드랍 (10%) — 몬스터가 5종이라 고정 드랍이 5개 재료만
-       커버한다. 6번째 재료(잿가루/서리결정/천공수정/금강석)는 전투로 얻을 수 없었는데,
-       같은 등급 풀에서 랜덤 드랍을 추가해 제작 교착을 방지한다.
-       설계 기준도 전투 드랍 + 재료 소환(랜덤) + 합성으로 전 재료를 커버한다. */
-    if(Math.random()<0.10){ matGainGrade(t.drop, 1); }
-    /* ★ A3-1: 회색코인(S.gray)은 전투 드랍으로 충전되지 않는다.
-       근거 — UI재현카탈로그 '길드 상점 — 회색코인(길드코인) 전용 교환소' 절:
-       "코인은 길드 레이드/약탈/기여로만 충전(상점 구매 불가)".
-       종전의 일반몹 3% 드랍·보스 드랍 2경로를 제거했다. 획득처는 길드 레이드 / 약탈 / 길드 기여(점령전) 뿐. */
-    if(boss){ toast(`${m.name} 처치! ${GRADES[t.drop].name} 재료 대량 획득`); matGainGrade(t.drop, ri(1,3)); }  // 보스는 등급 내 랜덤 추가 드랍
+    /* ★ M1: 골드·재료 드랍량은 보상 RNG — cosmetic 지대에서 전역 rnd/ri/Math.random 유지 */
+    cosmetic(()=>{
+      addGold(Math.max(1, Math.round(((boss?8:1)*t.gold + ri(0,Math.round(t.gold*0.4))) / aoeGoldDiv))); drop(mx, my, 'gold');
+      // ★ 몬스터별 고정 드랍 — 이 몬스터가 떨구는 재료 등급은 정해져 있다
+      const dropBuff = holdOwn('nest') ? 1.15 : 1; // 점령전: 잿불 군락 드랍률 +15% (★ B8/G-109 holds 스키마 객체화)
+      // ★ F2: 칭호 효과 축에 '드랍률'은 없다 → 칭호(badhand) 분기를 제거하고 기본 확률로 되돌렸다.
+      const p = (boss?1:0.35) * dropBuff;
+      /* ★ v4.3: 등급 공용풀 폐지 → 사냥터마다 '여기서만 나오는 대표 재료'(t.mat)를 떨군다.
+         다음 티어로 올라갈 이유가 골드 배율뿐이 아니라 "그 재료가 여기서만 나온다"가 되도록. */
+      if(Math.random()<p){ matGain(t.mat, boss?ri(2,4):1); drop(mx-8,my,'mat'); }
+      /* ★ v5.111: 보조 고정 드랍 — 등급당 6번째 재료의 유일한 '지정 파밍' 경로(HUNT_TIERS 주석 참조).
+         대표 재료의 절반 확률로 둔다. 아래 10% 랜덤 드랍은 그대로 유지(다른 재료 보완용). */
+      if(t.mat2 && Math.random()<p*0.5){ matGain(t.mat2, boss?ri(1,2):1); drop(mx-8,my,'mat'); }
+      if(t.sub && Math.random()<0.25){ matGainGrade(t.sub, 1); }   // 하위 등급은 아무 재료나 소량
+      /* ★ v5.29: 같은 등급 랜덤 추가 드랍 (10%) — 몬스터가 5종이라 고정 드랍이 5개 재료만
+         커버한다. 6번째 재료(잿가루/서리결정/천공수정/금강석)는 전투로 얻을 수 없었는데,
+         같은 등급 풀에서 랜덤 드랍을 추가해 제작 교착을 방지한다.
+         설계 기준도 전투 드랍 + 재료 소환(랜덤) + 합성으로 전 재료를 커버한다. */
+      if(Math.random()<0.10){ matGainGrade(t.drop, 1); }
+      /* ★ A3-1: 회색코인(S.gray)은 전투 드랍으로 충전되지 않는다.
+         근거 — UI재현카탈로그 '길드 상점 — 회색코인(길드코인) 전용 교환소' 절:
+         "코인은 길드 레이드/약탈/기여로만 충전(상점 구매 불가)".
+         종전의 일반몹 3% 드랍·보스 드랍 2경로를 제거했다. 획득처는 길드 레이드 / 약탈 / 길드 기여(점령전) 뿐. */
+      if(boss){ toast(`${m.name} 처치! ${GRADES[t.drop].name} 재료 대량 획득`); matGainGrade(t.drop, ri(1,3)); }  // 보스는 등급 내 랜덤 추가 드랍
+    });
     if(S.stats.kills % 12 === 0) wave++;
     /* ★ v5.26: 영웅 자동 레벨업 — 킬 시 참여 영웅에게 경험치 축적.
        ★ v5.30: 골드 ÷30 페널티와 동일하게 AoE 다중 킬 EXP 과급 해결.
@@ -2856,21 +2911,53 @@ const Battle = (()=>{
     }).join('')+'</div>';
   }
 
+  /* ★ M1(결정론 리팩터, 상세기획 §3.1): 어큐뮬레이터 고정 타임스텝.
+     종전엔 dt를 0.05초에 "클램프"만 했다(상한선이지 고정폭이 아니다) — 실제 프레임 간격이
+     16ms든 40ms든 그대로 update(dt)에 들어가, 같은 시드로 두 번 돌려도 프레임 타이밍이
+     다르면 다른 결과가 나왔다(game.js 구 loop, 실측). FIXED_DT 배수로만 update()를 부르면
+     "몇 번의 실제 프레임에 걸쳐 나뉘어 들어오든 결과가 같다"가 보장된다(M1 완료기준 D3). */
+  const FIXED_DT = 1/20;           // 50ms, 20Hz — 기존 클램프값(0.05)을 고정폭으로 승격
+  let acc = 0;
+  function stepOnce(dt){
+    /* ★ v5.32.1: update 에러로 게임이 멈추는 것을 방지. 에러가 나면 콘솔에 기록하고 계속 진행. */
+    try{ update(dt); }catch(e){ if(typeof console!=='undefined') console.error('update:',e); }
+  }
+  /* ★ M1: 실시간 rAF 루프와 헤드리스 검증(D1~D4)·향후 담금질 인스턴트 시뮬(M4)이 반드시 같은
+     코드 경로를 타야 한다(G1심사 §3-3 "따로 만들지 마라") — pumpFrame이 그 공용 경로다.
+     한 프레임 안에서 여러 FIXED_DT 스텝이 밀렸을 때(랙 스파이크·헤드리스 고속실행), 그중 한
+     스텝이 던전을 종료(mode 전환)시키면 남은 스텝은 문맥이 바뀐 채로 도는 대신 다음 프레임으로
+     이월한다 — endDungeon()을 부른 그 스텝까지는 항상 실행되므로 승패를 가르는 시점은 그대로다. */
+  function pumpFrame(frameDt){
+    acc += frameDt;
+    const modeAtStart = mode;
+    let guard = 0;
+    while(acc >= FIXED_DT && guard < 10000){
+      stepOnce(FIXED_DT); acc -= FIXED_DT; guard++;
+      if(mode !== modeAtStart) break;
+    }
+  }
   function loop(ts){
     if(!running) return;
-    const dt = Math.min(0.05, (ts-last)/1000 || 0); last=ts;
-    /* ★ v5.32.1: update/draw 에러로 게임이 멈추는 것을 방지.
-       에러가 나면 콘솔에 기록하고 다음 프레임 계속 진행. */
-    try{ update(dt); }catch(e){ if(typeof console!=='undefined') console.error('update:',e); }
+    const frameDt = Math.min(0.25, (ts-last)/1000 || 0); last=ts;   // 탭 전환 등 긴 정지는 250ms로 클램프해 폭주 방지
+    pumpFrame(frameDt);
     try{ draw(); }catch(e){ if(typeof console!=='undefined') console.error('draw:',e); }
-    contribT-=dt; if(contribT<=0){ contribT=0.4; try{renderContribPanel();}catch(e){} }
+    contribT-=frameDt; if(contribT<=0){ contribT=0.4; try{renderContribPanel();}catch(e){} }
     requestAnimationFrame(loop);
   }
-  function start(){ if(running) return; running=true; preloadHeroSheets(); preloadSkillFx(); last=performance.now(); resize(); requestAnimationFrame(loop); }
+  function start(){ if(running) return; running=true; preloadHeroSheets(); preloadSkillFx(); last=performance.now(); acc=0; resize(); requestAnimationFrame(loop); }
   function refreshParty(){ layoutHeroes(); }
   function contributions(){ const tot=heroes.reduce((a,h)=>a+h.dmgDone,0)||1; return heroes.map(h=>({job:h.job,pct:Math.round(h.dmgDone/tot*100)})); }
   window.addEventListener('resize', ()=>{ resize(); });
   function setHunt(){ if(mode==='dungeon') return; mobs=[]; wave=1; lastBossWave=0; wiped=0; layoutHeroes(); }
+  /* ★ M1: 헤드리스 완주 러너 — 렌더 없이 FIXED_DT만 최대 속도로 반복한다. 던전이 끝나면
+     (승패 확정으로 mode가 'hunt'로 복귀하면) 즉시 멈춘다. 담금질 마당(M4)의 "인스턴트 시뮬"이
+     그대로 이 함수를 호출하게 될 통로다 — 검증 하네스와 실제 기능이 같은 경로를 타게 한다. */
+  function runUntilDone(maxTicks){
+    const cap = maxTicks>0 ? maxTicks : 100000;
+    let ticks = 0;
+    while(mode==='dungeon' && dg && !dg.done && ticks < cap){ stepOnce(FIXED_DT); ticks++; }
+    return { ticks, finished: !(mode==='dungeon' && dg && !dg.done) };
+  }
   return { start, resize, refreshParty, contributions, wave:()=>wave, setHunt, partyCP:()=>partyCP, startDungeon, inDungeon:()=>mode==='dungeon',
            setPartySource:(fn)=>{ partySrc = (typeof fn==='function') ? fn : null; layoutHeroes(); },
            /* ★ v5.32: 스킬 쿨타임 UI 업데이트용 노출. */
@@ -2881,9 +2968,17 @@ const Battle = (()=>{
               어긋난다. 표시와 판정이 같은 값을 보도록 전투가 쓰는 수치를 그대로 내보낸다. */
            timeLeft:()=>(mode==='dungeon'&&dg ? Math.max(0,dg.timeLeft) : 0),
            otMul:()=>(mode==='dungeon'&&dg ? (dg.otMul||1) : 1),
-           /* ★ v5.117: 프레임을 손으로 한 칸 돌린다 — 스모크에서 시간이 걸린 규칙(서든데스 등)을
-              rAF 없이 검증하기 위한 통로다. 게임 코드는 쓰지 않는다(항상 loop 가 부른다). */
-           stepFrame:(dt)=>{ try{ update(Math.min(0.05, dt||0.016)); }catch(e){ throw e; } } };
+           /* ★ v5.117→M1: 프레임을 손으로 한 칸 돌린다 — 스모크에서 시간이 걸린 규칙(서든데스 등)을
+              rAF 없이 검증하기 위한 통로다. 게임 코드는 쓰지 않는다(항상 loop 가 부른다).
+              M1부터는 pumpFrame(어큐뮬레이터)에 위임한다 — 기존 호출부는 전부 dt=0.05(=FIXED_DT)를
+              써서(누산 즉시 1스텝 드레인) 동작이 완전히 동일하고, 0.05가 아닌 임의 dt를 넘겨도
+              이제는 고정폭 스텝으로 올바르게 누산된다(예전엔 update(dt)를 그 dt 그대로 돌렸다). */
+           stepFrame:(dt)=>{ pumpFrame(dt||FIXED_DT); },
+           /* ★ M1: 결정론 검증·향후 원정 시드 재현용 노출. */
+           FIXED_DT, pumpFrame, runUntilDone,
+           setSeed:(seed)=>setBattleSeed(seed),
+           rngChecksum:()=>_rngChecksum, rngDrawCount:()=>_rngDrawCount,
+           isCosmeticZone:()=>_cosmeticDepth>0 };
 })();
 
 /* ============================================================
