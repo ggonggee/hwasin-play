@@ -661,19 +661,24 @@ step('D5 · 전투 스텝 중 비시드 Math.random 직접 호출 0건 (연출/�
   const B = freshBattle();
   B.setSeed(0x0D5);
   B.setPartySource(partyFn);
-  const violations = [];
-  const origRandom = Math.random;
-  Math.random = function(){
-    if(!B.isCosmeticZone()) violations.push((new Error().stack||'').split('\n')[2] || '(위치 미상)');
-    return origRandom.call(Math);
-  };
+  /* ★ v5.128.1: 훅을 vm 컨텍스트 '안'에 설치한다. 종전엔 바깥 리얼름의 Math.random 을 패치해
+     별도 리얼름에서 도는 game.js 의 호출을 전혀 가로채지 못했다 — 항상 0건 거짓 통과
+     (QA 독립 검증이 오염 주입 교란 시험으로 발견). 재발 방지로, 설치 직후 오염을 일부러
+     호출해 훅이 실제로 무는지 카나리로 먼저 증명한 뒤에만 본검사를 신뢰한다. */
+  let count = null, sample = [];
   try{
+    ev("globalThis.__d5={v:[],orig:Math.random}; Math.random=function(){ if(!(Battle.isCosmeticZone&&Battle.isCosmeticZone())) __d5.v.push((new Error().stack||'').split('\\n')[2]||'(위치 미상)'); return __d5.orig.call(Math); };");
+    ev("Math.random();");                                     // 카나리 오염 — 반드시 1건 잡혀야 한다
+    if(ev("__d5.v.length") < 1) throw new Error('D5 카나리 실패 — 컨텍스트 내 훅이 발화하지 않는다');
+    ev("__d5.v.length = 0;");
     B.startDungeon(Object.assign({}, D_SCENARIO, { onEnd:()=>{} }));
     const r = B.runUntilDone(D_MAX_TICKS);
     if(!r.finished) throw new Error('D5 시나리오가 맥스 틱 내에 완주되지 않음');
-  } finally { Math.random = origRandom; }
-  if(violations.length) throw new Error(`비시드 Math.random 직접 호출 ${violations.length}건 감지:\n     - ` + violations.slice(0,5).join('\n     - '));
-  console.log(`     헤드리스 전투 1회(${D_SCENARIO.count}체 던전) 동안 Math.random 비지정 호출 0건 확인`);
+    count = ev("__d5.v.length");
+    sample = ev("__d5.v.slice(0,5)");
+  } finally { ev("if(globalThis.__d5){ Math.random=__d5.orig; delete globalThis.__d5; }"); }
+  if(count!==0) throw new Error(`비시드 Math.random 직접 호출 ${count}건 감지:\n     - ` + sample.join('\n     - '));
+  console.log(`     컨텍스트 내 훅 + 카나리 발화 확인 — 헤드리스 전투 1회(${D_SCENARIO.count}체 던전) 동안 비지정 호출 0건`);
 });
 
 console.log('\n=================== 결과 ===================');
