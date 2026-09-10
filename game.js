@@ -5087,14 +5087,21 @@ const MODALS = {
       .forEach(([ic,nm,v])=>{ const c=el('div','cell gframe'); c.innerHTML=`<div class="ei">${eImg(ic,2)}</div><div class="cn">${nm} ${fmt(v)}</div>`; g.appendChild(c); });
     b.appendChild(g);
     b.appendChild(el('div','hint',`<div class="hr"></div>재료: 일반·희귀 최대 2000개, 영웅·레전더리 최대 900개(초과분 미획득) · 무기: 종류당 최대 99개`));
-    // 장비 탭 [무기][벨트]
-    const TABS=[['무기','무기'],['벨트','벨트']];
+    /* 장비 탭 2개. 오른쪽 탭은 '무기가 아닌 장비 전부' 를 담는다 —
+       ★ 2026-09-10: 라벨이 '벨트' 였는데 실제로는 방패·반지·장신구·보조·특수까지 다 들어간다.
+       slotSchema 의 part 는 9종(무기/방어구/방패/벨트/반지/장신구/보조/특수/공용)이고 그중
+       '벨트' 는 하나일 뿐이다. 방패를 만든 이용자가 '벨트' 탭을 열어볼 이유가 없어서, 실제로
+       플레이하다 제작한 방패를 못 찾았다. 담는 것에 맞는 이름으로 바꾼다. */
+    const TABS=[['무기','무기'],['벨트','방어구·장신구']];
     const isWeapon=n=>slotSchema(n).part==='무기';
     const tb=el('div','inv-tabs'); const list=el('div','grid c4'); list.style.marginTop='6px';
     function drawList(){
       list.innerHTML='';
       const arr=S.equips.filter(e=>!e.equipped).filter(e=> S.invTab==='무기' ? isWeapon(e.slot) : !isWeapon(e.slot));
-      if(!arr.length){ list.appendChild(el('div','hint',`${S.invTab} 탭에 미장착 장비가 없습니다.`)); return; }
+      /* 안내문에는 내부 키(S.invTab)가 아니라 화면에 보이는 라벨을 쓴다 —
+         키는 '벨트' 인데 탭 이름은 '방어구·장신구' 라 그대로 쓰면 없는 탭 이름이 나온다. */
+      const tabLabel = (TABS.find(t=>t[0]===S.invTab)||[])[1] || S.invTab;
+      if(!arr.length){ list.appendChild(el('div','hint',`${tabLabel} 탭에 미장착 장비가 없습니다.`)); return; }
       arr.slice(0,16).forEach(e=>{ const c=el('div','cell gframe grade-'+e.grade); c.style.position='relative'; c.style.setProperty('--gc',GRADES[e.grade].color);
         c.innerHTML=`<div class="gtag">${GRADES[e.grade].name}</div><div class="ei">${equipImg(e.slot,2)}</div><div class="cn">${e.slot}</div>${e.enh?`<div class="lvl">+${e.enh}</div>`:''}`;
         /* ★ v5.112: 종전 `cur && cur.hero_id` — 이 스코프에 cur 이 없어 클릭 즉시
@@ -6522,7 +6529,22 @@ function itemDetail(e, heroId){ _itemDetailHeroId=heroId||null;
   eq.onclick=()=>{ if(e.equipped){ toast('이미 장착됨'); return; }
     /* ★ v5.81: 영웅 귀속 없는 착용 방지 — 인벤토리에서 heroId 없이 착용하면
        모든 영웅에게 적용되는 버그. 영웅 선택창(equip 모달)을 먼저 열도록 유도. */
-    if(!_itemDetailHeroId){ toast('영웅 착용창에서 장비를 장착해 주세요'); openModal('equip'); return; }
+    if(!_itemDetailHeroId){
+      /* ★ 2026-09-10: 종전엔 안내만 띄우고 빈 착용창으로 보냈다. 이용자는 방금 누른 장비가
+         어디 갔는지 모른 채 착용창 하단 트레이를 다시 찾아 눌러야 했다 — 실제로 플레이해 보니
+         같은 안내가 반복되며 제자리를 도는 것처럼 느껴진다.
+         v5.119 가 '바로가기·튜토리얼은 목표 아이템을 미리 골라 놓는다' 로 잡은 것과 같은 문제라
+         같은 방식으로 고친다: 착용창을 연 뒤 방금 그 장비의 상세를 그 영웅에 묶어 다시 띄운다.
+         [장착] 을 한 번 더 누르면 바로 끝난다.
+         영웅은 착용창이 기본으로 여는 것과 같은 기준(파티 1번)으로 고른다 — 화면과 어긋나면
+         엉뚱한 영웅에게 장착된다. */
+      const p0 = (party()[0] || ownedHeroes()[0]);
+      if(!p0){ toast('보유 영웅이 없습니다'); openModal('equip'); return; }
+      toast('영웅 착용창에서 장착합니다');
+      openModal('equip', p0.hero_id);
+      itemDetail(e, p0.hero_id);
+      return;
+    }
     showConfirmDialog({ title:'장착', warn:'*새 장비를 걸치면 같은 부위의 낡은 장비는 사라집니다.*', msg:'장착 하시겠습니까?', yes:'장착', no:'취소',
       onYes:()=>{
         /* ★ v5.71→v5.81: 착용 시 같은 부위 기존 장비는 파괴(삭제)한다.
