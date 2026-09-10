@@ -2115,6 +2115,13 @@ const Battle = (()=>{
       const dx=cx-sx, dy=cy-sy, dl=Math.max(1,Math.hypot(dx,dy)), sp=8;
       mobs.push({ name:t.n+' 군주', col:t.c, boss:true, shape:'boss', img:t.img, x:sx, y:sy, vx:dx/dl*sp, vy:dy/dl*sp*0.6,
         hpMax:t.hp*6, hp:t.hp*6, r:34, flash:0, atkT:bRnd(1,2), homing:true, spd:sp });   /* ★ M1: 시드 RNG */
+      /* ★ v5.150: 보스 등장 연출 — 5웨이브마다 오는 군주가 화면 구석에서 조용히 나타나곤 했다.
+         체력 6배짜리 이벤트 몹인 만큼 등장 자체를 알린다(화면 흔들림 + legendary 음 + 토스트).
+         보스 처치 연발(shake 0.3 + 불꽃 12발)과 같은 어휘로 맞춘다.
+         이 분기는 홈 전용이다(던전은 spawnDgBoss, soloSurvival 은 spawnMob() 무인자) —
+         M1 결정론 검사(D1~D5)가 돌리는 던전 경로에 영향 없음. */
+      shake=Math.max(shake,0.35); sfx('legendary');
+      toast(`👑 <b style="color:${t.c}">${t.n} 군주</b> 출현!`);
       return;
     }
     const cx=W*HERO_CENTER_X, cy=H*HERO_CENTER_Y;
