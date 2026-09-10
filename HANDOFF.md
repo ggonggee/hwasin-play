@@ -149,6 +149,7 @@ const OVERTIME = { at:30, stepSec:5, stepMul:0.6 };   // 30초 이후 5초마다
 | C | `freshState` 에 없는 `S.필드` 참조 → 구세이브에서 `undefined` → NaN. 의도한 예외는 `FS_EXEMPT` 에 이유와 함께 적는다 |
 | D · E · F | 최상위 중복 선언 · 없는 DOM id 조회 · `index.html` 중복 id |
 | J | `package.json` 버전 ↔ `index.html` 캐시버스터·화면 표기 불일치 |
+| K | **CSS 계약** — 없어지면 기능이 조용히 죽는 규칙(튜토리얼 손가락 z-index, 서든데스 배지, 오류 띠 z-index 등)과 정의 없는 `@keyframes` |
 
 `[B2]` 고아 모달과 `[G]` 미정의 심볼 후보는 **경고로만** 둔다 — 정규식 오탐과 의도된 예외가 섞여 있어
 실패로 올리면 게이트가 늑대소년이 된다.
@@ -159,6 +160,12 @@ const OVERTIME = { at:30, stepSec:5, stepMul:0.6 };   // 30초 이후 5초마다
 |---|---|---|
 | `git push` 직전 | `.githooks/pre-push` 가 `npm run check` 를 돌리고, 실패하면 push 를 막는다 | 훅을 설치한 PC 에서만 (`npm run setup`) |
 | GitHub 에 올라간 뒤 | `.github/workflows/check.yml` 이 같은 검사를 돌린다 | `ip-banlist.json` 이 공개 저장소에 없어 **[9] 금칙 스캔은 건너뛴다**. 저장소 secret `IP_BANLIST_JSON` 을 등록하면 그것까지 돈다 |
+
+`[K]` 는 2026-09-07 사고의 직접 대응이다. 스모크는 DOM 스텁 위에서 돌아 CSS 가 아예 없고,
+verify 는 CSS 를 줄 수만 셌기 때문에 그 회귀를 아무도 잡지 못했다. 디자인 변경까지 막으면 게이트가
+방해물이 되므로, **'이 규칙이 없거나 값이 틀리면 기능이 죽는 곳'** 만 목록으로 못박고 각 항목에 이유를
+적어 뒀다(`verify.mjs` 의 `CONTRACTS`). 새 항목을 넣는 기준은 "화면이 조금 달라 보인다" 가 아니라
+"눌러도 안 보인다 · 마크업은 나오는데 스타일이 없다 · 가려서 조작이 안 된다" 다.
 
 > 왜 두 겹인가: 2026-09-07 에 검사를 거치지 않은 옛 `style.css` 사본이 그대로 배포돼
 > v5.115~v5.127 의 CSS 수정 6건이 라이브에서 되돌아갔고, **3일 동안 아무도 몰랐다.**

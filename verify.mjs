@@ -191,6 +191,81 @@ console.log('\n[H] index.html 라인수', html.split('\n').length, '/ style.css 
 const acts=[...js.matchAll(/act\s*:\s*'([^']+)'/g)].map(m=>m[1]);
 console.log('[I] FORGE_SLOTS act 대상:',JSON.stringify([...new Set(acts)]));
 
+// ---- K) CSS 계약 — "없어지면 기능이 조용히 깨지는" 규칙만 못박는다
+/* 왜 있는가
+   2026-09-07 에 옛 style.css 사본이 배포돼 v5.115~v5.127 의 CSS 수정 6건이 라이브에서 통째로
+   되돌아갔는데, 3일 동안 아무 검사도 이걸 잡지 못했다. 스모크는 DOM 스텁 위에서 돌아 CSS 가
+   아예 없고, verify 는 CSS 를 줄 수만 셌기 때문이다.
+
+   그렇다고 CSS 전체를 검사할 수는 없다(디자인은 계속 바뀌는 게 정상이다). 그래서 대상을
+   **"이 규칙이 없거나 값이 틀리면 기능이 조용히 죽는 곳"** 으로만 좁힌다. 각 항목에 왜 그 값이어야
+   하는지를 함께 적는다 — 이유 없는 고정값은 다음 사람이 디자인 변경으로 오해하고 지운다.
+
+   새 항목을 추가하는 기준: 화면이 조금 달라 보이는 정도는 넣지 마라. '눌러도 안 보인다',
+   '마크업은 나오는데 스타일이 없다', '가려서 조작이 안 된다' 처럼 기능이 죽는 것만 넣는다. */
+{
+  const cssNoComment = css.replace(/[/][*][\s\S]*?[*][/]/g, '');
+  /* 선택자별 선언 블록을 모은다(같은 선택자가 여러 번 나오면 이어붙인다). */
+  const RULES = {};
+  for(const m of cssNoComment.matchAll(/([^{}]+)[{]([^{}]*)[}]/g)){
+    m[1].split(',').map(x=>x.trim().replace(/[\s]+/g,' ')).forEach(sel=>{
+      if(sel) RULES[sel] = (RULES[sel]||'') + ';' + m[2];
+    });
+  }
+  const declOf = (sel)=>RULES[sel] || null;
+  const propOf = (sel, prop)=>{
+    const d = declOf(sel); if(!d) return null;
+    const hits = [...d.matchAll(new RegExp('(?:^|;)[\\s]*'+prop+'[\\s]*:([^;]+)','g'))];
+    return hits.length ? hits[hits.length-1][1].trim() : null;   // 마지막 선언이 이긴다
+  };
+  const hasKeyframes = (name)=>new RegExp('@keyframes[\\s]+'+name+'[\\s]*[{]').test(cssNoComment);
+
+  const CONTRACTS = [
+    { sel:'.tut-finger', prop:'z-index', min:21,
+      why:'튜토리얼 손가락. 모달(#modal-root z:20) 위에 떠야 모달 안 버튼을 짚는 유도가 보인다. '
+        + '2026-09-07 배포 회귀에서 30→13 으로 되돌아가 손가락이 모달 뒤에 숨었던 바로 그 지점이다.' },
+    { sel:'.ar-head .ah-ot', why:'투기장 서든데스 배지. game.js 가 이 마크업을 항상 출력하므로, '
+        + '규칙이 없으면 스타일 없는 날것으로 뜬다(같은 회귀에서 통째로 사라졌었다).' },
+    { sel:'.ar-head .ah-timewrap', why:'서든데스 배지를 남은 시간 아래에 세로로 붙이는 래퍼. 없으면 배지가 시간과 겹친다.' },
+    { sel:'#errbar', prop:'z-index', min:61,
+      why:'전역 오류 띠. 소환연출(60)·토스트(40)·모달(20) 보다 위여야 한다 — 모달 render 가 터진 '
+        + '경우에도 보여야 하므로 무엇에도 가려지면 안 된다.' },
+    { sel:'.save-ta', why:'진행도 내보내기/가져오기 텍스트 상자. 규칙이 없으면 높이 0 에 가까워져 붙여넣을 칸이 사라진다.' },
+    { sel:'#chat', prop:'height',
+      why:'채팅 영역 높이. 값이 비면 채팅이 전장을 밀어내거나 사라진다(대표가 직접 조정하는 값이라 크기는 고정하지 않는다).' },
+  ];
+
+  const bad = [];
+  CONTRACTS.forEach(c=>{
+    if(!declOf(c.sel)){ bad.push(`${c.sel} 규칙이 없다 — ${c.why}`); return; }
+    if(!c.prop) return;
+    const v = propOf(c.sel, c.prop);
+    if(v===null){ bad.push(`${c.sel} 에 ${c.prop} 선언이 없다 — ${c.why}`); return; }
+    if(c.min!==undefined){
+      const n = parseInt(String(v).replace(/[^0-9-]/g,''), 10);
+      if(!(n >= c.min)) bad.push(`${c.sel} 의 ${c.prop} 가 ${v} — ${c.min} 이상이어야 한다. ${c.why}`);
+    }
+  });
+
+  /* animation 이 가리키는 @keyframes 가 실제로 있는지. 이름만 남고 정의가 사라지면
+     브라우저가 조용히 무시해서 '움직이지 않는다' 는 것 외엔 아무 단서가 없다. */
+  const animNames = new Set();
+  for(const m of cssNoComment.matchAll(/animation(?:-name)?[\s]*:([^;{}]+)/g)){
+    m[1].split(',').forEach(part=>{
+      part.trim().split(/[\s]+/).forEach(tok=>{
+        if(/^[A-Za-z_][-\w]*$/.test(tok) &&
+           !/^(none|infinite|alternate|normal|reverse|forwards|backwards|both|running|paused|linear|ease|ease-in|ease-out|ease-in-out|step-start|step-end|initial|inherit|unset|steps|cubic-bezier)$/.test(tok))
+          animNames.add(tok);
+      });
+    });
+  }
+  const missingKf = [...animNames].filter(n=>!hasKeyframes(n));
+  if(missingKf.length) bad.push(`@keyframes 정의가 없는 animation 이름: ${JSON.stringify(missingKf)} — 브라우저가 조용히 무시한다`);
+
+  console.log(`\n[K] CSS 계약: 규칙 ${CONTRACTS.length}건 · animation 이름 ${animNames.size}종 검사 ` + (bad.length ? '불일치 ❌' : '통과 ✅'));
+  bad.forEach(m=>fail(`[K] ${m}`));
+}
+
 // ---- J) 버전 일치 (package.json ↔ index.html 캐시버스터·화면 표기)
 /* 캐시버스터를 안 올리면 기존 이용자가 바뀐 CSS/JS 를 받지 못한다 — 실제로 겪은 사고라 게이트로 세운다.
    정본은 package.json 하나이고, 맞추는 일은 `node version.mjs` 가 대신한다. */
