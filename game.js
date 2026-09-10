@@ -1639,7 +1639,7 @@ function heroPortrait(heroId, size){
   const p = HERO_PORTRAIT[heroId];
   if(!p) return '';
   const s = size||2;
-  return '<img src="assets/heroes/portraits/'+p+'.png" style="width:'+s+'em;height:'+s+'em;object-fit:contain;image-rendering:pixelated" alt="">';
+  return '<img src="assets/heroes/portraits/'+p+'.webp" style="width:'+s+'em;height:'+s+'em;object-fit:contain;image-rendering:pixelated" alt="">';
 }
 
 const Battle = (()=>{
@@ -1687,14 +1687,14 @@ const Battle = (()=>{
   // 연출/보상 지대 — 시뮬레이션 상태에 되먹임하지 않는 Math.random 소비를 명시적으로 표시(D5 검증용).
   let _cosmeticDepth = 0;
   function cosmetic(fn){ _cosmeticDepth++; try{ return fn(); } finally{ _cosmeticDepth--; } }
-  /* ★ v5.25: 몬스터 스프라이트 캐시 — assets/monsters/<name>.png 를 미리 로드.
+  /* ★ v5.25: 몬스터 스프라이트 캐시 — assets/monsters/<name>.webp 를 미리 로드.
      캔버스에 drawImage 로 그린다. 32x32 픽셀아트를 128x128 로 확대한 것이다. */
   const MON_IMG_CACHE = {};
   function monImg(name){
     if(!name) return null;
     if(MON_IMG_CACHE[name]===undefined){
       const im = new Image();
-      im.src = 'assets/monsters/'+name+'.png';
+      im.src = 'assets/monsters/'+name+'.webp';
       im.onload = ()=>{ MON_IMG_CACHE[name]=im; };
       im.onerror = ()=>{ MON_IMG_CACHE[name]=null; };
       MON_IMG_CACHE[name] = im;  // 로드 중에도 참조 가능 (불완전 시 drawImage 스킵)
@@ -1898,7 +1898,7 @@ const Battle = (()=>{
     const key = dir+'/effects/'+name+'_'+String(frame||0).padStart(2,'0');
     if(SKILL_FX_CACHE[key]===undefined){
       const im = new Image();
-      im.src = 'assets/heroes/'+key+'.png';
+      im.src = 'assets/heroes/'+key+'.webp';
       im.onerror=()=>{};
       SKILL_FX_CACHE[key] = im;
     }
@@ -4112,7 +4112,7 @@ const MODALS = {
         const isHunting = (S.huntTier||0)===i;
         const row=el('div','pack');
         row.innerHTML=`<div class="pic" style="border-color:${t.c}">
-          <img src="assets/monsters/${t.img}.png" style="width:40px;height:40px;object-fit:contain">
+          <img src="assets/monsters/${t.img}.webp" style="width:40px;height:40px;object-fit:contain">
         </div>
         <div class="info">
           <div class="t" style="color:${t.c}">${t.n} ${isHunting?'<span class="small" style="color:var(--ok)">사냥중</span>':''}${(t.mat===matKey||t.mat2===matKey)?'<span class="small" style="color:var(--g-legend)">고정 드랍</span>':'<span class="small mut">랜덤</span>'}</div>
@@ -5240,7 +5240,7 @@ const MODALS = {
     BOSS_TYPES.forEach(bt=>{
       const G=GRADES[bt.g];
       const card=el('div','boss-card'); card.style.setProperty('--gc',G.color);
-      card.innerHTML=`<div class="bc-head"><div class="bc-ic">${bt.img?`<img src="assets/monsters/${bt.img}.png" style="width:48px;height:48px;image-rendering:pixelated;object-fit:contain" alt="${bt.n}">`:eImg(bt.ic,2)}</div>
+      card.innerHTML=`<div class="bc-head"><div class="bc-ic">${bt.img?`<img src="assets/monsters/${bt.img}.webp" style="width:48px;height:48px;image-rendering:pixelated;object-fit:contain" alt="${bt.n}">`:eImg(bt.ic,2)}</div>
         <div class="bc-info"><div class="bc-n">${bt.n}</div><div class="bc-g">${G.name} · 처치 시 ${G.name} 재료 드랍</div></div></div>`;
       const grid=el('div','bc-mats'); let ok=true;
       for(let i=0;i<6;i++){
@@ -5949,7 +5949,7 @@ const MODALS = {
       // ★ v4.7: 몬스터마다 드랍 아이템 아이콘 그리드를 보여준다(일반3·희귀3·영웅4·레전더리6)
       const dropGrid = (t.drops||[t.mat]).map(k=>
         `<span class="mdrop" title="${k}">${matIcon(k)}</span>`).join('');
-      row.innerHTML=`<div class="pic" style="border-color:${t.c}">${t.img?`<img src="assets/monsters/${t.img}.png" style="width:48px;height:48px;image-rendering:pixelated;object-fit:contain" alt="${t.n}">`:'💀'}</div>
+      row.innerHTML=`<div class="pic" style="border-color:${t.c}">${t.img?`<img src="assets/monsters/${t.img}.webp" style="width:48px;height:48px;image-rendering:pixelated;object-fit:contain" alt="${t.n}">`:'💀'}</div>
         <div class="info"><div class="t" style="color:${t.c}">${t.n} ${cur?'<span class="small" style="color:var(--ok)">소환 중</span>':''}</div>
         <div class="d"><b>레벨 : ${t.level}</b> · <span style="color:${jb.color}">${jb.emoji} ${jb.name}</span> · 권장 전투력 <b style="${danger?'color:var(--bad)':'color:var(--ok)'}">${fmt(t.cp)}</b>${danger?' ⚠ 전멸 위험':''}
         <div class="mdrops">${dropGrid}</div>
