@@ -222,5 +222,13 @@ for(const [sub, rows] of Object.entries(MAP)){
     copyFileSync(from, join(dir, name + '.png')); ok++;
   }
 }
-console.log(`✓ 아이콘 ${ok}종 복사 완료`);
+console.log(`✓ 아이콘 ${ok}종 복사 완료 (png)`);
+/* ★ 2026-09-10: 게임이 읽는 아이콘은 이제 .webp 다(첫 진입 전송량 2.05MB → 1.0MB).
+   이 도구는 원본 팩에서 파일을 '복사' 할 뿐이라 여기서 webp 로 만들 수 없다 —
+   Node 에는 WebP 인코더가 없고, 이 저장소는 npm 의존성을 두지 않는다.
+   그래서 변환은 별도 단계로 뺐다. 아래를 이어서 돌려야 게임이 아이콘을 찾는다.
+   빠뜨리면 npm run check 의 [L] 에셋 경로 확장자 검사가 막는다. */
+console.log('');
+console.log('  다음을 이어서 실행하라 (이걸 해야 게임이 아이콘을 찾는다):');
+console.log('    python png2webp.py assets/icons');
 if(miss.length){ console.log('✗ 원본을 찾지 못한 항목 ' + miss.length + '건:'); miss.forEach(m=>console.log('   ' + m)); process.exit(1); }

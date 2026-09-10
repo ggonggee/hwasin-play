@@ -191,6 +191,57 @@ console.log('\n[H] index.html 라인수', html.split('\n').length, '/ style.css 
 const acts=[...js.matchAll(/act\s*:\s*'([^']+)'/g)].map(m=>m[1]);
 console.log('[I] FORGE_SLOTS act 대상:',JSON.stringify([...new Set(acts)]));
 
+// ---- L) 에셋 경로 확장자 — 코드가 가리키는 파일이 실제로 있는가
+/* 왜 있는가
+   2026-09-10 에 아이콘을 png→webp 로 옮기면서 game.js 의 eImg() 한 곳만 .png 로 남았다.
+   그 함수는 화면 60여 곳이 쓰는 아이콘 출력기라 실제로는 아이콘 대부분이 깨졌을 텐데
+   npm run check 는 그대로 통과했다 — 스모크의 파일 존재 검사는 경로를 자기가 따로 조립해서
+   game.js 의 실제 문자열과 어긋나 있었기 때문이다. 즉 '코드가 무엇을 가리키는지' 를 아무도 안 봤다.
+
+   여기서는 소스에 박힌 에셋 경로 리터럴을 긁어, 그 폴더에 그 확장자 파일이 실제로 있는지 본다.
+   `${...}` 같은 템플릿 구멍이 파일명 쪽에 있어도 폴더와 확장자는 알 수 있으므로 그 수준에서 판정한다
+   (폴더 쪽에 구멍이 있으면 판정 불가라 건너뛴다). 파일 하나하나가 아니라 '폴더에 그 확장자가
+   하나라도 있는가' 를 보는 이유는, 확장자 전환을 빠뜨린 경우를 잡는 것이 목적이기 때문이다. */
+{
+  /* 폴더 아래(재귀) 파일 확장자 집합 */
+  const extsUnder = (abs)=>{
+    const out = new Set();
+    const walk = (d)=>{
+      for(const e of fs.readdirSync(d, { withFileTypes:true })){
+        if(e.isDirectory()) walk(d + '/' + e.name);
+        else { const i = e.name.lastIndexOf('.'); if(i>0) out.add(e.name.slice(i+1).toLowerCase()); }
+      }
+    };
+    walk(abs);
+    return out;
+  };
+  const srcAll = js + '\n' + html + '\n' + css;
+  const bad = [];
+  const seen = new Set();
+  const RE = new RegExp('assets' + '\/' + '[A-Za-z0-9_\\-.' + '\/' + '${}()+\'"\\[\\]]*?' + '\.' + '(png|jpg|jpeg|webp|gif|svg)\\b', 'g');
+  for(const m of srcAll.matchAll(RE)){
+    const full = m[0], ext = m[1];
+    const cut = full.lastIndexOf('/');
+    if(cut < 0) continue;
+    const dir = full.slice(0, cut);
+    if(/[${}()+'"\[\]]/.test(dir)) continue;      // 폴더 쪽에 템플릿 구멍이 있으면 판정 불가
+    const key = dir + '|' + ext;
+    if(seen.has(key)) continue;
+    seen.add(key);
+    /* 하위 폴더까지 재귀로 본다 — 'assets/heroes/sheets/'+key+'.webp' 처럼 key 안에
+       하위 폴더가 들어가는 조립식 경로가 있어서, 바로 아래만 보면 오탐이 난다. */
+    let exts = null;
+    try{ exts = extsUnder(D + dir); }
+    catch(e){ bad.push(dir + '/ 폴더가 없다 (소스가 ' + full + ' 를 가리킨다)'); continue; }
+    if(!exts.has(ext)){
+      bad.push(dir + '/ 아래에 .' + ext + ' 파일이 하나도 없다 — 소스는 ' + full
+        + ' 를 가리키는데 실제 확장자는 ' + JSON.stringify([...exts]));
+    }
+  }
+  console.log('\n' + '[L] 에셋 경로 확장자: 폴더·확장자 조합 ' + seen.size + '종 검사 ' + (bad.length ? '불일치 ❌' : '통과 ✅'));
+  bad.forEach(m=>fail('[L] ' + m));
+}
+
 // ---- K) CSS 계약 — "없어지면 기능이 조용히 깨지는" 규칙만 못박는다
 /* 왜 있는가
    2026-09-07 에 옛 style.css 사본이 배포돼 v5.115~v5.127 의 CSS 수정 6건이 라이브에서 통째로

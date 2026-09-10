@@ -124,13 +124,13 @@ function matIcon(k, size){
   if(!m) return '❔';
   if(!m.icon) return m.ic;
   const s = size||1.15;
-  return `<img src="assets/icons/${m.icon}.png" style="width:${s}em;height:${s}em;vertical-align:middle;object-fit:contain" alt="${k}">`;
+  return `<img src="assets/icons/${m.icon}.webp" style="width:${s}em;height:${s}em;vertical-align:middle;object-fit:contain" alt="${k}">`;
 }
 function jobIcon(id, size){
   const j = JOBS.find(x=>x.id===id);
   if(!j) return '❔';
   const s = size||1;
-  return `<img src="assets/icons/job_${id}.png" style="width:${s}em;height:${s}em;vertical-align:middle;object-fit:contain" alt="${j.name}">`;
+  return `<img src="assets/icons/job_${id}.webp" style="width:${s}em;height:${s}em;vertical-align:middle;object-fit:contain" alt="${j.name}">`;
 }
 /* ★ v5.19: 이모지→에셋 변환 헬퍼.
    game.js 곳곳의 ic/emoji 필드(제작 카테고리·상점 아이템·소환권 등)는
@@ -213,7 +213,7 @@ function eImg(e, size){
   const file = emFile(e);
   if(!file) return e;  // 매핑 없으면 원본 이모지
   const s = size||1.3;
-  return `<img src="assets/icons/em/${emSlug(e)}.png" style="width:${s}em;height:${s}em;vertical-align:middle;object-fit:contain" alt="${e}">`;
+  return `<img src="assets/icons/em/${emSlug(e)}.webp" style="width:${s}em;height:${s}em;vertical-align:middle;object-fit:contain" alt="${e}">`;
 }
 /* ★ v5.109: 이모지→아이콘 치환의 단일 관문.
    종전에는 화면을 그리는 코드가 eImg() 를 '기억해서' 호출해야 아이콘이 됐고, 45개 모달 중
@@ -248,7 +248,7 @@ function iconizeEmoji(root, size){
       for(let m; (m = EM_ICONIZE_RE.exec(text)); ){
         if(m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
         const img = document.createElement('img');
-        img.src = 'assets/icons/em/' + emSlug(m[0]) + '.png';
+        img.src = 'assets/icons/em/' + emSlug(m[0]) + '.webp';
         img.alt = m[0];
         img.style.cssText = 'width:'+s+'em;height:'+s+'em;vertical-align:middle;object-fit:contain';
         frag.appendChild(img);
@@ -521,7 +521,7 @@ const SLOT_STAT_SCHEMA = [
 const SLOT_STAT_FALLBACK = { part:'공용', stats:['hp','atk','def'] };
 /* ★ v5.63→v5.82: 장비 슬롯명 → 판타지 아이콘 매핑 (6000FantasyIcons 에셋).
    종전 캐주얼 이모지 → 판타지 일러스트 PNG로 전면 교체.
-   슬롯명(부분문자열 매칭) → assets/icons/equip/<키>.png 경로 반환. */
+   슬롯명(부분문자열 매칭) → assets/icons/equip/<키>.webp 경로 반환. */
 const EQUIP_ICONS = [
   /* 무기 */
   ['단검','dagger'],['대검','sword'],['도끼','axe'],['지팡이','staff'],['장궁','bow'],['강궁','bow'],
@@ -544,7 +544,7 @@ function equipIcon(slotName){
 function equipImg(slotName, size){
   const ic = equipIcon(slotName);
   const s = size||1.3;
-  return `<img src="assets/icons/equip/${ic}.png" style="width:${s}em;height:${s}em;vertical-align:middle;object-fit:contain" alt="${slotName||''}">`;
+  return `<img src="assets/icons/equip/${ic}.webp" style="width:${s}em;height:${s}em;vertical-align:middle;object-fit:contain" alt="${slotName||''}">`;
 }
 function slotSchema(name){
   const n=name||'';

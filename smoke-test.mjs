@@ -316,15 +316,15 @@ step('이모지 아이콘 매핑 무결성 (정규식·이형 정규화·파일 
     if(!RE.test(e)) noMatch.push(e);
     const bare = e.replace(/[️‍]/g,'');
     if(!emFile(bare) || !emFile(bare + '️')) noStrip.push(e);
-    if(!fs.existsSync(D + 'assets/icons/em/' + emSlug(e) + '.png')) noFile.push(e + '(' + emSlug(e) + '.png)');
+    if(!fs.existsSync(D + 'assets/icons/em/' + emSlug(e) + '.webp')) noFile.push(e + '(' + emSlug(e) + '.webp)');
   }
   if(noMatch.length) throw new Error('정규식이 못 잡는 매핑: ' + noMatch.join(','));
   if(noStrip.length) throw new Error('이형 정규화 실패(맨몸/FE0F 중 한쪽만 조회됨): ' + noStrip.join(','));
-  if(noFile.length) throw new Error('매핑은 있으나 png 파일이 없다 — npm run icons 를 돌려라: ' + noFile.join(', '));
+  if(noFile.length) throw new Error('매핑은 있으나 png 파일이 없다 — npm run icons 를 돌려라(그 뒤 python png2webp.py assets/icons 까지): ' + noFile.join(', '));
   /* 반대 방향: 파일만 있고 매핑이 없는 고아 png (지워야 할 잔재) */
   const slugs = new Set(keys.map(emSlug));
-  const orphan = fs.readdirSync(D + 'assets/icons/em').filter(f=>f.endsWith('.png'))
-    .map(f=>f.replace('.png','')).filter(s=>!slugs.has(s));
+  const orphan = fs.readdirSync(D + 'assets/icons/em').filter(f=>f.endsWith('.webp'))
+    .map(f=>f.replace('.webp','')).filter(s=>!slugs.has(s));
   if(orphan.length) throw new Error('EM_ICON_MAP 에 없는 고아 아이콘 파일: ' + orphan.join(','));
 });
 
