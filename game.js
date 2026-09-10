@@ -2547,9 +2547,26 @@ const Battle = (()=>{
     const t=tierDef();
     S.stats.kills++; sfx(boss?'legendary':'coin');
     /* ★ v5.145: 몬스터 도감 집계 — 표시 전용 상태라 시뮬레이션 되먹임 없음(위 stats.kills 와 동일 급).
-       던전 모드는 함수 상단에서 return 되므로 홈 사냥 몬스터만 걸린다. */
+       던전 모드는 함수 상단에서 return 되므로 홈 사냥 몬스터만 걸린다.
+       ★ v5.149: 첫 조우(0→1)와 등급 전종 조우 순간을 토스트+sysLog 으로 축하한다.
+       도감이 v5.145 부터 '수집 기록'이 됐는데 기록이 채워지는 걸 게임이 알려주지 않으면
+       플레이어는 도감을 열어보기 전까지 수집하고 있다는 사실 자체를 모른다.
+       AoE 다중 킬로 onKill 이 초당 여러 번 불려도 첫 조우는 몬스터당 1회뿐이라 스팸이 없다. */
+    const _tot0=(S.codexKills[t.n]||0)+(S.codexBossKills[t.n]||0);
     if(boss) S.codexBossKills[t.n]=(S.codexBossKills[t.n]||0)+1;
     else     S.codexKills[t.n]=(S.codexKills[t.n]||0)+1;
+    if(_tot0===0){
+      toast(`📖 <b>도감 신규 기록</b> — <span style="color:${t.c}">${t.n}</span>`);
+      sysLog(`도감 신규 기록 — ${t.n}`);
+      const disc=x=>((S.codexKills[x.n]||0)+(S.codexBossKills[x.n]||0))>0;
+      const grp=HUNT_TIERS.filter(x=>x.drop===t.drop);
+      if(grp.every(disc)){
+        const left=HUNT_TIERS.length-HUNT_TIERS.filter(disc).length;
+        toast(left ? `🏆 <b style="color:${GRADES[t.drop].color}">${GRADES[t.drop].name} 등급 도감 완성!</b> (남은 등급 ${left})`
+                   : `🏆🏆 <b style="color:var(--g-legend)">몬스터 도감 전종 완성!</b>`);
+        sfx('legendary'); sysLog(left?`${GRADES[t.drop].name} 등급 도감 완성`:'몬스터 도감 전종 완성');
+      }
+    }
     /* ★ v5.30: 홈 AoE 다중 킬 골드 밸런스 — 마리당 골드가 실측 기준값(분당 18,885G)의
        55배였던 원인 수정. AoE로 N마리를 동시에 잡으면 각 몹 골드를 1/N 분배.
        30마리 동시 킬 시 각 몹 = t.gold/30 → Lv10 기준 분당 약 34,000G (실측 기준값의 1.8배).
