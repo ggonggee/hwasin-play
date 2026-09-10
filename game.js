@@ -4064,8 +4064,19 @@ const MODALS = {
       : (S.seenTutorial && guideTarget()) ? guideTarget().slot : null;
     if(want){ const loc=forgeLocate(want); if(loc){ cur=loc.grade; slotIdx=loc.slotIdx; itemIdx=loc.itemIdx; } }
     const tabs=el('div','tabrow');
-    GORDER.forEach(g=>{ const t=el('div','tab'+(g===cur?' on':''), GRADES[g].name); if(g!==cur) t.style.color=GRADES[g].color;
-      t.onclick=()=>{ cur=g; itemIdx=0; render2(); [...tabs.children].forEach((c,i)=>c.classList.toggle('on',GORDER[i]===g)); };
+    /* ★ v5.147: '지금 제작 가능' 스캔성 — 이 게임의 재미는 '뭘 만들지 고르는 것'인데,
+       종전엔 아이템을 하나씩 눌러 재료 칩을 봐야 알 수 있었다. 순수 계산(craftParams·recipeOk
+       는 부작용 없음)으로 재료+골드가 모두 충분한 아이템 수를 등급 탭에, 개별 셀에는 우상단
+       체크를 단다. 제작 슬롯 점유(S.craft)와 무관하게 '재료가 갖춰진 상태'를 알려주는 표시다. */
+    function readyCount(g){
+      let n=0;
+      FORGE_SLOTS.forEach(s=>{ const list=(s.items&&s.items[g])||[];
+        list.forEach(it=>{ if(recipeOk(it.recipe) && S.gold>=craftParams(g,s.k,it.n).gold) n++; }); });
+      return n;
+    }
+    GORDER.forEach(g=>{ const rc=readyCount(g);
+      const t=el('div','tab'+(g===cur?' on':''), GRADES[g].name+(rc?` <span style="color:var(--gold);font-weight:800">${rc}</span>`:'')); if(g!==cur) t.style.color=GRADES[g].color;
+      t.onclick=()=>{ cur=g; itemIdx=0; render2(); [...tabs.children].forEach((c,i)=>c.classList.toggle('on',GORDER[i]===cur)); };
       tabs.appendChild(t); });
     b.appendChild(tabs);
     const body=el('div'); b.appendChild(body);
@@ -4161,7 +4172,9 @@ const MODALS = {
       const grid=el('div','forge-grid');
       const items=el('div','forge-items');
       list.forEach((it,i)=>{ const cell=el('div','fitem grade-'+cur+(i===itemIdx?' sel':'')); cell.style.setProperty('--gc',G.color);
-        cell.innerHTML=equipImg(it.n,1.8); cell.title=it.n;
+        /* ★ v5.147: 재료+골드 충족 셀에 우상단 체크 — 등급 탭 개수와 같은 판정식. */
+        const rdy = recipeOk(it.recipe) && S.gold>=craftParams(cur,slot.k,it.n).gold;
+        cell.innerHTML=equipImg(it.n,1.8)+(rdy?'<span class="rdy">✓</span>':''); cell.title=it.n;
         cell.onclick=()=>{ itemIdx=i; render2(); }; items.appendChild(cell); });
       grid.appendChild(items);
       const side=el('div','forge-side');

@@ -309,6 +309,11 @@ body{
   background:radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--gc,#333) 18%, #14100b), #14100b);
   display:flex; align-items:center; justify-content:center; font-size:24px; }
 .fitem.sel{ box-shadow:0 0 0 2px var(--g-legend), 0 0 12px rgba(242,178,58,.5); }
+/* ★ v5.147: '지금 제작 가능'(재료+골드 충족) 셀의 우상단 체크. 대장간 탭의 등급 옆 개수와
+   같은 판정식(game.js readyCount) — 재미가 '뭘 만들지 고르는 것'이라 스캔 가능성이 곧 재미다.
+   부모 .fitem 은 position:relative 라 절대배치가 안전하다. */
+.fitem .rdy{ position:absolute; top:-1px; right:-1px; font-size:10px; font-weight:900; line-height:14px;
+  color:#1a140c; background:var(--g-legend); border-radius:0 5px 0 7px; padding:0 4px; pointer-events:none; }
 .forge-side{ display:flex; flex-direction:column; gap:6px; }
 .forge-preview{ aspect-ratio:1; border-radius:8px; border:2px solid var(--gc,#6b5636); position:relative;
   background:radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--gc,#333) 22%, #14100b), #14100b);
