@@ -524,6 +524,16 @@ mkeys.forEach(k=>{
   });
 });
 console.log(`  클릭 ${clicked}건 실행 · 예외 ${clickErr}건 (신규/보유 상태 × 인벤토리 2탭)`);
+/* ★ 2026-09-10: 클릭 전수 실행이 남긴 '저장 봉인' 을 푼다.
+   이 스텁의 confirm() 은 무조건 true 라, 클릭 전수 단계에서 설정 화면의 [데이터 초기화] 와
+   진행도 [가져오기] 확인창까지 실제로 눌린다. 두 경로는 세이브를 쓰거나 지운 뒤 곧바로
+   location.reload() 하는 것이 전제여서 _saveSealed 를 세우는데(그래야 beforeunload 의 save 가
+   방금 쓴 것을 덮어쓰지 않는다), 스텁에는 reload 가 없어 봉인만 남는다.
+   그 상태로 두면 뒤따르는 검사들의 save() 가 전부 무효가 돼 엉뚱한 곳에서 실패한다
+   (실제로 [8] 직렬화 왕복이 'undefined' 로 터졌다).
+   ⚠ 제품 코드의 봉인을 약하게 만들지 말 것 — 봉인은 실제 버그(가져오기가 조용히 무효화되던
+      문제)를 막는 장치다. 여기서 하네스만 원상복구한다. */
+ev('_saveSealed = false');
 
 console.log('\n[8] 재화 음수화 / NaN 회귀 점검');
 step('전 모달 클릭 후 재화 무결성', ()=>{
@@ -538,6 +548,10 @@ step('전 모달 클릭 후 재화 무결성', ()=>{
   if(bad.length) throw new Error(bad.join(', '));
 });
 step('save→JSON 직렬화 왕복 무손실', ()=>{
+  /* 바로 위 검사가 모달 클릭을 다시 전수 실행하면서 [데이터 초기화]·[가져오기]를 또 눌러
+     저장을 재봉인한다(사유는 [7] 끝 주석 참조). 이 검사는 save() 가 실제로 써야 성립하므로
+     여기서 한 번 더 푼다. */
+  ev('_saveSealed = false');
   ev('save')(); const raw=store.get('hwasin_save_v1');
   if(/NaN|Infinity|undefined/.test(raw)) throw new Error('직렬화에 NaN/Infinity 포함');
   JSON.parse(raw);

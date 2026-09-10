@@ -1449,7 +1449,16 @@ function mergeDefaults(){ deepFill(S, freshState());
    save() 는 5초 간격 자동저장 + beforeunload 에서도 호출되므로, 영구 실패 상태에선 매번 토스트가
    떠서 폭주한다. _saveFailFlag 로 최초 1회만 알린다 (정상 복구되면 플래그 리셋). */
 let _saveFailFlag = false;
-function save(){ try{ S.lastSeen=Date.now(); localStorage.setItem(SAVE_KEY, JSON.stringify(S)); _saveFailFlag=false; }
+/* ★ 2026-09-10: 저장 봉인 플래그.
+   진행도 가져오기는 localStorage 에 남의 세이브를 써 넣고 location.reload() 를 부른다. 그런데
+   beforeunload 에 save 가 걸려 있어서(아래), 페이지를 떠나는 순간 **메모리에 남아 있던 옛 S** 가
+   방금 써 넣은 세이브를 그대로 덮어썼다 — 가져오기가 조용히 무효가 됐다(실측: 골드 777777 을
+   넣었는데 새로고침 후 111 로 되돌아옴). 5초 자동저장도 같은 창에서 끼어들 수 있다.
+   그래서 가져오기 직전에 이 플래그를 세워 이후의 모든 save() 를 무효화한다.
+   ⚠ 이 플래그를 끄는 코드를 넣지 마라 — 세운 뒤에는 곧바로 새로고침해 페이지가 사라지는 것이 전제다. */
+let _saveSealed = false;
+function save(){ if(_saveSealed) return;
+  try{ S.lastSeen=Date.now(); localStorage.setItem(SAVE_KEY, JSON.stringify(S)); _saveFailFlag=false; }
   catch(e){ if(!_saveFailFlag){ _saveFailFlag=true; try{ toast('⚠ 저장에 실패했습니다. 시크릿 모드이거나 저장 공간이 가득 찼을 수 있습니다.'); }catch(_){} } } }
 
 /* 일일 카운터 (실제 날짜 롤오버 리셋) */
@@ -3847,6 +3856,79 @@ function subBody(title, opts){
   root.appendChild(ov);
   return bd;
 }
+/* ★ 2026-09-10: 진행도 내보내기 / 가져오기.
+   왜 파일 다운로드가 아니라 텍스트인가 — 인앱 브라우저·iframe·일부 모바일 환경에서는
+   <a download> 와 스크립트 저장이 조용히 막힌다. 눌렀는데 아무 일도 안 나는 것이
+   백업 기능에서 가장 나쁜 실패다. 텍스트 복사/붙여넣기는 어디서나 된다.
+
+   가져오기의 안전장치(순서가 중요하다):
+     1) JSON 파싱 → 실패하면 거기서 멈춘다.
+     2) 세이브처럼 생겼는지 확인 — 객체이고 우리 세이브의 핵심 필드가 있어야 한다.
+        (남의 JSON 을 붙여넣어 진행도를 날리는 사고 방지)
+     3) 덮어쓰기 전에 지금 세이브를 백업 키로 복사한다. 손상 세이브 처리와 같은 방식이다.
+     4) 그 다음에 쓰고 새로고침 — load()+mergeDefaults() 를 정상 경로로 다시 태운다.
+        여기서 S 를 직접 갈아끼우지 않는 이유는, 화면·전투가 옛 S 를 참조한 채로 남기 때문이다. */
+function saveSnapshot(){
+  try{ return localStorage.getItem(SAVE_KEY) || JSON.stringify(S); }
+  catch(e){ return JSON.stringify(S); }
+}
+function looksLikeSave(o){
+  if(!o || typeof o!=='object' || Array.isArray(o)) return false;
+  /* freshState 의 대표 필드 중 2개 이상이 있으면 우리 세이브로 본다.
+     1개만 보면 우연히 gold 를 가진 남의 JSON 이 통과한다. */
+  const keys=['gold','mats','heroes','equips','huntTier','stats','daily','shards'];
+  return keys.filter(k=>k in o).length >= 2;
+}
+function saveExport(){
+  save();                       // 최신 상태를 먼저 확정한 뒤 내보낸다
+  const text = saveSnapshot();
+  b2Overlay('진행도 내보내기', (bd, close)=>{
+    bd.appendChild(el('div','b2-flavor','아래 글자를 전부 복사해 메모장·메일 등에 보관하세요. 다른 기기에서 [가져오기]에 붙여넣으면 이어서 플레이할 수 있습니다.'));
+    const ta=el('textarea','save-ta'); ta.readOnly=true; ta.value=text;
+    bd.appendChild(ta);
+    bd.appendChild(el('div','b2-flavor',`길이 ${fmt(text.length)}자`));
+    const row=el('div','btnrow');
+    const cp=el('button','btn gold','복사');
+    cp.onclick=()=>{
+      let ok=false;
+      try{ ta.select(); ta.setSelectionRange(0, text.length); ok=document.execCommand&&document.execCommand('copy'); }catch(e){}
+      if(!ok && navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(()=>toast('복사했습니다'), ()=>toast('복사 실패 — 직접 선택해 복사하세요'));
+        return;
+      }
+      toast(ok ? '복사했습니다' : '복사 실패 — 직접 선택해 복사하세요');
+    };
+    const cl=el('button','btn','닫기'); cl.onclick=close;
+    row.append(cp, cl); bd.appendChild(row);
+  });
+}
+function saveImport(){
+  b2Overlay('진행도 가져오기', (bd, close)=>{
+    bd.appendChild(el('div','b2-flavor','내보내기로 받아 둔 글자를 붙여넣으세요. 지금 진행도는 덮어쓰기 전에 자동으로 백업됩니다.'));
+    const ta=el('textarea','save-ta'); ta.placeholder='여기에 붙여넣기...';
+    bd.appendChild(ta);
+    const row=el('div','btnrow');
+    const go=el('button','btn gold','불러오기');
+    go.onclick=()=>{
+      const raw=(ta.value||'').trim();
+      if(!raw){ toast('붙여넣은 내용이 없습니다'); return; }
+      let obj=null;
+      try{ obj=JSON.parse(raw); }
+      catch(e){ toast('형식이 올바르지 않습니다 (JSON 아님)'); return; }
+      if(!looksLikeSave(obj)){ toast('이 게임의 진행도 데이터가 아닙니다'); return; }
+      styledConfirm('지금 진행도를 덮어씁니다. 계속할까요?', ()=>{
+        try{
+          localStorage.setItem(SAVE_KEY+'_before_import_'+Date.now(), saveSnapshot());   // 되돌릴 수 있게
+          _saveSealed = true;   // ← 반드시 쓰기 '전'에. 이후 자동저장·beforeunload 가 덮어쓰지 못한다.
+          localStorage.setItem(SAVE_KEY, JSON.stringify(obj));
+        }catch(e){ _saveSealed=false; toast('저장 공간이 부족해 불러오지 못했습니다'); return; }
+        close(); location.reload();
+      }, { title:'진행도 가져오기', sub:'덮어쓰기 전 현재 진행도를 백업합니다', yes:'덮어쓰기' });
+    };
+    const cl=el('button','btn','닫기'); cl.onclick=close;
+    row.append(go, cl); bd.appendChild(row);
+  });
+}
 function b2Overlay(title, build){
   const root=$('#modal-root'); if(!root) return null;
   root.querySelectorAll('.b2-ovl').forEach(n=>n.remove());
@@ -5994,7 +6076,17 @@ const MODALS = {
     // ③ 고객센터
     const cr=el('div','pack'); cr.innerHTML=`<div class="pic">🎧</div><div class="info"><div class="t">고객센터</div><div class="d">자주 묻는 질문 · 1:1 문의</div></div>`;
     const cb=el('button','btn sm','FAQ·문의'); cb.onclick=()=>toast('고객센터 준비 중입니다'); cr.appendChild(cb); b.appendChild(cr);
-    const btn=el('button','btn red wide','데이터 초기화'); btn.style.marginTop='10px'; btn.onclick=()=>{ if(confirm('세이브를 초기화할까요?')){ localStorage.removeItem(SAVE_KEY); location.reload(); } }; b.appendChild(btn);
+    /* ★ 2026-09-10: 세이브 내보내기·가져오기.
+       진행도가 이 브라우저의 localStorage 한 곳에만 있어서, 브라우저 데이터 삭제·시크릿 종료·
+       기기 변경이면 통째로 사라졌다. 백업 수단이 하나도 없었다(내보내기 경로 0건).
+       파일 다운로드는 환경에 따라 막히므로(iframe·인앱 브라우저), 어디서나 되는
+       '텍스트 복사/붙여넣기' 로 만든다. */
+    const dr=el('div','pack'); dr.innerHTML=`<div class="pic">💾</div><div class="info"><div class="t">진행도 백업</div><div class="d">다른 기기로 옮기거나 보관해 둡니다</div></div>`;
+    const dw=el('div','optbtns');
+    const exb=el('button','btn sm','내보내기'); exb.onclick=()=>saveExport();
+    const imb=el('button','btn sm','가져오기'); imb.onclick=()=>saveImport();
+    dw.append(exb, imb); dr.appendChild(dw); b.appendChild(dr);
+    const btn=el('button','btn red wide','데이터 초기화'); btn.style.marginTop='10px'; btn.onclick=()=>{ if(confirm('세이브를 초기화할까요?')){ _saveSealed=true; localStorage.removeItem(SAVE_KEY); location.reload(); } }   /* ★ 2026-09-10: 봉인하지 않으면 beforeunload 의 save 가 지운 세이브를 곧바로 되살린다 */; b.appendChild(btn);
   }},
   codex:{ title:'도감', render(b){
     let tab='영웅'; const TB=['영웅','몬스터','세트'];

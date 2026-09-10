@@ -1387,3 +1387,12 @@ body{
   font-size:var(--fs-sm); font-weight:700; font-family:inherit;
   background:linear-gradient(180deg,#8d3036,#5e1f24); border:1px solid #c05a60; color:#ffe9e5; }
 #errbar button:active{ filter:brightness(1.3); }
+
+/* ★ 2026-09-10: 진행도 내보내기/가져오기 텍스트 상자 (설정 → 진행도 백업).
+   파일 다운로드가 막히는 환경(인앱 브라우저 등)이 있어 복사·붙여넣기 방식으로 만들었다. */
+.save-ta{ width:100%; box-sizing:border-box; height:120px; margin:6px 0;
+  resize:vertical; padding:7px 8px; border-radius:7px;
+  background:#0c0906; border:1px solid var(--frame); color:#cdbf9f;
+  font-family:ui-monospace,Consolas,monospace; font-size:var(--fs-xs); line-height:1.4;
+  outline:none; word-break:break-all; }
+.save-ta::placeholder{ color:#6c6152; }
