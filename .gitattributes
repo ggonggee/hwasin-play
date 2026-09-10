@@ -9,3 +9,7 @@
 *.md text eol=lf
 *.sh text eol=lf
 *.lua text eol=lf
+
+# git 훅은 sh 로 실행된다 — CRLF 면 Windows 의 sh 가 "bad interpreter" 로 죽는다
+.githooks/* text eol=lf
+*.yml text eol=lf

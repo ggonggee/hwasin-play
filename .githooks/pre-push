@@ -1,0 +1,30 @@
+#!/bin/sh
+# 결정의 시대 — push 전 자동 검사 훅
+#
+# 왜 있는가
+#   이 저장소는 push = 배포다(main 에 올리면 GitHub Pages 에 그대로 나간다).
+#   npm run deploy 는 check 를 먼저 돌리지만, `git push` 를 직접 치면 그 게이트를 그냥 지나친다.
+#   2026-09-07 에 실제로 그렇게 나갔다 — 옛 style.css 사본이 올라가 v5.115~v5.127 의 CSS 수정
+#   6건이 라이브에서 통째로 되돌아갔고(튜토리얼 손가락이 모달 뒤로 숨음, 서든데스 배지 CSS 소실),
+#   아무도 3일 동안 몰랐다. 사람이 "잊지 않기"로 막는 규칙은 언젠가 반드시 뚫린다.
+#
+# 설치
+#   npm run setup      (내부적으로 git config core.hooksPath .githooks)
+#   ※ hooksPath 는 저장소 로컬 설정이라 clone 마다 한 번씩 실행해야 한다.
+#
+# 우회 (정말 필요할 때만)
+#   git push --no-verify
+#   문서 오타 수정처럼 배포물과 무관한 커밋에만 쓴다. 소스 3개를 건드렸다면 쓰지 마라.
+
+echo "[pre-push] npm run check — 통과해야 push 된다"
+echo "           (건너뛰려면 git push --no-verify · 소스 3개를 고쳤다면 쓰지 마라)"
+
+if ! npm run check; then
+  echo ""
+  echo "[pre-push] ❌ 검사 실패 — push 를 중단했다."
+  echo "           이 저장소는 push = 배포다. 실패한 상태로 올리면 이용자가 그대로 본다."
+  exit 1
+fi
+
+echo "[pre-push] ✅ 통과 — push 를 진행한다."
+exit 0

@@ -244,6 +244,35 @@ step('구세이브 L등급 장비명 이관(화신 XX → 결정 XX) + 세트 �
   const lgd=ev('FORGE_SLOTS').find(s=>s.k==='무기').items.L.map(it=>Array.isArray(it)?it[0]:it.n);
   if(!lgd.every(n=>/^결정 /.test(n))) throw new Error('L등급 무기 접두 불일치: '+lgd.join(','));
 });
+/* ★ 2026-09-10: 몬스터 소환권 폐지 — 보유분이 회색코인으로 환불되는지, 그리고 '판매·소비 경로가
+   되살아나지 않는지' 를 함께 잠근다. 이관 검사만 두면 나중에 누가 상점 줄을 되살려도 통과한다. */
+step('폐지된 몬스터 소환권 → 회색코인 환불 이관', ()=>{
+  const old=JSON.parse(JSON.stringify(legacy));
+  old.tickMon=3; old.tickMonP=2; old.gray=100;
+  delete old._monTicketV;                       // 아직 이관 안 된 구세이브
+  store.set('hwasin_save_v1', JSON.stringify(old));
+  ev('load')();
+  const S=ev('S');
+  const want = 100 + 3*26 + 2*300;              // 기존 100 + 소환권 78 + 소환권+ 600 = 778
+  if(S.gray!==want) throw new Error(`환불액 불일치: gray=${S.gray} (기대 ${want})`);
+  if((S.tickMon|0)!==0 || (S.tickMonP|0)!==0) throw new Error('환불 후 소환권이 남아 있다');
+  if(S._monTicketV!==1) throw new Error('이관 플래그가 안 섰다 — 재접속마다 재환불된다');
+  if(S._monTicketRefund!==678) throw new Error('환불 안내량 불일치: '+S._monTicketRefund);
+  // 두 번째 로드에서 또 환불되면 안 된다(무한 재화 생성)
+  store.set('hwasin_save_v1', JSON.stringify(S));
+  ev('load')();
+  if(ev('S').gray!==want) throw new Error('재로드에서 중복 환불됐다: '+ev('S').gray);
+});
+step('몬스터 소환권 판매·소비 경로가 되살아나지 않았는지', ()=>{
+  const shop = ev('GRAYSHOP').map(it=>it.t).join(' | ');
+  if(/몬스터 소환권/.test(shop)) throw new Error('회색상점에 몬스터 소환권이 다시 있다: '+shop);
+  /* 소스에서 tickMon 을 '늘리는' 코드가 남아 있으면 폐지가 반쪽이다.
+     읽기(|0)·초기화(=0)·환불표는 허용하고, 증가 대입만 잡는다. */
+  const grow = js.split('\n')
+    .map((l,i)=>[i+1,l])
+    .filter(([,l])=>/S\.tickMonP?\s*(=\s*\(?S\.tickMonP?[^)]*\)?\s*\+|\+=)/.test(l));
+  if(grow.length) throw new Error('몬스터 소환권을 지급하는 코드가 남아 있다: ' + grow.map(([n])=>'game.js:'+n).join(', '));
+});
 step('이관 후 refreshHUD/openModal', ()=>{ ev('refreshHUD')(); ev('openModal')('costume'); ev('openModal')('package'); });
 /* ★ v5.109: 이모지→아이콘 치환의 '판정 로직'을 고정한다.
    DOM 순회(iconizeEmoji 본체)는 이 스텁에 TreeWalker 가 없어 실행되지 않는다 — 그건 실브라우저
@@ -286,7 +315,20 @@ step('서든데스 — 임계 전 1배, 이후 계단식 가중', ()=>{
   if(!B || !B.startDungeon) throw new Error('Battle.startDungeon 없음');
   /* kind:'arena' 는 적 3인을 즉시 정리해버려 규칙이 붙기 전에 끝난다(스텁 환경). 규칙 자체를
      보려는 테스트이므로 시간이 남는 몹 던전으로 돌린다 — overtime 은 kind 와 무관하게 동작한다. */
-  B.startDungeon({ name:'검증', foeCP:1000, kind:'mobs', count:9999, dur:120, overtime:true, onEnd:()=>{} });
+  /* ★ 2026-09-10: 이 검사를 자기완결형으로 바꿨다.
+     종전에는 '던전이 조기 종료' 로 무작위 실패했다 — 실측 12회 중 3회(25%). 원인은 두 가지였다.
+       ① 시드를 안 정해 전투 RNG 가 실행마다 달랐다.
+       ② 그보다 큰 원인 — 앞선 검사들이 세이브를 여기저기 갈아끼워 놓아서(클릭 전수 실행 등)
+          파티 구성·전투력이 실행마다 달랐다. 그래서 시드만 고정해도 여전히 흔들렸다(15회 중 11회 실패).
+     이제 세이브를 비워 기본 상태로 되돌린 뒤, 시드를 고정하고, 몬스터를 무해하게(foeCP:1) 둔다.
+     이 검사가 보려는 것은 '시간에 따른 가중 곡선' 이지 '이길 수 있는가' 가 아니다.
+     ⚠ 게이트가 이유 없이 빨간불이 되면 사람은 초록이 뜰 때까지 다시 돌린다. 그 습관이 진짜 회귀를
+        통과시킨다. 검사에서 무작위성은 그 무작위성이 검사 대상일 때만 남긴다. */
+  store.set('hwasin_save_v1','');   // 앞선 검사들이 남긴 세이브를 끊는다 → freshState 로 로드
+  ev('load')();
+  B.setSeed(0x5DDE47);              // layoutHeroes 보다 먼저 (검사 [10] runSeeded 와 같은 순서)
+  if(B.refreshParty) B.refreshParty();
+  B.startDungeon({ name:'검증', foeCP:1, kind:'mobs', count:9999, dur:120, overtime:true, onEnd:()=>{} });
   const at=OT.at, seen=[];
   const adv=sec=>{ for(let i=0;i<sec*20;i++) B.stepFrame(0.05); };   // 0.05초(프레임 상한) 스텝
   adv(at-2);            seen.push(['임계 직전', B.otMul()]);
@@ -485,9 +527,25 @@ console.log('\n[9] 유사성 회귀 가드 (금칙 스캐너 — L1 자기고백
    verbatim_signatures = 라운드1에서 다룬 축자 문구·수치 조합. 단일 리터럴은 substring, 조합
    시그니처(가격표·수치객체 등은 개별 값이 우연히 재사용될 수 있어)는 all[] 로 '전부 동시에
    존재할 때만' 실패 처리한다. */
-let BANLIST;
+/* ★ 2026-09-10: 데이터 파일이 없을 때의 동작에 예외 경로를 하나 냈다.
+   이 파일은 .gitignore 에 있어(공개 저장소에 금칙어를 올리지 않는다) GitHub Actions 체크아웃에는
+   존재하지 않는다. 종전처럼 무조건 exit(2) 를 하면 CI 를 아예 세울 수 없어서, 다른 9개 단계까지
+   같이 못 돌게 된다 — 가드 하나를 지키려고 나머지 가드를 전부 버리는 셈이다.
+   그래서 HWASIN_BANLIST_OPTIONAL=1 일 때만 [9] 를 건너뛰고, 대신 마지막 결과에 '건너뜀' 을
+   크게 남긴다. 이 스위치는 CI 워크플로에서만 켠다 — 로컬·pre-push 는 종전대로 파일을 요구한다.
+   (근본 해소는 저장소 시크릿으로 파일을 넣어 주는 것이다. .github/workflows/check.yml 주석 참조) */
+let BANLIST = null, BANLIST_SKIPPED = false;
 try{ BANLIST = JSON.parse(fs.readFileSync(D+'ip-banlist.json','utf8')); }
-catch(e){ console.error('[9] ip-banlist.json 없음 — 회귀 가드 데이터는 로컬 정본이다. 내부 저장소 docs/design/ 의 백업(ip-banlist-정본-*.json)을 이 경로로 복사하라.'); process.exit(2); }
+catch(e){
+  if(process.env.HWASIN_BANLIST_OPTIONAL === '1'){
+    BANLIST_SKIPPED = true;
+    console.warn('  ⚠ ip-banlist.json 없음 + HWASIN_BANLIST_OPTIONAL=1 → [9] 금칙 스캔을 건너뛴다.');
+    console.warn('    이 실행은 유사성 회귀를 검사하지 않았다. 배포 전 로컬에서 npm run check 를 반드시 돌려라.');
+  } else {
+    console.error('[9] ip-banlist.json 없음 — 회귀 가드 데이터는 로컬 정본이다. 내부 저장소 docs/design/ 의 백업(ip-banlist-정본-*.json)을 이 경로로 복사하라.');
+    process.exit(2);
+  }
+}
 const SCAN_TARGETS = [ ['game.js', js], ['index.html', html], ['style.css', css] ];
 
 /* 유니코드 정규화(NFC) 후 비교 — 원본 파일이 NFD(자모 분해)로 저장돼도 놓치지 않는다.
@@ -536,6 +594,9 @@ function runCanarySelfCheck(){
   return { allOk, results };
 }
 
+if(BANLIST_SKIPPED){
+  console.log('  ⏭ [9] 건너뜀 — 금칙 데이터 없음(HWASIN_BANLIST_OPTIONAL=1).');
+} else {
 const canary = runCanarySelfCheck();
 const canaryOkCount = Object.values(canary.results).filter(Boolean).length;
 const canaryTotal = Object.keys(canary.results).length;
@@ -564,6 +625,7 @@ step('금칙 스캔 (L1 자기고백 토큰 + 축자/수치 시그니처)', ()=>
   });
   if(allHits.length) throw new Error('금칙 재발견:\n     - ' + allHits.join('\n     - '));
 });
+}
 
 console.log('\n[10] M1 결정론 검증 (전투 결정론 리팩터 — 명문 상세기획 §3.1/§3.2, G1심사 §4-3 D1~D5)');
 /* ★ M1 완료기준은 5개 전부 자동 검증(G1심사 §4-3): D1 동일시드 100회 해시 동일 / D2 다른 시드
@@ -683,4 +745,11 @@ step('D5 · 전투 스텝 중 비시드 Math.random 직접 호출 0건 (연출/�
 
 console.log('\n=================== 결과 ===================');
 if(errs.length){ console.log('실패 '+errs.length+'건:'); errs.forEach(e=>console.log(' - '+e)); process.exit(1); }
-console.log('모든 스모크 통과 ✅');
+/* 건너뛴 검사가 있으면 '전부 통과' 라고 말하지 않는다 — 통과와 미검사를 같은 문장으로 보고하면
+   다음 사람이 검사된 것으로 믿는다. 배포 판정에 쓰이는 문장이라 특히 구분한다. */
+if(BANLIST_SKIPPED){
+  console.log('⚠ 스모크 통과 — 단, [9] 유사성 회귀 가드는 실행되지 않았다(금칙 데이터 없음).');
+  console.log('  이 실행 결과만으로 배포 가능이라고 판단하지 마라. 로컬에서 npm run check 를 돌려라.');
+} else {
+  console.log('모든 스모크 통과 ✅');
+}

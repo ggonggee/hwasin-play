@@ -66,7 +66,8 @@ const HERO_SHARD_NEED = { N:25, R:80, E:400, L:1200 };   // 등급별 합성 요
    [판매 종수 = 14종] 추천 탭 요약·영웅 탭 상세 두 곳에서 동일 14종·동일 순서로 노출한다.
    [선정 기준 = hero_id 채번 오름차순 상위 14종 (HERO_001~HERO_014)]
      근거: 가나다순도 등급순도 아닌 내부 고정 ID 순서로 정렬한다.
-     우리 로스터는 30종이므로 같은 규칙(고정 채번 오름차순)을 그대로 적용해 앞 14종을 취한다.
+     ⚠ 아래 '14종' 은 로스터가 30종이던 시절의 설명이다. 현재 로스터는 9종이라 앞 14종을 취하면
+     결국 전원(9종)이 대상이 된다 — 실제 동작은 바로 아래 SHOP_HERO_COUNT=9 가 정한다.
      결과적으로 N블록 5종 전원(HERO_001~005) + R블록 앞 9종(HERO_006~014)이 판매 대상이며,
      E/L 조각은 상점 직판매에서 제외된다(합성·소환·던전으로만 수급 → 상위 등급 과금 단축 방지).
    [가격 2단가] 그린 리본 X50 = 루비 300 (6.0루비/개) · 레드 리본 X600 = 루비 3,400 (≈5.67루비/개, 약 5.5% 대량할인). */
@@ -282,6 +283,36 @@ function migrateMatPools(){
     pool.forEach((m,i)=>{ S.mats[m.k]=(S.mats[m.k]||0)+each+(i===0?rest:0); });
     delete S.mats[g];
   });
+}
+
+/* ★ 2026-09-10: 폐지한 '몬스터 소환권 / 몬스터 소환권+' 보유분을 회색코인으로 환불한다.
+   이 두 재화는 판매·지급 경로만 있고 소비처가 코드 전체에서 0 이었다(폐지 근거는 GRAYSHOP 하단 주석).
+   그냥 지우면 회색코인을 실제로 지불한 이용자가 손해를 보므로, 판매가 그대로 되돌려준다.
+     몬스터 소환권   80 회색 / 3장 → 장당 26 (내림. 26×3=78 로 2 모자라지만, 올림하면
+                     81 이 되어 지불액보다 많아진다. 이용자에게 유리한 쪽이 아니라 '더 주지 않는' 쪽을
+                     택한 것은 재화 인플레를 만들지 않기 위해서다.)
+     몬스터 소환권+  300 회색 / 1장 → 장당 300
+   우편·탑 상자로 받은 분까지 함께 환불된다 — 지급 출처를 세이브에서 되짚을 수 없고,
+   그 차이를 가리려다 더 큰 버그를 만드는 것보다 일괄 환불이 안전하다.
+
+   ⚠ 판정 플래그(_monTicketV)는 freshState() 에 넣지 마라. mergeDefaults 가 deepFill 로 먼저 채워
+      이관이 통째로 스킵된다(HANDOFF 3-3 — 몬스터 확장 때 _huntV 로 실제로 당했다).
+      아래 _huntV 와 같은 방식으로 '없으면 이관' 을 판정한다. */
+const MON_TICKET_REFUND = { tickMon: 26, tickMonP: 300 };
+function migrateMonTickets(){
+  if(!S || S._monTicketV === 1) return;
+  let back = 0;
+  ['tickMon','tickMonP'].forEach(k=>{
+    const n = S[k]|0;
+    if(n > 0) back += n * MON_TICKET_REFUND[k];
+    S[k] = 0;
+  });
+  if(back > 0){
+    S.gray = (S.gray||0) + back;
+    /* 이관 시점엔 toast/sysLog 가 아직 준비되지 않았을 수 있으므로 예약해 두고 나중에 알린다. */
+    S._monTicketRefund = back;
+  }
+  S._monTicketV = 1;
 }
 
 /* 제작 부위 카테고리 — 4개 아이템 카테고리 + 액션 숏컷 2개(용광로/망치) = 6칸.
@@ -645,13 +676,25 @@ const GRAYSHOP = [
      다 쓰면 '강화 실패 시 단계 하락'을 막을 방법이 영구히 사라졌다. 여기서 보급한다. */
   { t:'하락 방지권 3개',    ic:'🔮', cost:60,   give:()=>{ S.wards=(S.wards||0)+3; } },
   /* ★ v5.8: 획득처가 0 이던 재화들의 무과금 보급선.
-     고급 소환권 3종·몬스터 소환권은 소환 화면에 상시 노출되는데 평생 0 이었고,
+     고급 소환권 3종은 소환 화면에 상시 노출되는데 평생 0 이었고,
      영웅 기록서는 유료 패키지로만 들어와 결제 유저조차 쓸 데가 없었다. */
-  { t:'몬스터 소환권 3장',   ic:'👹', cost:80,   give:()=>{ S.tickMon=(S.tickMon||0)+3; } },
   { t:'영웅 소환권+ 1장',    ic:'📜', cost:400,  give:()=>{ S.tickHeroP=(S.tickHeroP||0)+1; } },
   { t:'재료 소환권+ 1장',    ic:'🧰', cost:220,  give:()=>{ S.tickMatP=(S.tickMatP||0)+1; } },
-  { t:'몬스터 소환권+ 1장',  ic:'🩸', cost:300,  give:()=>{ S.tickMonP=(S.tickMonP||0)+1; } },
   { t:'영웅 기록서 1권',     ic:'📕', cost:900,  give:()=>{ S.records=(S.records||0)+1; } },
+  /* ★ 2026-09-10: '몬스터 소환권 3장'(80) · '몬스터 소환권+ 1장'(300) 을 판매 목록에서 내렸다.
+     이유: 이 두 재화는 v5.8 이 '획득처 0' 을 메우면서 만들어졌는데 **소비처를 끝내 만들지 않았다.**
+     코드 전체에서 차감하는 곳이 0 이라, 회색코인을 내고 사면 영원히 쓰지 못하는 함정 상품이었다.
+     회색코인은 전투로 벌리지 않고 길드 레이드·약탈·기여로만 들어오는 느린 재화라 피해가 더 컸다.
+
+     왜 '소비처를 만들기' 가 아니라 '내리기' 인가 — 넣을 자리가 없다는 것이 근거로 확인됐다.
+       · 보스 소환의 재료 대체로 쓰면: R보스 재료 42개는 회색 환산 약 840 인데 소환권 3장은 80 이다.
+         20배 이상 싸서 재료 소모처(보스 소환)가 통째로 무너진다.
+       · 재료 지급권으로 쓰면: 이 상점이 이미 재료를 직접 판다(R 20 · E 35 · L 90).
+         소환권 1장 원가가 약 27 이라 'R재료 1개(20)' 보다 비싸져서 살 이유가 없다.
+       · '몬스터를 소환한다' 는 뜻으로 쓰면: 이 게임에서 그 행동은 이미 [몬스터] 화면의 사냥터
+         선택이고 **무료다**(코드 문구도 "몬스터 소환 →", "소환 중"). 코어 루프라 유료화 불가.
+     즉 이름만 있고 설계가 없던 재화다. 보유분은 migrateMonTickets() 가 구매가로 환불한다.
+     되살리려면 먼저 소비처 설계부터 하고, 그 다음에 판매를 붙여라 — 순서를 뒤집지 마라. */
 ];
 
 /* ★ v5.126: 루비 충전 상품의 수량·가격을 전부 재설계했다. ⚠임의수치 — 추후 비즈니스부가
@@ -1394,6 +1437,7 @@ function mergeDefaults(){ deepFill(S, freshState());
   migrateNames();    // ★ F3: IP 세탁으로 바뀐 코스튬·패키지 id 이관
   migrateEquipNames(); // ★ v5.108: 브랜드 통일로 바뀐 L등급 장비명 이관 (세트 매칭 보존)
   migrateMatPools(); // ★ v4.3: 폐지된 등급 공용풀 잔량을 같은 등급 재료로 분배
+  migrateMonTickets(); // ★ 2026-09-10: 폐지된 몬스터 소환권 보유분을 회색코인으로 환불
   // ★ v4.7: 몬스터 8종 → 120종 확장. 구세이브의 0~7 인덱스를 같은 등급·상대위치로 옮긴다.
   if(typeof S.huntTier==='number' && S.huntTier<HUNT_MIGRATE_V47.length && S._huntV!==47){
     S.huntTier = HUNT_MIGRATE_V47[S.huntTier]; }
@@ -1706,24 +1750,77 @@ const Battle = (()=>{
      개별 PNG 수천 개 대신 시트 ~84장만 로드. */
   const SHEET_W = 1920, SHEET_H = 1024, CELL = 128, COLS = 15;
   const HERO_SHEETS = {};  /* key: dir/anim → Image 객체 */
-  let _sheetsLoaded = false;
-  function preloadHeroSheets(){
-    if(_sheetsLoaded) return;
-    _sheetsLoaded = true;
-    const ranged = ['Idle','Run','Attack1','Attack2','Attack3','CastSpell','Special1','Special2','Die'];
-    const melee  = ['Idle','Run','Melee','Melee2','MeleeSpin','CastSpell','Special1','Special2','Die','ShieldBlockMid'];
-    for(const hid in HERO_SPRITE_DIR){
+
+  /* ★ 2026-09-10: 시트 프리로드를 '전원 즉시' 에서 '출전 영웅 우선 + 나머지는 나중' 으로 바꿨다.
+     왜: 종전 preloadHeroSheets() 는 9영웅 × 9~10동작 = 시트 84장을 게임 시작과 동시에
+     전부 요청했다. assets/heroes/sheets 는 84MB 이고 시트 한 장이 평균 1MB 다.
+     실제로 화면에 서는 영웅은 홈에서 1명, 던전 파티에서 3명뿐인데, 첫 진입에서 나머지
+     5~8명 몫까지 같이 받느라 모바일 회선에서 첫 그림이 늦게 떴다.
+     (영웅은 그림이 뜨기 전까지 그림자만 그려진다 — drawHero 의 폴백 참조.)
+
+     지금 구조는 세 단계다.
+       1단계 즉시   — 지금 필드에 서는 영웅의 '항상 쓰는 동작'(Idle/Run/기본공격)만.
+       2단계 유휴   — 같은 영웅의 나머지 동작(스킬·사망). 브라우저가 한가할 때 받는다.
+                      스킬 최소 쿨타임이 1.5초라 그 전에 도착한다.
+       3단계 요청시 — 출전하지 않은 영웅. drawHeroSheet 가 실패할 때의 기존 지연 로드
+                      경로(drawHero/drawFoeHero)가 그대로 처리한다. 새로 만든 길이 아니다.
+
+     ⚠ 되돌리지 마라: '전부 미리 받아두면 안전하다' 는 직관으로 1단계에 전원을 넣으면
+        첫 진입 체감이 그대로 돌아온다. 늦게 받아도 되는 것을 늦게 받는 게 요점이다. */
+  const ALWAYS_ANIMS_RANGED = ['Idle','Run','Attack1'];
+  const ALWAYS_ANIMS_MELEE  = ['Idle','Run','Melee'];
+  const LATER_ANIMS_RANGED  = ['Attack2','Attack3','CastSpell','Special1','Special2','Die'];
+  const LATER_ANIMS_MELEE   = ['Melee2','MeleeSpin','CastSpell','Special1','Special2','Die','ShieldBlockMid'];
+
+  function isMeleeSkin(hid){ return hid==='HERO_003'||hid==='HERO_008'||hid==='HERO_004'; }
+
+  /* 시트 1장을 요청한다. 이미 요청했으면 아무 것도 하지 않는다(중복 요청 방지). */
+  function requestHeroSheet(dir, anim){
+    const key = dir+'/'+anim;
+    if(HERO_SHEETS[key]) return;
+    const im = new Image();
+    im.src = 'assets/heroes/sheets/'+key+'.png';
+    im.onerror=()=>{};
+    HERO_SHEETS[key] = im;
+  }
+
+  /* 잠시 뒤에 실행 — 단, 반드시 실행된다.
+     ⚠ requestIdleCallback 하나만 걸면 안 된다(2026-09-10 실측). 이 게임은 requestAnimationFrame
+        루프를 쉬지 않고 돌려 메인 스레드가 한가해지는 순간이 없고, 백그라운드 탭에서는 rAF 가
+        스로틀되면서 유휴 콜백이 굶는다. {timeout:3000} 을 줘도 4초를 기다려 확인했지만
+        끝내 발화하지 않았다 — 즉 2단계 시트가 영영 안 받아지는 조용한 실패였다.
+     그래서 유휴 콜백과 타이머를 같이 걸고 먼저 오는 쪽을 쓴다(once 로 중복 실행 차단).
+     타이머가 '늦어도 이때는 받는다' 는 하한선이고, 유휴 콜백은 '한가하면 더 일찍' 이다. */
+  function whenIdle(fn){
+    let fired = false;
+    const once = ()=>{ if(fired) return; fired = true; fn(); };
+    let scheduled = false;
+    if(typeof requestIdleCallback === 'function'){ requestIdleCallback(once, {timeout:2000}); scheduled = true; }
+    if(typeof setTimeout === 'function'){ setTimeout(once, 1200); scheduled = true; }
+    if(!scheduled) once();   /* 둘 다 없는 하네스(DOM 스텁)에서는 즉시 — 검사에서 단계가 통째로 빠지지 않게 */
+  }
+
+  /* 지금 필드에 서는 영웅들의 시트를 데운다. hids 는 hero_id 배열. */
+  function warmHeroSheets(hids){
+    const uniq = [...new Set((hids||[]).filter(Boolean))];
+    const later = [];
+    uniq.forEach(hid=>{
       const dir = HERO_SPRITE_DIR[hid];
-      const isMelee = hid==='HERO_003'||hid==='HERO_008'||hid==='HERO_004';
-      const anims = isMelee ? melee : ranged;
-      for(const anim of anims){
-        const key = dir+'/'+anim;
-        const im = new Image();
-        im.src = 'assets/heroes/sheets/'+key+'.png';
-        im.onerror=()=>{};
-        HERO_SHEETS[key] = im;
-      }
-    }
+      if(!dir) return;
+      const melee = isMeleeSkin(hid);
+      (melee ? ALWAYS_ANIMS_MELEE : ALWAYS_ANIMS_RANGED).forEach(a=>requestHeroSheet(dir, a));
+      (melee ? LATER_ANIMS_MELEE  : LATER_ANIMS_RANGED ).forEach(a=>later.push([dir,a]));
+    });
+    if(later.length) whenIdle(()=>later.forEach(([d,a])=>requestHeroSheet(d,a)));
+  }
+
+  /* start() 진입점 — 현재 파티를 기준으로 데운다. layoutHeroes 와 같은 출처를 읽으므로
+     heroes 배열이 아직 안 만들어졌어도(호출 순서와 무관하게) 올바른 대상을 고른다. */
+  function preloadHeroSheets(){
+    try{
+      const p = (partySrc || party)() || [];
+      warmHeroSheets(p.map(h=>h && h.hero_id));
+    }catch(e){ /* 파티를 못 읽으면 지연 로드 경로가 알아서 처리한다 */ }
   }
   /* ★ v5.100: 8방향 → row 매핑 (대표 직접 확인으로 정정).
      실제 스프라이트 방향 (대표가 Idle 시트로 확인):
@@ -1881,6 +1978,9 @@ const Battle = (()=>{
       };
     });
     partyCP = Math.max(1, heroes.reduce((a,h)=>a+h.cp,0));
+    /* ★ 2026-09-10: 필드에 서는 영웅이 확정되는 유일한 지점이라 여기서 시트를 데운다.
+       파티를 바꾸거나 홈↔던전을 오갈 때도 자동으로 따라온다(refreshParty→layoutHeroes). */
+    warmHeroSheets(heroes.map(h=>h.hid));
     renderContribPanel();
   }
   function tierDef(){ return HUNT_TIERS[clamp((S&&S.huntTier)||0,0,HUNT_TIERS.length-1)]; }
@@ -1917,6 +2017,9 @@ const Battle = (()=>{
       }));
       /* 적 전체 전투력 (아군 partyCP와 대칭) */
       foePartyCP = foes.reduce((a,f)=>a+f.cp, 0);
+      /* ★ 2026-09-10: 투기장 적 영웅은 우리 파티에 없는 영웅일 수 있다 — 입장하는 순간 데운다.
+         안 데우면 첫 몇 프레임 동안 적이 그림자로만 보인다(지연 로드 경로가 받아오는 사이). */
+      warmHeroSheets(foes.map(f=>f.hid));
     } else { foes=[]; foePartyCP=0; }
     // ★ B5/G-77: kind:'wave' — 웨이브 서바이벌 전용 상태.
     //   몹 '그룹'을 전부 처치하면 waveNo 가 오르고 제한시간(기본 60초)이 리셋된다.
@@ -4430,9 +4533,11 @@ const MODALS = {
   summon:{ title:'소환', render(b){
     const shardTot=shardTotal();
     const res=el('div','summon-res wrap2');
+    /* ★ 2026-09-10: '몬스터권'·'몬스터권+' 카운터를 뺐다. 소비처가 0 이라 상시 0 으로 붙어 있으면서
+       "언젠가 쓰는 것" 처럼 보이게 만드는 칸이었다(판매도 함께 내렸다 — GRAYSHOP 주석 참조).
+       남은 8종은 전부 이 화면 안에서 실제로 소모된다. */
     [['🎟️','영웅권',S.tickHero],['📜','영웅권+',S.tickHeroP||0],
      ['📦','재료권',S.tickMat],['🧰','재료권+',S.tickMatP||0],
-     ['👹','몬스터권',S.tickMon||0],['🩸','몬스터권+',S.tickMonP||0],
      ['💎','루비',S.ruby],['🔥','조각',shardTot],['🪙','회색',S.gray],['🎲','주사위',S.dice]]
       .forEach(([ic,nm,v])=>{ const r=el('div','sres'); r.innerHTML=`<span class="si">${eImg(ic,1.5)}</span><span>${nm}</span><b>${fmt(v)}</b>`; res.appendChild(r); });
     b.appendChild(res);
@@ -6831,9 +6936,12 @@ function towerExchange(){
   pop.appendChild(el('div','b5-head','웨이브 상자 교환'));
   pop.appendChild(el('div','b5-msg',`보유 상자 <b style="color:var(--g-legend)">${S.towerBox||0}</b>개`));
   /* ★ v5.8: 재료 외 교환품 — 탑 상자의 소비처를 넓히고, 기록서·고급권의 두 번째 획득 경로가 된다. */
+  /* ★ 2026-09-10: '몬스터 소환권+' 교환을 내렸다 — 소비처가 0 인 재화라 상자를 태우면 손해였다.
+     상세 근거는 GRAYSHOP 하단 주석 참조. 대신 '재료 소환권+' 를 넣어 상자 소비처 3종을 유지한다
+     (재료 소환권+ 는 소환 화면에서 실제로 쓰인다 — '재료 소환 고급' 타일). */
   [['📕','영웅 기록서',8,1,()=>{ S.records=(S.records||0)+1; }],
    ['📜','영웅 소환권+',4,1,()=>{ S.tickHeroP=(S.tickHeroP||0)+1; }],
-   ['🩸','몬스터 소환권+',3,1,()=>{ S.tickMonP=(S.tickMonP||0)+1; }]].forEach(([ic,nm,cost,gain,give])=>{
+   ['🧰','재료 소환권+',3,1,()=>{ S.tickMatP=(S.tickMatP||0)+1; }]].forEach(([ic,nm,cost,gain,give])=>{
     const r=el('div','pack'); r.innerHTML=`<div class="pic">${ic}</div><div class="info"><div class="t">${nm} X${gain}</div><div class="d">웨이브 상자 ${cost}개 소모</div></div>`;
     const bt=el('button','btn sm'+((S.towerBox||0)>=cost?' gold':''),'교환');
     bt.onclick=()=>{ if((S.towerBox||0)<cost){ toast('상자가 부족합니다'); return; }
@@ -6938,6 +7046,14 @@ function enterHome(){
   Battle.resize(); Battle.start(); refreshHUD(); tickClock();
   for(let i=0;i<5;i++) pushChat(pick(CHAT_LINES)(), '전체');
   sysLog('결정의 시대에 오신 것을 환영합니다, 군주여.');
+  /* ★ 2026-09-10: 폐지된 몬스터 소환권 환불 안내. 재화가 조용히 사라지면 이용자는 버그로 받아들인다 —
+     이관은 로드 시점에 이미 끝났고(migrateMonTickets), 여기서는 알리기만 한다. */
+  if(S._monTicketRefund > 0){
+    const n = S._monTicketRefund; S._monTicketRefund = 0;
+    sysLog(`몬스터 소환권이 폐지되어 보유분을 회색코인 <b>${fmt(n)}</b>개로 돌려드렸습니다.`);
+    setTimeout(()=>toast(`몬스터 소환권 환불 — 회색코인 +${fmt(n)}`), 900);
+    save();
+  }
   if(!_loopOn){ _loopOn=true; requestAnimationFrame(gameLoop); }
   updateGuideBanner();
   /* ★ v5.113: 종전엔 '튜토리얼 미완료'이기만 하면 재접속할 때마다 인트로가 다시 돌아
