@@ -836,8 +836,8 @@ const ACCOUNT_PACKS = [
   { id:'ap_ltd2',   t:'한정 패키지 II',  ic:'📦', cost:7500, items:[['📘','최상급 마법서 X15'],['📕','기록서 X12'],['💠','대장장이의 눈물 X40'],['🎲','주사위 X500']],
     give:()=>{ matGain('최상급 마법서',15); S.records=(S.records||0)+12; matGain('대장장이의 눈물',40); S.dice+=500; } },
 ];
-/* ★ v5.56: 도감 몬스터 — HUNT_TIERS 정의 후에 초기화됨 (아래 initMonsters). */
-let MONSTERS = [];
+/* ★ v5.56→v5.145: 도감용 MONSTERS 이름 배열은 제거 — 소비자가 도감뿐이었는데 도감이
+   v5.145 부터 HUNT_TIERS 를 직접 읽는다(등급·스프라이트·드랍까지 필요해져서). */
 // ★ 코어 파밍 루프 — 사냥 대상(홈 필드 스폰)을 플레이어가 직접 선택한다.
 //   몬스터별 드랍 재료가 고정되어 있고, 다음 등급 장비의 재료는 더 강한 다음 몬스터가 떨군다.
 //   준비 없이 강한 몬스터를 선택하면 부대가 맞아 죽는다(전멸 → 자동 후퇴).
@@ -910,7 +910,6 @@ const HUNT_TIERS = (()=>{
 // 구세이브 이관 — 종전 8단계 인덱스를 새 20종(등급당 5종) 위치로 옮긴다(등급·상대 진행도 보존)
 // ★ v5.9: 120종→20종 축소. 등급당 5종이므로 경계는 0/5/10/15, 중간은 2/7/12/17.
 const HUNT_MIGRATE_V47 = [0, 2, 5, 7, 10, 12, 15, 17];
-MONSTERS = HUNT_TIERS.map(t=>t.n);  /* v5.56: HUNT_TIERS 정의 후 도감 초기화 */
 /* ★ v4.7: 마을회관·훈련소 레벨당 버프. 실측 Lv3=0.6% / Lv5=1.0% → 레벨당 +0.2%p.
    종전 상수 0.05%p 는 4배 낮았다(파일 상단 주석의 '+0.05%p/Lv' 도 오답). */
 const VILL_BUFF_PP = 0.2;
@@ -1299,6 +1298,10 @@ function freshState(){
     buffs:{ goldUntil:0, expUntil:0, craftUntil:0, adFree:false }, // 상점 버프(구독 만료ts·영구 플래그) ★ B7/G-100 craftUntil 신규
     daily:{ date:'', counts:{} }, // 일일 횟수 제한
     claimed:{ attend:{}, mail:{} }, // 1회성 보상 수령
+    /* ★ v5.145: 몬스터 도감 수집 기록(몬스터명 → 처치 수). 표시 전용 — 보상·경제 영향 없음.
+       구세이브는 mergeDefaults 로 {} 를 받아 이 시점부터 집계한다. 과거 킬의 소급은 불가
+       (몬스터별 기록이 존재하지 않았다). 보스 '군주' 변형은 codexBossKills 에 따로 센다. */
+    codexKills:{}, codexBossKills:{},
     /* ★ B9/G-120 bossChallenges·raids · ★ F2 칭호 조건 카운터 신규
        craftFail/craftWin 은 '현재 연속(스트릭)', ...Best 는 '최고 스트릭'이다.
        칭호는 한 번 달성하면 유지돼야 하므로 have() 는 Best 만 본다. */
@@ -2543,6 +2546,10 @@ const Battle = (()=>{
     if(mode==='dungeon'&&dg){ dg.killed++; S.stats.kills++; sfx(boss?'legendary':'coin'); cosmetic(()=>addGold(ri(200,600))); return; } // 던전 보상은 결과창에서 일괄
     const t=tierDef();
     S.stats.kills++; sfx(boss?'legendary':'coin');
+    /* ★ v5.145: 몬스터 도감 집계 — 표시 전용 상태라 시뮬레이션 되먹임 없음(위 stats.kills 와 동일 급).
+       던전 모드는 함수 상단에서 return 되므로 홈 사냥 몬스터만 걸린다. */
+    if(boss) S.codexBossKills[t.n]=(S.codexBossKills[t.n]||0)+1;
+    else     S.codexKills[t.n]=(S.codexKills[t.n]||0)+1;
     /* ★ v5.30: 홈 AoE 다중 킬 골드 밸런스 — 마리당 골드가 실측 기준값(분당 18,885G)의
        55배였던 원인 수정. AoE로 N마리를 동시에 잡으면 각 몹 골드를 1/N 분배.
        30마리 동시 킬 시 각 몹 = t.gold/30 → Lv10 기준 분당 약 34,000G (실측 기준값의 1.8배).
@@ -6114,7 +6121,35 @@ const MODALS = {
     b.appendChild(tabs); const body=el('div'); b.appendChild(body);
     function render(){ body.innerHTML='';
       if(tab==='영웅'){ const g=el('div','grid c3'); JOBS.forEach(j=>{ const _b=classBest(j.id); const owned=!!_b; const gr=owned?_b.grade:'N'; const c=el('div','cell gframe grade-'+gr);   /* ★ B4/G-50: 로스터 구조 대응 */ c.innerHTML=`<div class="gtag">${owned?GRADES[gr].name:'미보유'}</div><div class="ei" style="${owned?'':'filter:grayscale(1);opacity:.4'}">${jobIcon(j.id)}</div><div class="cn">${j.name}<br><span class="mut" style="font-size:8px">${j.el}·${j.role}</span></div>`; g.appendChild(c); }); body.appendChild(g); }
-      else if(tab==='몬스터'){ const g=el('div','grid c4'); MONSTERS.forEach((m,i)=>{ const gr=['N','N','R','R','E','E','L'][i]||'N'; const c=el('div','cell gframe grade-'+gr); c.innerHTML=`<div class="gtag">${GRADES[gr].name}</div><div class="ei">💀</div><div class="cn">${m}</div>`; g.appendChild(c); }); body.appendChild(g); }
+      else if(tab==='몬스터'){
+        /* ★ v5.145: 단순 명단 나열 → '수집 기록' 으로 개편. 세 가지 이유:
+           ① 종전엔 20종에 7칸짜리 등급 배열(['N','N','R','R','E','E','L'])을 그대로 썐서
+              8번째 몬스터부터 전부 '일반'으로 표시되던 버그(13종 오표시). 등급의 정본은 t.drop.
+           ② 스프라이트가 있는데 전부 💀 이모지로 그렸다 — 실물 스프라이트로.
+           ③ 처치 수(codexKills/codexBossKills)로 수집·발견 재미를 준다. 미조우는 실루엣+???.
+              몬스터 선택 화면이 원래 전 정보를 공개하므로 여기서 가리는 건 정보 은닉이 아니라
+              '내가 잡은 기록' 채우기다. 보상은 일절 없음(경제 영향 0).
+              조우한 몬스터엔 고정 드랍 재료(mat/mat2)를 보여준다 — '뭘 사냥할지 고르는'
+              코어 루프의 참고 자료로 쓰이게. */
+        const kc=S.codexKills||{}, bc=S.codexBossKills||{};
+        const disc=HUNT_TIERS.filter(t=>((kc[t.n]||0)+(bc[t.n]||0))>0).length;
+        body.appendChild(el('div','hint',`조우 <b style="color:var(--ok)">${disc}</b>/${HUNT_TIERS.length}종 · 홈 사냥에서 처치하면 기록이 채워집니다 <span class="mut">(총 처치 ${fmt(S.stats.kills||0)})</span>`));
+        const g=el('div','grid c4');
+        HUNT_TIERS.forEach(t=>{
+          const k=kc[t.n]||0, bk=bc[t.n]||0, found=(k+bk)>0;
+          const spr=`<img src="assets/monsters/${t.img}.webp" style="width:44px;height:44px;image-rendering:pixelated;object-fit:contain" alt="${t.n}">`;
+          const c=el('div','cell gframe grade-'+t.drop);
+          if(found){
+            c.innerHTML=`<div class="gtag">${GRADES[t.drop].name}</div><div class="ei">${spr}</div>
+              <div class="cn">${t.n}<br><span class="mut" style="font-size:var(--fs-xs)">처치 ${fmt(k)}${bk?` · 군주 ${fmt(bk)}`:''}</span></div>
+              <div class="mdrops" style="justify-content:center;margin-top:2px"><span class="mdrop" title="${t.mat}">${matIcon(t.mat)}</span>${t.mat2?`<span class="mdrop" title="${t.mat2}">${matIcon(t.mat2)}</span>`:''}</div>`;
+          } else {
+            c.innerHTML=`<div class="gtag" style="opacity:.55">미조우</div><div class="ei" style="filter:grayscale(1) brightness(.3)">${spr}</div><div class="cn" style="opacity:.55">???</div>`;
+          }
+          g.appendChild(c);
+        });
+        body.appendChild(g);
+      }
       else { const g=el('div','grid c3'); SETS.forEach(s=>{ const c=el('div','cell gframe'); c.style.aspectRatio='auto'; c.style.padding='8px 4px'; c.innerHTML=`<div class="ei" style="font-size:20px">🧩</div><div class="cn"><b>${s.n}</b><br><span class="mut" style="font-size:9px">${setFxSummary(s)}</span></div>`; g.appendChild(c); }); body.appendChild(g); }
     }
     render();

@@ -450,6 +450,22 @@ step('홈 모드 영웅 1명 배치 (isHuntSolo)', ()=>{
   const ov=windowStub.document.getElementById('stage-overlay');
   if(ov && ov.innerHTML!=='') throw new Error('홈 모드인데 기여도 패널이 표시됨');
 });
+/* ★ v5.145: 몬스터 도감 집계 회귀 — onKill 이 codexKills 를 못 채우면 도감이 영영 빈 채로
+   남는다(화면은 깨지지 않아 조용히 죽는 유형). idleTick 은 골드 루프일 뿐 전투를 돌리지
+   않으므로(2026-09-11 실측), 홈 모드에서 Battle.step 으로 전투를 실제로 돌려 본다.
+   킬이 기록되는지 + 기록된 이름이 전부 실제 몬스터명인지. 보스 '군주' 변형은 codexBossKills. */
+step('몬스터 도감 집계 — 홈 사냥 킬이 codexKills 에 기록된다', ()=>{
+  const B=ev('Battle'), S=ev('S'), HT=ev('HUNT_TIERS');
+  const frame=B.stepFrame||B.pumpFrame;
+  if(!B || !frame) throw new Error('Battle.stepFrame/pumpFrame 없음 — 인터페이스 변경 시 이 검사를 다시 맞춰라');
+  const names=new Set(HT.map(t=>t.n));
+  const sum=o=>Object.values(o||{}).reduce((a,b)=>a+b,0);
+  const base=sum(S.codexKills);
+  for(let i=0;i<4000;i++) frame(0.016);   // ≒64초 — 시작 영웅이 N등급 1티어를 잡기에 충분한 여유
+  if(sum(S.codexKills)<=base) throw new Error('64초 홈 사냥에도 codexKills 증가 0 — onKill 집계 경로가 죽었다');
+  for(const k of Object.keys(S.codexKills||{})) if(!names.has(k)) throw new Error('실재하지 않는 몬스터명이 집계됨: '+k);
+  for(const k of Object.keys(S.codexBossKills||{})) if(!names.has(k)) throw new Error('실재하지 않는 몬스터명이 보스 집계에 있음: '+k);
+});
 /* ★ v5.9: 몬스터 종 수 검증 — 등급당 5종, 총 20종(설계 기준). 마릿수 선택기 기본값 30.
    종전 120종(등급당 30종)은 "30마리" 마릿수 선택기를 도감 종 수로 오독한 것이었다. */
 step('몬스터 종 수 = 20 (등급당 5종) + 마릿수 기본 30', ()=>{
