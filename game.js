@@ -6647,6 +6647,13 @@ function itemDetail(e, heroId){ _itemDetailHeroId=heroId||null;
            종전엔 x.slot===e.slot 정확매칭이라 '흑철 대검'↔'용암 소드'가
            같은 무기 부위인데도 파괴되지 않았음. findEq의 부분매칭과 통일. */
         const newPart = slotSchema(e.slot).part;
+        /* ★ v5.148: 세트 효과 달성/해제 감지 — 착용 전후로 각 세트의 활성 임계 단계(달성한
+           최고 k)를 비교한다. 새로 넘어선 세트는 축하 토스트+sfx, 깨진 세트는 장착 토스트에
+           부기로 알린다. 세트 파밍의 '완성 순간'이 조용히 지나가면 수집 동기가 반감되고,
+           반대로 더 강한 한 조각에 낀 것때문에 6세트가 소리 없이 깨지면 화면 전투력과
+           실제 체감이 어긋난다. 장착 경로는 이 onYes 한 곳뿐이라 여기서만 감시한다. */
+        const setTier = st=>{ const c=setPieceCount(st.n); let best=0; st.tiers.forEach(t=>{ if(c>=t.k) best=Math.max(best,t.k); }); return best; };
+        const pre = SETS.map(s=>({ s, k:setTier(s) }));
         const before = S.equips.length;
         S.equips = S.equips.filter(x=>{
           if(x===e) return true;  /* 새로 착용할 장비는 유지 */
@@ -6657,8 +6664,13 @@ function itemDetail(e, heroId){ _itemDetailHeroId=heroId||null;
         });
         e.equipped=true;
         e.heroId=_itemDetailHeroId;
-        toast(`${G.name} ${e.slot} 장착` + (S.equips.length<before ? ' · 기존 장비 파괴' : ''));
+        const broke = pre.filter(x=>setTier(x.s)<x.k).map(x=>x.s.n);
+        toast(`${G.name} ${e.slot} 장착` + (S.equips.length<before ? ' · 기존 장비 파괴' : '')
+          + (broke.length?` · <b style="color:var(--bad)">${broke.join('·')} 세트 해제</b>`:''));
         sfx('tap');
+        pre.forEach(x=>{ const now=setTier(x.s);
+          if(now>x.k){ toast(`🎉 <b style="color:var(--g-legend)">${x.s.n} ${now}세트</b> 효과 발동!`); sfx('legendary');
+            sysLog(`${x.s.n} ${now}세트 효과 발동`); } });
         Battle.refreshParty(); openModal('equip', _itemDetailHeroId); refreshHUD(); } }); };
   const enh=el('button','btn wide','강화'); enh.onclick=()=>openEnhance(e);
   row.append(eq,enh); b.appendChild(row);
