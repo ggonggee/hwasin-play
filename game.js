@@ -4001,6 +4001,26 @@ function craftParams(grade, cat, itemName){
   return { p0, gold:(ov?ov.gold:base.gold), sec:(ov?ov.sec:base.sec), guide:!!ov };
 }
 function recipeOk(recipe){ return (recipe||[]).every(r=>matAvail(r.k)>=r.need); }
+/* ★ v5.151: 제작 시작 로직 — 종전엔 대장간 모달 클로저(startCraft) 안에만 있었다.
+   결과 팝업의 [다시 제작] 이 같은 판정·차감 경로를 쓰게 하려고 밖으로 뺐다(내용은 이동일 뿐).
+   종료의 openModal('forge', item.n) 은 v5.119 사전 선택 — 제작 시작 후에도 그 아이템이
+   선택된 채로 대장간이 열린다(종전엔 기본값 N/무기로 리셋돼 재시작 때마다 탭을 다시 눌렀다). */
+function craftStart(grade, catKey, item){
+  if(S.craft){ toast('이미 제작중입니다.'); return; }                       // G-25
+  const cp=craftParams(grade,catKey,item.n);
+  if(!recipeOk(item.recipe)){ toast('재료가 부족합니다.'); return; }         // G-26
+  // ★ F2: 칭호 '빈털터리' — 조건은 '골드가 모자란 상태에서 제작 버튼을 연속 클릭'이다.
+  if(S.gold<cp.gold){
+    S.stats.poorClick=(S.stats.poorClick||0)+1;
+    S.stats.poorBest=Math.max(S.stats.poorBest||0,S.stats.poorClick);
+    toast('골드가 부족합니다.'); return;
+  }
+  S.stats.poorClick=0;                                                      // 제작이 실제로 시작되면 스트릭 초기화
+  item.recipe.forEach(r=>matSpend(r.k,r.need)); S.gold-=cp.gold;
+  S.craft={ grade, slot:item.n, cat:catKey, ic:item.ic, endAt:Date.now()+cp.sec*1000*craftTimeMul(), // ★ B7/G-100 제작시간 버프
+            p0:cp.p0, sec:cp.sec, gold:cp.gold, recipe:item.recipe.map(r=>({k:r.k,need:r.need})) };
+  sfx('tap'); toast(`${GRADES[grade].name} ${item.n} 제작 시작`); openModal('forge', item.n); refreshHUD();
+}
 // 제작 취소 — 재료·골드 100% 환급
 function cancelCraft(){
   if(!S.craft) return; const c=S.craft;
@@ -4105,22 +4125,8 @@ const MODALS = {
     b.appendChild(tabs);
     const body=el('div'); b.appendChild(body);
     function itemsOf(){ const s=FORGE_SLOTS[slotIdx]; return (s&&s.items&&s.items[cur])||[]; }
-    function startCraft(item){
-      if(S.craft){ toast('이미 제작중입니다.'); return; }                       // G-25
-      const slot=FORGE_SLOTS[slotIdx], cp=craftParams(cur,slot.k,item.n);
-      if(!recipeOk(item.recipe)){ toast('재료가 부족합니다.'); return; }         // G-26
-      // ★ F2: 칭호 '빈털터리' — 조건은 '골드가 모자란 상태에서 제작 버튼을 연속 클릭'이다.
-      if(S.gold<cp.gold){
-        S.stats.poorClick=(S.stats.poorClick||0)+1;
-        S.stats.poorBest=Math.max(S.stats.poorBest||0, S.stats.poorClick);
-        toast('골드가 부족합니다.'); return;
-      }
-      S.stats.poorClick=0;                                                      // 제작이 실제로 시작되면 스트릭 초기화
-      item.recipe.forEach(r=>matSpend(r.k,r.need)); S.gold-=cp.gold;
-      S.craft={ grade:cur, slot:item.n, cat:slot.k, ic:item.ic, endAt:Date.now()+cp.sec*1000*craftTimeMul(), // ★ B7/G-100 제작시간 버프
-                p0:cp.p0, sec:cp.sec, gold:cp.gold, recipe:item.recipe.map(r=>({k:r.k,need:r.need})) };
-      sfx('tap'); toast(`${GRADES[cur].name} ${item.n} 제작 시작`); openModal('forge'); refreshHUD();
-    }
+    /* ★ v5.151: 본체는 전역 craftStart 로 이동(결과 팝업 [다시 제작] 이 같은 경로를 씀). */
+    function startCraft(item){ craftStart(cur, FORGE_SLOTS[slotIdx].k, item); }
     // G-24: 아이템 클릭 → 중앙 오버레이 팝업(딤 + 확대 아이콘 + 이름 + 플레이버 + 전용 [제작])
     function openForgeItemPopup(item){
       const slot=FORGE_SLOTS[slotIdx];
@@ -6795,8 +6801,19 @@ function resolveCraft(forceSuccess){
   /* ★ v5.123: 종전 onclick 이 openModal('forge') 만 불러서 — 이 팝업은 _subKey 미등록
      오버레이라 openModal 이 닫아 주지 않는다 — 대장간이 팝업 '뒤'에서 다시 그려질 뿐,
      팝업은 ✕로만 닫혔다(대표 제보). closeSub() 로 팝업을 닫고 대장간으로 복귀한다. */
-  const btn=el('button','btn gold wide','확인'); btn.style.marginTop='10px';
-  btn.onclick=()=>{ closeSub(); openModal('forge'); }; b.appendChild(btn);
+  /* ★ v5.151: [확인] 은 같은 아이템이 선택된 대장간으로(pre 지정 — 종전엔 N/무기 기본값으로
+     리셋돼 재도전 때마다 탭을 다시 눌러야 했다). [다시 제작] 은 craftStart 로 즉시 재시작 —
+     재료·골드 부족과 제작 슬롯 점유 가드는 craftStart 안에서 토스트로 막힌다.
+     실패 시 재료 90% 환급이므로 '부족합니다' 토스트가 뜨는 것 자체가 다시 파밍하라는 신호다. */
+  const again=el('button','btn gold wide','다시 제작'); again.style.marginTop='10px';
+  again.onclick=()=>{ closeSub();
+    const sdef=FORGE_SLOTS.find(s=>s.k===cat);
+    const it=(sdef&&sdef.items&&sdef.items[grade]||[]).find(x=>x.n===slot);
+    if(it) craftStart(grade, cat, it);
+    else openModal('forge', slot); };
+  b.appendChild(again);
+  const btn=el('button','btn wide','확인'); btn.style.marginTop='6px';
+  btn.onclick=()=>{ closeSub(); openModal('forge', slot); }; b.appendChild(btn);
   $('#modal-root').classList.add('on'); currentModal='craftResult';
 }
 /* ★ v5.58: 제작 완성 시 중앙 강제 팝업 (완성되면 알림 팝업이 중앙에 뜨는 설계). */
