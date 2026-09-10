@@ -5165,13 +5165,21 @@ const MODALS = {
          키는 '벨트' 인데 탭 이름은 '방어구·장신구' 라 그대로 쓰면 없는 탭 이름이 나온다. */
       const tabLabel = (TABS.find(t=>t[0]===S.invTab)||[])[1] || S.invTab;
       if(!arr.length){ list.appendChild(el('div','hint',`${tabLabel} 탭에 미장착 장비가 없습니다.`)); return; }
-      arr.slice(0,16).forEach(e=>{ const c=el('div','cell gframe grade-'+e.grade); c.style.position='relative'; c.style.setProperty('--gc',GRADES[e.grade].color);
+      /* ★ v5.152: 정렬 + 표시 확장. 종전엔 획득 순서 그대로 앞 16칸만 보여줬다 —
+         오래된 일반 장비가 16개 쌓인 시점부터 새로 만든 상위 등급이 목록에 안 나타나
+         '제작했는데 어디 갔지?'가 됐다(모달 본문 .mbody 가 스크롤되므로 개수 제약도 불필요).
+         정렬 기준: 등급(L→N) → 강화 레벨 → 최신 획득. 같은 등급이라도 방금 만든 게 위에 온다. */
+      const gi=e=>GORDER.indexOf(e.grade);
+      arr.sort((a,b)=> gi(b)-gi(a) || (b.enh||0)-(a.enh||0) || S.equips.indexOf(b)-S.equips.indexOf(a));
+      const CAP=60, shown=arr.slice(0,CAP);
+      shown.forEach(e=>{ const c=el('div','cell gframe grade-'+e.grade); c.style.position='relative'; c.style.setProperty('--gc',GRADES[e.grade].color);
         c.innerHTML=`<div class="gtag">${GRADES[e.grade].name}</div><div class="ei">${equipImg(e.slot,2)}</div><div class="cn">${e.slot}</div>${e.enh?`<div class="lvl">+${e.enh}</div>`:''}`;
         /* ★ v5.112: 종전 `cur && cur.hero_id` — 이 스코프에 cur 이 없어 클릭 즉시
            ReferenceError 로 죽었다(장비를 눌러도 아무 반응이 없음). 인벤토리에는
            선택된 영웅이라는 개념이 없으므로 heroId 는 null 이 정답이다. itemDetail 의
            v5.81 가드가 "영웅 착용창에서 장착" 으로 유도한다. */
         c.onclick=()=>itemDetail(e, null); list.appendChild(c); });
+      if(arr.length>CAP) list.appendChild(el('div','hint',`총 ${fmt(arr.length)}개 중 상위 ${CAP}개 표시 — 오래된 순으로 아래는 생략됩니다.`));
     }
     TABS.forEach(([k,label])=>{ const t=el('div','inv-tab'+(S.invTab===k?' on':''),label);
       t.onclick=()=>{ S.invTab=k; tb.querySelectorAll('.inv-tab').forEach(x=>x.classList.remove('on')); t.classList.add('on'); drawList(); }; tb.appendChild(t); });
