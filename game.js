@@ -1482,6 +1482,15 @@ function fmtFull(n){ return Math.floor(n||0).toLocaleString('ko-KR'); }
 function rnd(a,b){ return a + Math.random()*(b-a); }
 function ri(a,b){ return Math.floor(rnd(a,b+1)); }
 function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+/* ★ 2026-09-10: 복원추출 없이 n개를 뽑는다 — pick()을 반복 호출하면 같은 원소가 중복될 수 있다.
+   실제로 투기장 적 3인을 pick()으로 세 번 뽑다가 같은 영웅(같은 이름)이 두 번 나온 사례가
+   실기 QA에서 관측됐다(같은 이름의 적 카드 2장). 배열을 얕게 섞어 앞 n개만 취하면
+   n ≤ arr.length 일 때 중복이 없다. n이 배열보다 크면 있는 만큼만 반환한다(원본은 건드리지 않음). */
+function pickN(arr, n){
+  const a = arr.slice();
+  for(let i=a.length-1; i>0; i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+  return a.slice(0, Math.min(n, a.length));
+}
 function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
 function toast(msg){ const box=$('#toast'); const t=el('div','toast',msg); box.appendChild(t); setTimeout(()=>t.remove(), 1900); }
 
@@ -5473,7 +5482,9 @@ const MODALS = {
              헤더(정원 N/30 배지 + 타이틀 + [길드 공지])와 누적점수 전폭 석판은 뷰를 바꿔도 유지되고,
              하단 고정 버튼은 미가입 2개(랭킹/점령지) · 가입 3개(길드 레이드/랭킹/점령전)로 갈린다.
        G-105 미가입 분기 — [길드 생성](길드장 버프 안내 + 길드명 입력 + 루비/골드 취소선 할인 2버튼)
-             + [길드 가입](빈 리스트 + `Enter text...` + [검색])
+             + [길드 가입](빈 리스트 + 검색창 + [검색])
+             ★ 2026-09-10: 검색창 placeholder는 레퍼런스 캡처에 `Enter text...`(영문)로 찍혀 있었으나,
+             한국어 UI 한복판에 영문이 끼는 것은 재현할 가치가 없는 잡음으로 보고 '길드명 검색...'으로 둔다.
        G-107 랭킹 6행 + 내 길드 요약행(별도 테두리) = 7요소. 1~3위만 구역 배지(3색), 4~6위는 숫자 등수.
              행 클릭 시 인라인 확장 [길드명][신청][X] · 신청 시 '가입 신청 완료' 토스트
        G-110 멤버 행 5필드 — 직급 뱃지 / 닉네임 / 기여점수 '~점' / 온라인 상태 / 참여기록
@@ -5545,7 +5556,7 @@ const MODALS = {
       const res=el('div','gu-searchres');
       const clearRes=()=>{ res.innerHTML=''; res.appendChild(el('div','gu-empty','검색 결과가 없습니다.')); };
       const srow=el('div','gu-searchrow');
-      const si=el('input','gu-input'); si.placeholder='Enter text...';
+      const si=el('input','gu-input'); si.placeholder='길드명 검색...';
       const sb=el('button','btn sm gold','검색');
       const doSearch=()=>{
         const q=(si.value||'').trim(); res.innerHTML='';
@@ -6756,10 +6767,12 @@ function arenaFight(){
   const foeTier=TIERS[clamp(S.arenaTier+ri(-1,1),0,TIERS.length-1)];   // 매칭은 ±1단차 이내
   /* ★ v5.84: 3v3 — 적 영웅 3명 스프라이트 정보 생성 (좌우 대치용).
      적은 랜덤 직업 3종, hero_id를 HERO_ROSTER에서 무작위 선택.
-     스프라이트 시트는 기존 HERO_SPRITE_DIR 재사용. */
-  const foeHeroIds=[];
+     스프라이트 시트는 기존 HERO_SPRITE_DIR 재사용.
+     ★ 2026-09-10: pick()을 3번 따로 호출하면 복원추출이라 같은 영웅이 중복 선택될 수 있었다
+     (실기 QA에서 실제로 '야습자 베이른' 카드가 적 3인 중 2장 뜨는 것을 확인). roster가 9명이라
+     3명을 고르는 데 중복을 허용할 이유가 없다 — pickN으로 중복 없이 뽑는다. */
   const roster=HERO_ROSTER.filter(r=>r.grade==='N'||r.grade==='R');
-  for(let i=0;i<3;i++) foeHeroIds.push(pick(roster).hero_id);
+  const foeHeroIds=pickN(roster,3).map(r=>r.hero_id);
   const foeHeroes=foeHeroIds.map((hid,i)=>{
     const r=HERO_BY_ID[hid];
     const job = JOBS.find(j=>j.id===r.class_id) || JOBS[0];

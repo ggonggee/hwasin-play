@@ -273,6 +273,30 @@ step('몬스터 소환권 판매·소비 경로가 되살아나지 않았는지'
     .filter(([,l])=>/S\.tickMonP?\s*(=\s*\(?S\.tickMonP?[^)]*\)?\s*\+|\+=)/.test(l));
   if(grow.length) throw new Error('몬스터 소환권을 지급하는 코드가 남아 있다: ' + grow.map(([n])=>'game.js:'+n).join(', '));
 });
+/* ★ 2026-09-10: pickN 중복 없는 추출 — 투기장 적 3인 선정(HERO_ROSTER 9명 중 3명)이
+   pick()을 세 번 따로 호출하는 복원추출이라 같은 영웅이 중복 선택될 수 있었다
+   (실기 QA에서 같은 이름의 적 카드가 2장 뜨는 것을 실제로 확인). 회귀를 막는다. */
+step('pickN — 복원추출 없이 n개 (중복 없음, 순서 무작위)', ()=>{
+  const pickN = ev('pickN');
+  const pool = ['a','b','c','d','e','f','g','h','i'];   // HERO_ROSTER N+R = 9명과 동일한 크기
+  for(let t=0;t<500;t++){
+    const got = pickN(pool, 3);
+    if(got.length!==3) throw new Error('길이 불일치: '+got.length);
+    if(new Set(got).size!==3) throw new Error('중복 발생: '+JSON.stringify(got));
+    if(got.some(x=>!pool.includes(x))) throw new Error('원본에 없는 값 반환: '+JSON.stringify(got));
+  }
+  const over = pickN(['x','y'], 5);   // n이 배열보다 크면 있는 만큼만
+  if(over.length!==2) throw new Error('n>length 처리 실패: '+JSON.stringify(over));
+});
+step('투기장 적 3인 — 500회 매칭 중 같은 영웅 중복 0건', ()=>{
+  ev('load')();
+  const HERO_ROSTER=ev('HERO_ROSTER'), pickN=ev('pickN');
+  const roster=HERO_ROSTER.filter(r=>r.grade==='N'||r.grade==='R');
+  for(let t=0;t<500;t++){
+    const ids=pickN(roster,3).map(r=>r.hero_id);
+    if(new Set(ids).size!==3) throw new Error('투기장 적 3인 중 중복: '+JSON.stringify(ids));
+  }
+});
 step('이관 후 refreshHUD/openModal', ()=>{ ev('refreshHUD')(); ev('openModal')('costume'); ev('openModal')('package'); });
 /* ★ v5.109: 이모지→아이콘 치환의 '판정 로직'을 고정한다.
    DOM 순회(iconizeEmoji 본체)는 이 스텁에 TreeWalker 가 없어 실행되지 않는다 — 그건 실브라우저
