@@ -3512,7 +3512,11 @@ const TUT = [
   { k:'form',    goal:2,  modal:()=>(((S.tut&&S.tut.formN)||0) ? 'arena' : 'hero'),
     txt:'진영을 편성해 저장하고 투기장에 입장하세요', base:false,
     cnt:()=>(((S.tut&&S.tut.formN)||0)?1:0) + ((S.stats.arenaEnters||0)?1:0),
-    subs:{ hero:'#formOpenBtn', formation:'.btn.gold' } },
+    /* ★ 2026-09-10: arena 항목 추가. 종전엔 hero·formation 만 있어서, 편성을 저장하고 손가락을 따라
+       투기장을 여는 순간 유도가 사라졌다 — v5.112 가 "모달을 연 순간 유도가 사라지면 '그래서 뭘
+       누르라는 건데' 가 된다" 며 매 단계 손가락을 유지하기로 한 설계를 이 단계만 어기고 있었다.
+       9단계 전수 플레이에서 실제로 확인. 확인창([입장]) 은 버튼이 하나라 별도 지목은 두지 않는다. */
+    subs:{ hero:'#formOpenBtn', formation:'.btn.gold', arena:'#arenaEnterBtn' } },
   { k:'mission', goal:1,  modal:'',          txt:'미션 완료 보상을 수령하고 클래스를 선택하세요', base:false, cnt:()=>(S.classTrait?1:0) },
 ];
 /* ★ v5.112: 한 단계 안에서 목표가 둘 이상이면 지목 대상도 바뀐다(STEP8: 편성 → 투기장) */
@@ -3664,7 +3668,9 @@ function introRewards(){
   if(!_t.introResGiven){
     matGain('흑염석', 20); S.stones = (S.stones||0) + 10; S.tickMat = (S.tickMat||0) + 10;
     /* ★ v5.112: STEP7(영웅 합성)용 조각. 소환은 1회당 1~3개를 5개 직업에 무작위로 뿌리므로
-       R등급 요구치(50)를 튜토리얼 안에서 모으는 건 불가능하다 — 막히면 신규가 이탈한다.
+       R등급 요구치(HERO_SHARD_NEED.R — v5.126 부터 80, 종전 50)를 튜토리얼 안에서 모으는 건
+       불가능하다 — 막히면 신규가 이탈한다. 지급량은 상수를 그대로 쓰므로 요구치가 바뀌어도 따라간다.
+       (2026-09-10 실측: 시작 시드 60/20 + 여기서 +80/+80 = 화염 140·서리 100 → 7단계 합성 가능)
        시작 보유 영웅(HERO_001·002)의 직업에 요구치만큼 얹어 '모아서 합성'을 체험만 시킨다. */
     ['HERO_001','HERO_002'].forEach(h=>{ const r=HERO_BY_ID[h]; if(!r) return;
       S.shards[r.class_id]=(S.shards[r.class_id]||0)+HERO_SHARD_NEED.R; });
@@ -4818,6 +4824,7 @@ const MODALS = {
     /* ---- 하단: [입장] / [자동입장] — 탭과 무관하게 항상 유지 ---- */
     const row=el('div','btnrow'); row.style.marginTop='10px';
     const enter=el('button','btn gold wide','입장 (입장권 1)');
+    enter.id='arenaEnterBtn';   /* ★ 2026-09-10: 튜토리얼 8단계 손가락 앵커 (forgeCraftBtn·eqOpenBtn·formOpenBtn 과 같은 방식) */
     enter.onclick=()=>{
       if(busyFight()) return;
       if(S.ticket<1){ toast('입장권이 부족합니다.'); return; }
