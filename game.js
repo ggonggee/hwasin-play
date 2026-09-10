@@ -7228,6 +7228,48 @@ function scheduleUIScale(){
   if(typeof requestAnimationFrame === 'function') requestAnimationFrame(updateUIScale);
   setTimeout(updateUIScale, 250); setTimeout(updateUIScale, 800);
 }
+/* ★ 2026-09-10: 전역 오류 처리기.
+   종전에는 잡히지 않은 예외가 콘솔로만 갔다. 게임 루프의 update/draw 는 각자 try/catch 가 있어
+   프레임이 죽지는 않지만, 그 바깥(모달 render, 클릭 핸들러, 초기화)에서 터지면 화면이 그 자리에
+   멈추고 이용자는 이유를 모른 채 방치된다. 폰에서는 콘솔을 볼 수도 없다.
+   심사·시연 중에 이런 일이 나면 "게임이 멈췄다" 로만 남으므로, 최소한 무슨 일이 났는지 보이고
+   스스로 복구(새로고침)할 수 있게 한다.
+
+   설계 판단 몇 가지:
+   - 막지 않는다. 전체를 덮는 오버레이로 만들면 사소한 오류 하나에 플레이가 통째로 끊긴다.
+     상단 띠로 띄우고 [닫기] 를 준다. 치명적인 경우엔 [새로고침] 을 쓰면 된다.
+   - 세이브를 건드리지 않는다. 오류 시점의 상태가 이미 깨져 있을 수 있어, 여기서 save() 를
+     부르면 깨진 상태를 덮어쓸 위험이 있다. 5초 자동저장이 이미 직전 정상 상태를 남겨 둔다.
+   - 한 번만 띄운다. 같은 오류가 반복되면 개수만 올린다(프레임마다 터지는 경우 폭주 방지).
+   - 처리기 자신이 던지면 무한 루프가 되므로 전체를 try/catch 로 감싼다.
+   - 리소스 로드 실패(이미지 404)는 잡지 않는다 — 그건 캡처 단계에서만 window 에 도달하는데
+     여기서는 버블 단계로만 듣기 때문이다. 아이콘 하나 빠진 것으로 경고를 띄우지 않으려는 것. */
+let _errShown = false, _errCount = 0;
+function reportFatal(label, err){
+  try{
+    _errCount++;
+    const badge = document.getElementById('errbar-count');
+    if(_errShown){ if(badge) badge.textContent = _errCount>1 ? `(${_errCount}건)` : ''; return; }
+    _errShown = true;
+    const msg = (err && (err.message || err.reason && err.reason.message || err.reason)) || err || '알 수 없는 오류';
+    const ver = (document.querySelector('script[src*="game.js"]')||{}).getAttribute
+               ? (document.querySelector('script[src*="game.js"]').getAttribute('src')||'').replace(/^.*v=/,'v') : '';
+    const bar = document.createElement('div');
+    bar.id = 'errbar';
+    bar.innerHTML = `<div class="eb-t">⚠ 오류가 발생했습니다 <span id="errbar-count"></span></div>
+      <div class="eb-m">${String(msg).slice(0,140).replace(/</g,'&lt;')}</div>
+      <div class="eb-v">${label} · ${ver}</div>
+      <div class="eb-btns"><button id="errbar-reload">새로고침</button><button id="errbar-close">닫기</button></div>`;
+    (document.getElementById('device') || document.body).appendChild(bar);
+    const rl = document.getElementById('errbar-reload');
+    const cl = document.getElementById('errbar-close');
+    if(rl) rl.onclick = ()=>location.reload();
+    if(cl) cl.onclick = ()=>{ bar.remove(); _errShown = false; };
+  }catch(_){ /* 처리기 자신의 실패는 삼킨다 — 여기서 던지면 오류 폭주가 된다 */ }
+}
+window.addEventListener('error', (e)=>{ reportFatal('script', e.error || e); });
+window.addEventListener('unhandledrejection', (e)=>{ reportFatal('promise', e.reason || e); });
+
 window.addEventListener('DOMContentLoaded',()=>{
   load(); wire(); refreshHUD();
   scheduleUIScale();

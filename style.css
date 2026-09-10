@@ -1369,3 +1369,21 @@ body{
 .smi .gi img{ width:34px; height:34px; object-fit:contain; }
 .cur .ic img{ width:26px; height:26px; object-fit:contain; }
 .sk img{ width:28px; height:28px; object-fit:contain; }
+
+/* ★ 2026-09-10: 전역 오류 띠 (game.js reportFatal).
+   최상단 z-index — 모달(20)·손가락(30)·토스트(40)·소환연출(60)보다 위에 둔다.
+   모달 render 가 터진 경우에도 보여야 하므로 무엇에도 가려지면 안 된다.
+   화면을 덮지 않고 상단 띠로만 나온다 — 사소한 오류 하나로 플레이를 끊지 않기 위해서다. */
+#errbar{ position:absolute; left:6px; right:6px; top:6px; z-index:70;
+  padding:8px 10px; border-radius:9px;
+  background:linear-gradient(180deg,rgba(70,20,22,.97),rgba(38,12,13,.97));
+  border:1px solid #b8434a; box-shadow:0 4px 14px rgba(0,0,0,.6); }
+#errbar .eb-t{ font-size:var(--fs-base); font-weight:800; color:#ffd9d2; }
+#errbar .eb-m{ margin-top:3px; font-size:var(--fs-sm); color:#f0cfc9; line-height:1.45;
+  word-break:break-word; }
+#errbar .eb-v{ margin-top:3px; font-size:var(--fs-xs); color:#c79a94; }
+#errbar .eb-btns{ display:flex; gap:6px; margin-top:7px; }
+#errbar button{ flex:1; padding:6px 0; border-radius:7px; cursor:pointer;
+  font-size:var(--fs-sm); font-weight:700; font-family:inherit;
+  background:linear-gradient(180deg,#8d3036,#5e1f24); border:1px solid #c05a60; color:#ffe9e5; }
+#errbar button:active{ filter:brightness(1.3); }
