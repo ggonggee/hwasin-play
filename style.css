@@ -145,7 +145,7 @@ body{
 /* ★ v5.23: 전투 배경 — Theme_Dark Background_02 에셋. 1080x1920 를 cover 로 채운다.
    canvas는 투명하게 그려지고 이 배경이 아래에 보인다. 배경 위에 살짝 어둡게 overlay. */
 #stage-wrap{ position:relative; flex:1 1 auto; min-height:0;
-  background:url('assets/bg_battle.png') no-repeat center/cover, #0a0806; }
+  background:url('assets/bg_battle.jpg') no-repeat center/cover, #0a0806; }
 #stage-wrap::before{ content:''; position:absolute; inset:0; z-index:0; pointer-events:none;
   background:rgba(8,6,4,.42); }
 #battle{ position:absolute; inset:0; width:100%; height:100%; display:block; z-index:1; }

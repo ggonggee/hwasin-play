@@ -2607,9 +2607,9 @@ const Battle = (()=>{
     ctx.clearRect(0,0,W,H);
     const sx=shake>0?(Math.random()-0.5)*shake*36:0, sy=shake>0?(Math.random()-0.5)*shake*36:0;
     ctx.save(); ctx.translate(sx,sy);
-    // ★ v5.23: 캔버스 배경 채우기 제거 — #stage-wrap 의 CSS 배경(bg_battle.png)이 보이게.
+    // ★ v5.23: 캔버스 배경 채우기 제거 — #stage-wrap 의 CSS 배경(bg_battle.jpg)이 보이게.
     //   어둡게 하려면 CSS 에서 배경 위에 overlay 를 주면 된다.
-    // ★ v5.33: drawFloor() 제거 — 전투 배경(bg_battle.png)만 표시.
+    // ★ v5.33: drawFloor() 제거 — 전투 배경(bg_battle.jpg)만 표시.
     const fx0 = ctx.createRadialGradient(W*0.08,H*0.14,4, W*0.08,H*0.14,90);
     fx0.addColorStop(0,'rgba(255,130,50,.5)'); fx0.addColorStop(1,'rgba(255,130,50,0)');
     ctx.fillStyle=fx0; ctx.beginPath(); ctx.arc(W*0.08,H*0.14,90,0,7); ctx.fill();
