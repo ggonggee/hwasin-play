@@ -6120,7 +6120,24 @@ const MODALS = {
     const tabs=el('div','tabrow'); TB.forEach(t=>{ const x=el('div','tab'+(t===tab?' on':''),t); x.onclick=()=>{ tab=t; render(); [...tabs.children].forEach((c,i)=>c.classList.toggle('on',TB[i]===tab)); }; tabs.appendChild(x); });
     b.appendChild(tabs); const body=el('div'); b.appendChild(body);
     function render(){ body.innerHTML='';
-      if(tab==='영웅'){ const g=el('div','grid c3'); JOBS.forEach(j=>{ const _b=classBest(j.id); const owned=!!_b; const gr=owned?_b.grade:'N'; const c=el('div','cell gframe grade-'+gr);   /* ★ B4/G-50: 로스터 구조 대응 */ c.innerHTML=`<div class="gtag">${owned?GRADES[gr].name:'미보유'}</div><div class="ei" style="${owned?'':'filter:grayscale(1);opacity:.4'}">${jobIcon(j.id)}</div><div class="cn">${j.name}<br><span class="mut" style="font-size:8px">${j.el}·${j.role}</span></div>`; g.appendChild(c); }); body.appendChild(g); }
+      if(tab==='영웅'){
+        /* ★ v5.146: 직업 5종 요약 → 9영웅 로스터 수집 뷰. 종전엔 직업 아이콘 5칸이라
+           '내가 영웅을 몇 마리 모았나'가 안 보였다(영웅 모달과 정보가 겹치지도 않았다).
+           초상화(HERO_PORTRAIT)·보유 상태·등급·직업을 한눈에 — 몬스터 탭의 처치 기록과
+           같은 '내 컬렉션' 축. 상세(조각 진행·합성)는 영웅 모달이 맡는다. */
+        const own=HERO_ROSTER.filter(r=>heroOwned(r.hero_id)).length;
+        body.appendChild(el('div','hint',`영웅 로스터 <b style="color:var(--ok)">${own}</b>/${HERO_ROSTER.length}종 보유 — 조각을 모아 [영웅 → 합성]으로 해금합니다.`));
+        const g=el('div','grid c3');
+        HERO_ROSTER.forEach(r=>{
+          const e=heroEntry(r.hero_id)||{}, has=!!e.own, G=GRADES[r.grade]||GRADES.N;
+          const c=el('div','cell gframe grade-'+r.grade);
+          c.innerHTML=`<div class="gtag" style="${has?'':'opacity:.55'}">${has?G.name:'미보유'}</div>
+            <div class="ei" style="${has?'':'filter:grayscale(1);opacity:.35'}">${heroPortrait(r.hero_id,2.2)}</div>
+            <div class="cn">${r.name}<br><span class="mut" style="font-size:var(--fs-xs)">${(e.job||{}).name||''}${has?` · Lv${e.level}`:''}</span></div>`;
+          g.appendChild(c);
+        });
+        body.appendChild(g);
+      }
       else if(tab==='몬스터'){
         /* ★ v5.145: 단순 명단 나열 → '수집 기록' 으로 개편. 세 가지 이유:
            ① 종전엔 20종에 7칸짜리 등급 배열(['N','N','R','R','E','E','L'])을 그대로 썐서
@@ -6150,7 +6167,24 @@ const MODALS = {
         });
         body.appendChild(g);
       }
-      else { const g=el('div','grid c3'); SETS.forEach(s=>{ const c=el('div','cell gframe'); c.style.aspectRatio='auto'; c.style.padding='8px 4px'; c.innerHTML=`<div class="ei" style="font-size:20px">🧩</div><div class="cn"><b>${s.n}</b><br><span class="mut" style="font-size:9px">${setFxSummary(s)}</span></div>`; g.appendChild(c); }); body.appendChild(g); }
+      else {
+        /* ★ v5.146: 세트 카드에 착용 진행도와 구성품 아이콘을 보여준다. 종전엔 🧩 이모시와
+           효과 요약뿐이라 '그래서 지금 몇 개 입었지'에 답이 없었다. 아이콘 밝기 = 착용 여부
+           (진행도 숫자 setPieceCount 와 같은 기준 — 세트효과는 보유가 아니라 착용으로 발동).
+           단계별 효과·구성품 명칭은 세트효과 화면(setfx)이 맡는다. */
+        const g=el('div','grid c3');
+        SETS.forEach(s=>{
+          const list=SET_PIECES[s.n]||[], own=setPieceCount(s.n), max=list.length;
+          const worn=nm=>(S.equips||[]).some(e=>e&&e.equipped&&e.slot===nm);
+          const c=el('div','cell gframe'); c.style.aspectRatio='auto'; c.style.padding='8px 4px';
+          c.innerHTML=`<div class="gtag" style="${own>0?'':'opacity:.55'}">${own} / ${max}</div>
+            <div class="cn"><b style="color:${own>0?'var(--g-legend)':'inherit'}">${s.n}</b>${s.multi?' <span class="mut" style="font-size:var(--fs-xs)">3단계</span>':''}<br>
+            <span class="mut" style="font-size:var(--fs-xs)">${setFxSummary(s)}</span></div>
+            <div class="mdrops" style="justify-content:center;margin-top:3px">${list.map(nm=>`<span class="mdrop" title="${nm}" style="${worn(nm)?'':'opacity:.35'}">${equipImg(nm,.75)}</span>`).join('')}</div>`;
+          g.appendChild(c);
+        });
+        body.appendChild(g);
+      }
     }
     render();
   }},
