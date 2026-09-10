@@ -1895,34 +1895,48 @@ const Battle = (()=>{
     }
     return SKILL_FX_CACHE[key];
   }
+  /* ★ 2026-09-10: 스킬 이펙트 프리로드도 '전원 즉시' 에서 '출전 영웅 + 쿨타임 순서' 로 바꿨다.
+     왜: 종전 preloadSkillFx() 는 5직업 × 스킬 4종 × 15프레임 = 파일 360장(7.2MB)을 전투 시작과
+     동시에 전부 요청했다. 실제로 필드에 서는 영웅은 홈 1명·파티 3명뿐인데 나머지 직업 몫까지
+     같이 받는다. 용량보다 '요청 360건' 이 문제다 — 같은 순간 영웅 시트도 받아야 해서 첫 화면이
+     늦어지고, 모바일 회선에서 연결이 서로를 밀어낸다.
+
+     단계는 스킬 쿨타임(SKILL_CD = 1.5 / 9 / 20 / 35초)을 그대로 따른다.
+       1단계 즉시   — 슬롯 0·1 (쿨 1.5초·9초). 전투 시작 직후 바로 나간다.
+       2단계 잠시 뒤 — 슬롯 2·3 (쿨 20초·35초). 20초는 whenIdle 하한(1.2초)보다 한참 뒤다.
+       3단계 요청시 — 출전하지 않은 직업. skillFxSpriteByName 의 기존 지연 로드가 처리한다.
+     ⚠ 슬롯 0을 2단계로 미루지 마라 — 쿨 1.5초라 도착 전에 발동해 이펙트가 한 번 비어 보인다. */
+  function fxNamesFor(hid, jobId){
+    /* 영웅 전용 이펙트 이름이 있으면 그것이 우선(라비스 등), 없으면 직업 기본 */
+    return HERO_FX_NAMES[hid] || SKILL_FX_MAP[jobId] || null;
+  }
+  function warmSkillFx(entries){
+    /* entries: [{hid, jobId}] — jobId 는 오버라이드가 적용된 최종 이펙트 직업 */
+    const later = [];
+    const seen = new Set();
+    (entries||[]).forEach(e=>{
+      if(!e || !e.jobId) return;
+      const sig = e.hid+'|'+e.jobId;
+      if(seen.has(sig)) return;
+      seen.add(sig);
+      const dir = JOB_FX_DIR[e.jobId] || e.jobId;
+      const names = fxNamesFor(e.hid, e.jobId);
+      if(!names) return;
+      names.forEach((name, slot)=>{
+        for(let f=0; f<15; f++){
+          if(slot <= 1) skillFxSpriteByName(dir, name, f);   // 즉시 (쿨 1.5s·9s)
+          else later.push([dir, name, f]);                   // 나중 (쿨 20s·35s)
+        }
+      });
+    });
+    if(later.length) whenIdle(()=>later.forEach(a=>skillFxSpriteByName(a[0],a[1],a[2])));
+  }
+  /* start() 진입점 — 현재 파티 기준. warmHeroSheets 와 같은 출처(party)를 읽는다. */
   function preloadSkillFx(){
-    for(const jobId in SKILL_FX_MAP){
-      const dir = JOB_FX_DIR[jobId] || jobId;
-      for(const name of SKILL_FX_MAP[jobId]){
-        for(let f=0; f<15; f++){
-          const key = dir+'/effects/'+name+'_'+String(f).padStart(2,'0');
-          const im = new Image();
-          im.src = 'assets/heroes/'+key+'.png';
-          SKILL_FX_CACHE[key] = im;
-        }
-      }
-    }
-    /* ★ v5.103: HERO_FX_NAMES 커스텀 이펙트도 프리로드 (라비스 DeathSpell 등) */
-    for(const hid in HERO_FX_NAMES){
-      const jobId = HERO_FX_OVERRIDE[hid] || 'flame';
-      const dir = JOB_FX_DIR[jobId] || jobId;
-      for(const name of HERO_FX_NAMES[hid]){
-        for(let f=0; f<15; f++){
-          const key = dir+'/effects/'+name+'_'+String(f).padStart(2,'0');
-          if(SKILL_FX_CACHE[key]===undefined){
-            const im = new Image();
-            im.src = 'assets/heroes/'+key+'.png';
-            im.onerror=()=>{};
-            SKILL_FX_CACHE[key] = im;
-          }
-        }
-      }
-    }
+    try{
+      const p = (partySrc || party)() || [];
+      warmSkillFx(p.map(h=>h && ({ hid:h.hero_id, jobId:HERO_FX_OVERRIDE[h.hero_id] || (h.job && h.job.id) })));
+    }catch(e){ /* 파티를 못 읽으면 지연 로드 경로가 알아서 처리한다 */ }
   }
   /* ★ v4.9: 종전 0.62 는 '상시 노출되던 content-rail 을 피하려고' 좁혀둔 값이었다.
      아이콘열이 ☰ 토글로 바뀌어 전장을 가리지 않으므로, 채팅 패널 직전까지 쓴다. */
@@ -1990,6 +2004,7 @@ const Battle = (()=>{
     /* ★ 2026-09-10: 필드에 서는 영웅이 확정되는 유일한 지점이라 여기서 시트를 데운다.
        파티를 바꾸거나 홈↔던전을 오갈 때도 자동으로 따라온다(refreshParty→layoutHeroes). */
     warmHeroSheets(heroes.map(h=>h.hid));
+    warmSkillFx(heroes.map(h=>({ hid:h.hid, jobId:HERO_FX_OVERRIDE[h.hid] || (h.job && h.job.id) })));
     renderContribPanel();
   }
   function tierDef(){ return HUNT_TIERS[clamp((S&&S.huntTier)||0,0,HUNT_TIERS.length-1)]; }
@@ -2029,6 +2044,11 @@ const Battle = (()=>{
       /* ★ 2026-09-10: 투기장 적 영웅은 우리 파티에 없는 영웅일 수 있다 — 입장하는 순간 데운다.
          안 데우면 첫 몇 프레임 동안 적이 그림자로만 보인다(지연 로드 경로가 받아오는 사이). */
       warmHeroSheets(foes.map(f=>f.hid));
+      /* ⚠ 여기서 warmSkillFx(foes...) 를 부르지 마라 — 적 영웅은 스킬 이펙트를 그리지 않는다.
+         'skillfx' 이펙트를 만드는 곳은 heroes.forEach 안 한 곳뿐이고(아래 스킬 발동부),
+         적 공격 루프는 'bolt' 만 만들며 drawFoe 도 skillFxSprite 를 참조하지 않는다.
+         한 번 넣었다가 독립 검수에서 '그리지도 않는 자산을 최대 90장 받는다'로 잡혀 뺐다.
+         나중에 적도 스킬 이펙트를 쓰게 만든다면 그때 이 줄을 되살려라. */
     } else { foes=[]; foePartyCP=0; }
     // ★ B5/G-77: kind:'wave' — 웨이브 서바이벌 전용 상태.
     //   몹 '그룹'을 전부 처치하면 waveNo 가 오르고 제한시간(기본 60초)이 리셋된다.
