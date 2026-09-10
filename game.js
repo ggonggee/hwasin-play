@@ -1720,7 +1720,7 @@ const Battle = (()=>{
     'cave_612':0.93,'devil_709':0.93,'field_503':0.90,
   };
   /* ★ v5.49: 9영웅 전체 스프라이트 — hero_id별 개별 에셋 폴더.
-     assets/heroes/sheets/<hero_key>/<anim>.png (스프라이트시트 통째로) */
+     assets/heroes/sheets/<hero_key>/<anim>.webp (스프라이트시트 통째로) */
   const HERO_SPRITE_DIR = {
     'HERO_001':'flame_n','HERO_006':'flame_r',
     'HERO_002':'frost_n','HERO_007':'frost_r',
@@ -1797,7 +1797,7 @@ const Battle = (()=>{
     const key = dir+'/'+anim;
     if(HERO_SHEETS[key]) return;
     const im = new Image();
-    im.src = 'assets/heroes/sheets/'+key+'.png';
+    im.src = 'assets/heroes/sheets/'+key+'.webp';
     im.onerror=()=>{};
     HERO_SHEETS[key] = im;
   }
@@ -2878,7 +2878,7 @@ const Battle = (()=>{
         const key = dir+'/'+animName;
         if(!HERO_SHEETS[key]){
           const im = new Image();
-          im.src = 'assets/heroes/sheets/'+key+'.png';
+          im.src = 'assets/heroes/sheets/'+key+'.webp';
           im.onerror=()=>{};
           HERO_SHEETS[key] = im;
         }
@@ -3023,7 +3023,7 @@ const Battle = (()=>{
         const key = dir+'/'+animName;
         if(!HERO_SHEETS[key]){
           const im = new Image();
-          im.src = 'assets/heroes/sheets/'+key+'.png';
+          im.src = 'assets/heroes/sheets/'+key+'.webp';
           im.onerror=()=>{};
           HERO_SHEETS[key] = im;
         }
