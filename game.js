@@ -6185,6 +6185,10 @@ const MODALS = {
           c.innerHTML=`<div class="gtag" style="${has?'':'opacity:.55'}">${has?G.name:'미보유'}</div>
             <div class="ei" style="${has?'':'filter:grayscale(1);opacity:.35'}">${heroPortrait(r.hero_id,2.2)}</div>
             <div class="cn">${r.name}<br><span class="mut" style="font-size:var(--fs-xs)">${(e.job||{}).name||''}${has?` · Lv${e.level}`:''}</span></div>`;
+          /* ★ v5.153: 카드 탭 → 영웅 화면. 도감은 '대조', 영웅 모달이 '행동'(합성·장비) —
+             미보유를 발견하면 바로 조각을 합성하러 갈 수 있게 한다. */
+          c.style.cursor='pointer';
+          c.onclick=()=>openModal('hero');
           g.appendChild(c);
         });
         body.appendChild(g);
@@ -6211,6 +6215,11 @@ const MODALS = {
             c.innerHTML=`<div class="gtag">${GRADES[t.drop].name}</div><div class="ei">${spr}</div>
               <div class="cn">${t.n}<br><span class="mut" style="font-size:var(--fs-xs)">처치 ${fmt(k)}${bk?` · 군주 ${fmt(bk)}`:''}</span></div>
               <div class="mdrops" style="justify-content:center;margin-top:2px"><span class="mdrop" title="${t.mat}">${matIcon(t.mat)}</span>${t.mat2?`<span class="mdrop" title="${t.mat2}">${matIcon(t.mat2)}</span>`:''}</div>`;
+            /* ★ v5.153: 조우한 몬스터 카드 탭 → 몬스터 선택 화면(해당 등급 탭).
+               도감이 재료 드랍 참고(v5.145)로 쓰이는 만큼 '이 재료 필요 → 도감 확인 →
+               바로 사냥 변경'의 동선이 한 번에 이어진다. 미조우 카드는 정보가 없어 안 데려간다. */
+            c.style.cursor='pointer';
+            c.onclick=()=>{ MODALS.monster._tab=GORDER.indexOf(t.drop); openModal('monster'); };
           } else {
             c.innerHTML=`<div class="gtag" style="opacity:.55">미조우</div><div class="ei" style="filter:grayscale(1) brightness(.3)">${spr}</div><div class="cn" style="opacity:.55">???</div>`;
           }
@@ -6232,6 +6241,9 @@ const MODALS = {
             <div class="cn"><b style="color:${own>0?'var(--g-legend)':'inherit'}">${s.n}</b>${s.multi?' <span class="mut" style="font-size:var(--fs-xs)">3단계</span>':''}<br>
             <span class="mut" style="font-size:var(--fs-xs)">${setFxSummary(s)}</span></div>
             <div class="mdrops" style="justify-content:center;margin-top:3px">${list.map(nm=>`<span class="mdrop" title="${nm}" style="${worn(nm)?'':'opacity:.35'}">${equipImg(nm,.75)}</span>`).join('')}</div>`;
+          /* ★ v5.153: 카드 탭 → 세트효과 화면(단계별 효과·구성품 명칭 상세). */
+          c.style.cursor='pointer';
+          c.onclick=()=>openModal('setfx');
           g.appendChild(c);
         });
         body.appendChild(g);
