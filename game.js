@@ -3524,16 +3524,24 @@ function reviveHUDTick(){
    늘어나야 통과한다. 진행 카운터(n/M)는 트래커에 그대로 렌더된다.
    base:true = 단계 진입 시점 값을 기준선으로 잡고 증분만 센다. */
 const TUT = [
-  { k:'hunt',    goal:20, modal:'monster',   txt:'몬스터를 사냥해 20마리를 처치하세요',        base:true, cnt:()=>(S.stats.kills||0) },
+  /* ★ 2026-09-11: 1단계는 누를 것이 없다 — 자동 사냥이 이미 돌고 있다. 종전엔 [몬스터] 내비를 짚어서
+     눌러 들어가면 아무 할 일도 없는 화면에서 손가락이 사라졌다. 목표 화면 없음 + 대기 문구로 바꾼다. */
+  { k:'hunt',    goal:20, modal:'',          txt:'몬스터를 사냥해 20마리를 처치하세요',        base:true, cnt:()=>(S.stats.kills||0),
+    wait:()=>true, waitTxt:'자동 사냥 중 — 잠시 기다리세요' },
   /* ★ v5.119: 대장간이 방패를 미리 골라 두므로(사전 선택) 손가락은 [제작]만 짚으면 된다 */
   { k:'shield',  goal:1,  modal:'forge',     txt:'대장간에서 방패를 제작하세요',              base:true, cnt:()=>S.equips.filter(e=>(e.slot||'').indexOf('방패')>=0).length,
-    subs:{ forge:'#forgeCraftBtn' } },
+    /* 제작이 걸려 있는 30초 동안은 누를 것이 없다(대기 문구로 남은 시간을 보여준다). 완성되면 결과 팝업의
+       [확인] 을 엔진이 짚는다. 제작 중에 [제작] 을 다시 짚으면 안 되므로 subs 를 함수로 둔다. */
+    wait:()=>!!S.craft, waitTxt:()=>`제작 중 — ${Math.max(0,Math.ceil(((S.craft&&S.craft.endAt)||0)-Date.now())/1000)}초 뒤 완성`,
+    subs:{ forge:()=> S.craft ? null : '#forgeCraftBtn' } },
   /* ★ v5.112: STEP3·4 는 '영웅탭 → 영웅 장비창'에서 장착·강화한다.
      종전엔 인벤토리를 가리켰는데, 인벤토리에는 장착 기능이 없어(영웅 귀속 필요) 흐름이 끊겼다.
      subs = 모달이 열린 뒤 그 안에서 다시 짚어줄 대상 — 다단계 손가락 유도. */
   { k:'wear',    goal:1,  modal:'hero',      txt:'영웅 장비창에서 제작한 장비를 장착하세요',   base:true, cnt:()=>S.equips.filter(e=>e.equipped).length,
+    ovlText:/^장착$/,
     subs:{ hero:'#eqOpenBtn', equip:'.grid.c5 .cell' } },
   { k:'enh',     goal:1,  modal:'hero',      txt:'장착한 장비를 1회 강화하세요',               base:true, cnt:()=>S.equips.reduce((a,e)=>a+(e.enh||0),0),
+    ovlText:/^강화$/,
     subs:{ hero:'#eqOpenBtn', equip:'.eq-fn5 .round-btn' } },
   { k:'hsum',    goal:1,  modal:'summon',    txt:'영웅을 소환해 조각을 모으세요',             base:true, cnt:()=>(S.stats.summons||0),
     subs:{ summon:'#sumHero1 button' } },
@@ -3553,8 +3561,12 @@ const TUT = [
        투기장을 여는 순간 유도가 사라졌다 — v5.112 가 "모달을 연 순간 유도가 사라지면 '그래서 뭘
        누르라는 건데' 가 된다" 며 매 단계 손가락을 유지하기로 한 설계를 이 단계만 어기고 있었다.
        9단계 전수 플레이에서 실제로 확인. 확인창([입장]) 은 버튼이 하나라 별도 지목은 두지 않는다. */
-    subs:{ hero:'#formOpenBtn', formation:'.btn.gold', arena:'#arenaEnterBtn' } },
-  { k:'mission', goal:1,  modal:'',          txt:'미션 완료 보상을 수령하고 클래스를 선택하세요', base:false, cnt:()=>(S.classTrait?1:0) },
+    /* 편성을 이미 저장했으면(formN≥1) 편성 화면에서 더 할 일이 없다 → null 이면 엔진이 ✕ 를 짚어 투기장으로 보낸다. */
+    subs:{ hero:'#formOpenBtn', formation:()=>(((S.tut&&S.tut.formN)||0) ? null : '.btn.gold'), arena:'#arenaEnterBtn' } },
+  /* 9단계: 보상 화면은 tutPoll 이 홈으로 돌아온 순간 자동으로 연다. 그 뒤 [확인]→[선택]→[확정] 은
+     엔진이 TUT_MODAL_PRIMARY(본문 주 버튼) 로 짚는다. 투기장 결과 뒤 열려 있는 투기장 화면은 ✕ 로 유도된다. */
+  { k:'mission', goal:1,  modal:'',          txt:'미션 완료 보상을 수령하고 클래스를 선택하세요', base:false, cnt:()=>(S.classTrait?1:0),
+    wait:()=>!!(S.tut&&S.tut.missionPending), waitTxt:'전투가 끝나면 보상 화면이 열립니다' },
 ];
 /* ★ v5.112: 한 단계 안에서 목표가 둘 이상이면 지목 대상도 바뀐다(STEP8: 편성 → 투기장) */
 function tutModal(t){ return t ? (typeof t.modal==='function' ? t.modal() : t.modal) : ''; }
@@ -3622,36 +3634,140 @@ let _dlgQueue=[], _dlgDone=null;
 function showDialogue(lines, onDone){ _dlgQueue=lines.slice(); _dlgDone=onDone||null; $('#npc-layer').classList.remove('hidden'); nextDialogue(); }
 function nextDialogue(){ if(!_dlgQueue.length){ $('#npc-layer').classList.add('hidden'); const d=_dlgDone; _dlgDone=null; if(d) d(); return; } $('#npcText').textContent=_dlgQueue.shift(); }
 // --- 손가락 포인터 (강제 유도) ---
-function clearFinger(){ document.querySelectorAll('.tut-highlight').forEach(e=>e.classList.remove('tut-highlight')); const f=$('#tutFinger'); if(f) f.remove(); }
-function pointFinger(modalKey){ pointFingerEl(document.querySelector(`[data-modal="${modalKey}"]`)); }
-/* ★ v5.112: 모달 안의 버튼도 짚는다. 하단 네비만 짚고 끝내면 모달을 연 순간
-   유도가 사라져 "그래서 뭘 누르라는 건데" 가 된다(설계상 매 단계 손가락 유지). */
-function pointFingerSel(sel){ const root=$('#modal-root'); if(!root||!root.classList.contains('on')) return; pointFingerEl(root.querySelector(sel)); }
-function pointFingerEl(t){ clearFinger(); if(!t) return; t.classList.add('tut-highlight');
-  const f=el('div','tut-finger','👆'); f.id='tutFinger'; const r=t.getBoundingClientRect(), dr=$('#device').getBoundingClientRect();
-  /* ★ v5.108: 두 rect 는 transform:scale 이 적용된 '화면 좌표'인데, 손가락은 #device 안(453 좌표계)에
-     배치된다 → 배율로 나눠 되돌리지 않으면 화면이 작을수록 목표에서 점점 멀어진다. */
+/* ★ 2026-09-11 전면 재작성 — "손가락만 따라 누르면 척척 진행" 이 되게 한다.
+   대표가 실제 플레이에서 지적한 것들이 전부 종전 구조의 결함이었다:
+   ① 모달을 닫아도 손가락을 다시 계산하지 않아, 모달 안 버튼을 짚던 손가락이 그 자리에 그대로 떠 있었다.
+   ② 단계가 넘어가면 홈 내비를 짚는데 모달이 아직 열려 있어(스크림 아래) 누를 수 없는 곳을 가리켰다.
+   ③ 확인창·결과 팝업·하위 화면(.b5-ovl/.b2-ovl/.sub-ovl)·대사 ▶·닫기 ✕ 에는 손가락이 아예 없었다.
+   ④ subs 에 없는 화면에 들어가면 손가락이 사라지고 나갈 길을 안 알려줬다.
+   ⑤ 위치를 한 번만 재서 스크롤·팝인 애니메이션 뒤엔 어긋났고, STEP 박스에 장식 👆까지 붙어 손가락이 둘로 보였다.
+
+   새 구조는 두 함수다.
+     tutTarget()      — 화면 상태를 위에서부터 훑어 '지금 눌러야 할 요소 하나' 를 정한다.
+                        대사 ▶ → 최상위 팝업의 주 버튼 → 열린 모달의 지목 대상(없으면 ✕) → 홈 내비.
+                        기다려야 할 때(자동 사냥·제작 타이머·전투·소환 연출)는 null.
+     tutFingerTick()  — 매 프레임 tutTarget() 을 다시 구해 손가락을 그 위에 두고 따라간다.
+                        대상이 바뀌면 하이라이트를 옮기고 화면 밖이면 스크롤로 끌어온다. null 이면 숨긴다.
+   ⚠ 손가락을 '한 번 찍고 끝' 으로 되돌리지 마라. 모달 열림/닫힘·팝업·스크롤 어느 하나라도 놓치면 ①②③이 재발한다. */
+const TUT_PRIMARY_TEXT = /^(확인|받기|예|장착|소환|합성|창설|입장|덮어쓰기|제작 시작|확정|선택|강화|불러오기)$/;
+/* 본문에서 주 버튼(받기·확인·소환·선택·확정)을 짚어도 되는 화면.
+   ⚠ '이번 단계의 목표 화면일 때만' 짚어야 한다 — 안 그러면 엉뚱한 모달(예: 합성 단계인데 소환창이
+      열려 있음)에서 그 모달의 버튼을 눌러 버린다. 아래 tutTarget 이 (목표모달 일치 || 터미널)로 건다.
+   TUT_TERMINAL = 단계와 무관하게 '무조건 그 행동을 받아야 넘어가는' 화면(인트로 보상·미션 보상·클래스). */
+const TUT_TERMINAL = { introReward:1, missionReward:1, classTrait:1, classCompare:1 };
+
+function tutVisible(e){
+  if(!e || e.disabled) return false;
+  if(e.classList && e.classList.contains('hidden')) return false;
+  const r=e.getBoundingClientRect(); return r.width>0 && r.height>0;
+}
+function tutTopOverlay(){
+  const root=$('#modal-root'); if(!root) return null;
+  const list=[...root.querySelectorAll('.b5-ovl, .b2-ovl, .sub-ovl')].filter(tutVisible);
+  if(!list.length) return null;
+  const z=e=>e.classList.contains('b5-ovl')?3:e.classList.contains('b2-ovl')?2:1;   // 확인창(32) > 팝업(30) > 하위화면(28)
+  let best=list[0]; list.forEach(e=>{ if(z(e)>=z(best)) best=e; });               // 같은 층이면 나중에 붙은 것
+  return best;
+}
+function tutPrimaryIn(container, allowGold){
+  const btns=[...container.querySelectorAll('button, .btn')].filter(tutVisible);
+  const byText=btns.find(b=>TUT_PRIMARY_TEXT.test((b.textContent||'').trim()));
+  if(byText) return byText;
+  if(allowGold){ const g=btns.find(b=>b.classList.contains('gold')); if(g) return g; }
+  return null;
+}
+function tutSubSel(st, key){
+  const v = st.subs && st.subs[key];
+  return (typeof v==='function') ? v() : (v||null);
+}
+/* 지금 눌러야 할 요소. 없으면 null(=손가락 숨김). */
+function tutTarget(){
+  if(!S || S.seenTutorial) return null;
+  const st=TUT[S.tutStep]; if(!st) return null;
+  const home=$('#home'); if(!home || home.classList.contains('hidden')) return null;
+  // 1) 대사가 떠 있으면 ▶ 부터
+  const npc=$('#npc-layer'); if(npc && !npc.classList.contains('hidden')){ const n=$('#npcNext'); return tutVisible(n)?n:null; }
+  // 2) 소환 연출 중에는 아무것도 못 누른다
+  const fx=$('#summon-fx'); if(fx && fx.classList.contains('on')) return null;
+  const root=$('#modal-root'); const modalOn=!!(root && root.classList.contains('on'));
+  // 3) 최상위 팝업(확인창·결과·하위 화면) — 그 안의 주 버튼, 튜토리얼 경로가 아닌 하위 화면이면 ✕
+  const ovl=tutTopOverlay();
+  if(ovl){
+    /* 단계가 콕 집은 버튼(강화/장착 등)이 이 팝업에 있으면 그것부터 — 장비 상세엔 [장착]·[강화]가 함께 있다. */
+    if(st.ovlText){ const want=[...ovl.querySelectorAll('button, .btn')].filter(tutVisible)
+                      .find(b=>st.ovlText.test((b.textContent||'').trim())); if(want) return want; }
+    if(ovl.classList.contains('sub-ovl')){
+      /* .sub-ovl 은 '화면' 이다. 두 종류로 갈린다:
+         · ✕ 가 없는 것 = 결과 팝업(제작 결과 등) → 반드시 주 버튼(확인)으로 닫아야 진행된다.
+         · ✕ 가 있는 것 = 내용 화면(장비 상세·강화). 단계가 원하는 버튼(ovlText)이 위에서 안 잡혔다면
+           이번 단계와 무관한(이전 단계에서 남은) 화면이므로 ✕ 로 닫아 올바른 곳으로 돌려보낸다. */
+      const x=ovl.querySelector('.sub-x');
+      if(!x){ const p=tutPrimaryIn(ovl, false); return p||null; }
+      return tutVisible(x)?x:null;
+    }
+    /* .b2-ovl / .b5-ovl = 확인·결과 다이얼로그. 반드시 답해야 넘어가므로 항상 주 버튼(예/확인/소환/…). */
+    return tutPrimaryIn(ovl, true);
+  }
+  // 4) 기다려야 하는 단계 — 홈에 있거나 그 단계의 목표 모달 안에 있을 때만(엉뚱한 모달이면 아래에서 ✕)
+  if(st.wait && st.wait() && (!modalOn || currentModal===tutModal(st))) return null;
+  // 5) 모달이 열려 있으면: 그 화면의 지목 대상 → (이번 단계의 목표 화면/터미널이면) 주 버튼 → 아니면 닫기
+  if(modalOn){
+    const sel=tutSubSel(st, currentModal);
+    if(sel){ const t=root.querySelector(sel); if(tutVisible(t)) return t; }
+    const relevant = (currentModal===tutModal(st)) || TUT_TERMINAL[currentModal];
+    if(relevant){ const p=tutPrimaryIn($('#modalBody'), false); if(p) return p; }
+    /* 이번 단계와 무관한 모달이 열려 있다 → 닫아서 올바른 화면으로 돌려보낸다(닫으면 6·7단계로 이어진다). */
+    const x=$('#modalClose'); return tutVisible(x)?x:null;
+  }
+  // 6) 전투 중에는 기다린다
+  if(Battle.inDungeon && Battle.inDungeon()) return null;
+  // 7) 홈 — 이 단계의 목표 화면으로 가는 내비
+  const mk=tutModal(st); if(mk){ const n=document.querySelector(`[data-modal="${mk}"]`); return tutVisible(n)?n:null; }
+  return null;
+}
+let _fingerEl=null, _fingerTarget=null, _fingerWait=null;
+function clearFinger(){
+  document.querySelectorAll('.tut-highlight').forEach(e=>e.classList.remove('tut-highlight'));
+  if(_fingerEl) _fingerEl.style.display='none'; _fingerTarget=null;
+}
+function tutFingerTick(){
+  if(!S || S.seenTutorial){ if(_fingerTarget||_fingerEl&&_fingerEl.style.display!=='none') clearFinger(); return; }
+  const t=tutTarget();
+  const box=$('#onboard'); if(box) box.classList.toggle('over', !!($('#modal-root')&&$('#modal-root').classList.contains('on')));
+  /* 대기 상태 표시 — 손가락이 없는 이유를 STEP 박스에 적는다(없으면 '왜 안 알려주지' 가 된다) */
+  const st=TUT[S.tutStep]; const waiting = !t && !!(st && st.wait && st.wait());
+  if(waiting!==_fingerWait){ _fingerWait=waiting; renderTutorial(); }
+  if(waiting && st.waitTxt){ const w=$('#onboard .ob-wait'); if(w){ const txt=(typeof st.waitTxt==='function')?st.waitTxt():st.waitTxt; if(w.textContent!==txt) w.textContent=txt; } }
+  if(!t){ if(_fingerTarget) clearFinger(); return; }
+  if(!_fingerEl){ _fingerEl=el('div','tut-finger','👆'); _fingerEl.id='tutFinger'; $('#device').appendChild(_fingerEl); }
+  if(t!==_fingerTarget){
+    document.querySelectorAll('.tut-highlight').forEach(e=>e.classList.remove('tut-highlight'));
+    t.classList.add('tut-highlight'); _fingerTarget=t;
+    try{ t.scrollIntoView({block:'nearest', inline:'nearest'}); }catch(e){}
+  }
+  const r=t.getBoundingClientRect(), dr=$('#device').getBoundingClientRect();
+  /* 두 rect 는 transform:scale 이 적용된 '화면 좌표' 인데 손가락은 #device 안(453 좌표계)에 놓인다 →
+     배율로 나눠 되돌린다(v5.108). 매 프레임 다시 재므로 스크롤·팝인 애니메이션 뒤에도 따라간다. */
   const ui=(typeof UI_SCALE==='number' && UI_SCALE>0)?UI_SCALE:1;
-  f.style.left=((r.left-dr.left+r.width/2)/ui-12)+'px'; f.style.top=((r.top-dr.top)/ui-26)+'px'; $('#device').appendChild(f); }
+  _fingerEl.style.display='';
+  _fingerEl.style.left=((r.left-dr.left+r.width/2)/ui-12)+'px';
+  _fingerEl.style.top=((r.top-dr.top)/ui-26)+'px';
+}
 /* ★ B1/G-02: 건너뛰기(.ob-skip) 마크업·핸들러 완전 삭제 — 강제 유도형으로 설계한다. */
 function renderTutorial(){
   const box=$('#onboard'); if(!box) return;
   if(S.seenTutorial || S.tutStep>=TUT.length){ box.classList.add('hidden'); clearFinger(); return; }
   const t=TUT[S.tutStep]; box.classList.remove('hidden');
   const prog=clamp(_tutProg,0,t.goal), pct=Math.round(prog/t.goal*100);
+  const waiting = !!(t.wait && t.wait());
+  const wtxt = waiting ? ((typeof t.waitTxt==='function')?t.waitTxt():(t.waitTxt||'')) : '';
   box.innerHTML=`<div class="ob-step">STEP ${S.tutStep+1}/${TUT.length}</div><div class="ob-txt">${t.txt}</div>`+
-    `<div class="ob-prog"><span class="ob-bar"><i style="width:${pct}%"></i></span><span class="ob-n">${prog}/${t.goal}</span></div>`;
-  const mk=tutModal(t); if(mk) pointFinger(mk); else clearFinger();
+    `<div class="ob-prog"><span class="ob-bar"><i style="width:${pct}%"></i></span><span class="ob-n">${prog}/${t.goal}</span></div>`+
+    (wtxt?`<div class="ob-wait">${wtxt}</div>`:'');
+  tutFingerTick();
 }
 // 모달 오픈은 더 이상 단계를 통과시키지 않는다 — 손가락 유도만 갱신한다(G-01).
-function tutorialProgress(modalKey){
-  if(!S || S.seenTutorial) return;
-  const t=TUT[S.tutStep]; if(!t) return;
-  const sel = t.subs && t.subs[modalKey];
-  /* 모달 본문은 openModal 이 이 함수를 부른 뒤에 그려질 수 있으므로 한 틱 미룬다 */
-  if(sel){ setTimeout(()=>pointFingerSel(sel), 0); return; }
-  if(tutModal(t)===modalKey) clearFinger();
-}
+function tutorialProgress(modalKey){ tutFingerTick(); }
 /* ★ B1/G-04: 미션 완료 보상 5칸 (모달 MODALS.missionReward 에서 렌더) */
 const MISSION_REWARDS = [
   { ic:'🔥', n:'영웅 조각',   q:300, act:()=>{ S.shards.flame=(S.shards.flame||0)+300; } },
@@ -3851,7 +3967,7 @@ function openModal(key, arg){   // ★ B3/G-45: arg 전달 (예: openModal('equi
   if(!same) tutorialProgress(key);
 }
 let _introActive=false;
-function closeModal(){ closeSub(); $('#modal-root').classList.remove('on'); currentModal=null; if(_introActive){ _introActive=false; startGuidedTutorial(); } }
+function closeModal(){ closeSub(); $('#modal-root').classList.remove('on'); currentModal=null; if(_introActive){ _introActive=false; startGuidedTutorial(); } tutFingerTick(); }
 function gradeBadge(g){ const G=GRADES[g]; return `<span style="color:${G.color};font-weight:700">${G.name}</span>`; }
 
 /* ---------- [B2] 제작·합성 공용 헬퍼 ---------- */
@@ -7346,7 +7462,7 @@ function tickForge(){
 }
 function gameLoop(ts){
   const dt=Math.min(0.1,(ts-lastFrame)/1000||0); lastFrame=ts;
-  idleTick(dt); chatTick(dt); craftAutoCheck();
+  idleTick(dt); chatTick(dt); craftAutoCheck(); tutFingerTick();
   hudT-=dt; if(hudT<=0){ hudT=0.5; refreshHUD(); tickClock(); tickForge(); reviveHUDTick(); }
   requestAnimationFrame(gameLoop);
 }

@@ -435,7 +435,7 @@ body{
 #onboard .ob-bar{ flex:1; height:5px; background:#0c0906; border:1px solid #33281a; border-radius:3px; overflow:hidden; }
 #onboard .ob-bar>i{ display:block; height:100%; background:linear-gradient(90deg,#c2a05e,#f0cd82); }
 #onboard .ob-n{ font-size:var(--fs-sm); font-weight:700; color:#f0cd82; }
-#onboard::after{ content:'👆'; position:absolute; right:-4px; bottom:-14px; font-size:var(--fs-xl); animation:obFinger 1s ease-in-out infinite; }
+/* ★ 2026-09-11: STEP 박스에 붙어 있던 장식 👆(#onboard::after) 제거 — 실제 유도 손가락과 둘로 보여 혼란을 줬다. */
 @keyframes obFinger{ 50%{ transform:translateY(3px);} }
 
 /* 가이드 NPC 대사 레이어 */
@@ -474,7 +474,9 @@ body{
 /* ★ v5.120: z-index 13 → 30. 모달(#modal-root z:20)이 열리면 손가락이 그 뒤에 깔려
    모달 안 버튼을 짚는 유도(제작·소환 타일·장비창 등)가 하나도 안 보였다(QA 독립 검증 발견).
    손가락은 pointer-events:none 이라 위에 떠도 조작을 막지 않는다. */
-.tut-finger{ position:absolute; z-index:30; font-size:36px; pointer-events:none;
+.tut-finger{ position:absolute; z-index:45; font-size:36px; pointer-events:none;
+  /* ★ 2026-09-11: 30→45. 확인창(.b5-ovl 32)·팝업(.b2-ovl 30)·하위화면(.sub-ovl 28) 위에도 떠야 그 안의 버튼을 짚는다.
+     토스트(40) 위, 소환 연출(60)·오류 띠(70) 아래. */
   animation:fingerBob .7s ease-in-out infinite;
   filter:drop-shadow(0 0 8px rgba(242,178,58,.9)) drop-shadow(0 2px 4px #000); }
 @keyframes fingerBob{ 0%,100%{ transform:translateY(0) scale(1); } 50%{ transform:translateY(8px) scale(1.1); } }
@@ -1401,3 +1403,12 @@ body{
   font-family:ui-monospace,Consolas,monospace; font-size:var(--fs-xs); line-height:1.4;
   outline:none; word-break:break-all; }
 .save-ta::placeholder{ color:#6c6152; }
+
+/* ★ 2026-09-11: 모달이 열려 있는 동안 STEP 안내 박스를 스크림(#modal-root z:20) 위로 올려 읽히게 한다.
+   종전엔 스크림에 눌려 36% 밝기로 가라앉아, 모달 안에서 "지금 뭘 하라는 거지" 를 볼 수 없었다.
+   상단 좌측 한 줄 띠로 줄이고 오른쪽 70px 은 비워 모달 ✕(.mclose) 를 가리지 않는다. */
+#onboard.over{ z-index:25; top:2px; left:6px; max-width:calc(100% - 70px); padding:4px 8px; }
+#onboard.over .ob-bar{ display:none; }
+#onboard.over .ob-txt{ margin:1px 0 2px; }
+#onboard .ob-wait{ margin-top:3px; font-size:var(--fs-sm); color:#7fd0c0; }
+.tut-highlight.mclose, .tut-highlight.sub-x{ z-index:46 !important; }
