@@ -128,7 +128,8 @@ const refU=[...new Set(refs)];
    _monTicketV      몬스터 소환권 폐지 이관의 판정 플래그. _huntV 와 같은 이유로 여기 둔다.
    _monTicketRefund 그 이관이 남기는 환불 안내량. 표시하고 0 으로 지운다(없으면 안내 생략). */
 const FS_EXEMPT = new Set(['_huntV','_tk','_vm','_monTicketV','_monTicketRefund',
-  '_pendingLoginToast']);   // ★ v5.201: 접속 보상 토스트 플러시 큐 — 휘발성(부팅 중 rollDaily→DOMContentLoaded 사이만 존재). 세이브될 필요 없음.
+  '_pendingLoginToast',
+  '_towerPrevForBanner']);   // ★ v5.208: 탑 신기록 판정용 직전 기록 캡처 — 휘발성(입장~결과창 사이만).   // ★ v5.201: 접속 보상 토스트 플러시 큐 — 휘발성(부팅 중 rollDaily→DOMContentLoaded 사이만 존재). 세이브될 필요 없음.
 const notInFS=refU.filter(x=>!FS_KEYS.includes(x));
 console.log('[C] freshState에 없는 S.필드 참조:', notInFS.length? JSON.stringify(notInFS):'없음 ✅');
 notInFS.forEach(x=>{

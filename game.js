@@ -5927,6 +5927,7 @@ const MODALS = {
         if(dailyLeft('tower',1)<=0){toast('오늘 도전 완료');return;}
         if(S.ticket<1){toast('입장권 부족');return;}
         S.ticket--; dailyUse('tower');                          // ★ G-76 — 차감은 [예] 이후에만
+        S._towerPrevForBanner=S._tower||0;                       // ★ v5.208: 신기록 판정용 직전 기록(reward 전 캡처)
         const foe=600+w*450;
         enterDungeonFight({ name:'불꽃의 탑', col:'#e85a2e', foeCP:foe, kind:'wave', dur:60, waveDur:60, race:true, soloSurvival:true,
           rewardText:'도달 웨이브 비례 보상',
@@ -5935,7 +5936,18 @@ const MODALS = {
             addGold(gold); S.stones+=stn; S.towerBox=(S.towerBox||0)+box;
             if(reach>=10) matGainGrade(pick(['R','E']), 2);   // ★ v4.5.1: 등급풀 폐지 대응
             sysLog(`불꽃의 탑 결과 — <b>${reach} Wave</b> · 골드 +${fmt(gold)} · 강화석 +${stn} · 웨이브 상자 +${box}`); },
-          resultExtra:(bx,win,st)=>{ bx.appendChild(el('div','center big',`도달 ${Math.max(1,(st&&st.wave)||1)} Wave`)); } });
+          /* ★ v5.208: 신기록 연출 — 최고 웨이브 갱신이 조용히 S._tower 에만 반영돼 결과창에서
+             '내가 기록을 세웠는지'를 알 수 없었다. 결과창에 신기록 배너 + legendary 음.
+             직전 기록은 reward(갱신)보다 먼저 잡아야 한다 — resultExtra 는 reward 뒤에 실행되므로. */
+          resultExtra:(bx,win,st)=>{
+            const reach=Math.max(1,(st&&st.wave)||1);
+            const prev=S._towerPrevForBanner;
+            bx.appendChild(el('div','center big',`도달 ${reach} Wave`));
+            if(prev!==undefined && reach>prev){
+              bx.appendChild(el('div','center',`<div style="color:var(--g-legend);font-weight:800;font-size:15px">🏅 신기록! (종전 ${prev} Wave)</div>`));
+              sfx('legendary');
+            }
+          } });
       }, { title:'불꽃의 탑', sub:`입장권 1개 차감 · 오늘 ${left}/1회`, yesFirst:true });
     };
     // [교환]
