@@ -466,6 +466,20 @@ step('몬스터 도감 집계 — 홈 사냥 킬이 codexKills 에 기록된다'
   for(const k of Object.keys(S.codexKills||{})) if(!names.has(k)) throw new Error('실재하지 않는 몬스터명이 집계됨: '+k);
   for(const k of Object.keys(S.codexBossKills||{})) if(!names.has(k)) throw new Error('실재하지 않는 몬스터명이 보스 집계에 있음: '+k);
 });
+/* ★ v5.161: 일일 미션 진행도 회귀 — 종전엔 평생 누적 스탯을 보고 있어 화면 문구 '매일 0시 리셋'과
+   어긋났고 2일차부터 로그인 즉시 전 미션 완료 상태가 됐다. 세 가지를 잠근다:
+   ① 위 전투로 오늘 처치 카운터가 실제로 오르는가 ② 미션 cnt 가 누적 스탯이 아닌 오늘 카운터를
+   보는가 ③ 강제 롤오버 뒤 진행도가 0으로 리셋되는가. */
+step('일일 미션 진행도 — 오늘 처치 기준 + 0시 리셋', ()=>{
+  const S=ev('S'), DQ=ev('DAILY_QUESTS');
+  const todayK=(S.daily&&S.daily.counts&&S.daily.counts.kill)||0;
+  if(todayK<1) throw new Error('64초 홈 사냥 후에도 오늘 처치 카운터 0 — dailyCount 연결이 죽었다');
+  const hunt=DQ.find(q=>q.t.indexOf('500마리')>=0);
+  if(!hunt) throw new Error('DAILY_QUESTS 구성 변경 — 이 검사를 다시 맞춰라');
+  if(hunt.cnt()!==todayK) throw new Error(`일일 미션 진행도(${hunt.cnt()})가 오늘 처치(${todayK})와 다르다 — 누적 스탯 회귀`);
+  S.daily.date='2000-01-01'; ev('dailyUse')('probe');   // 강제 롤오버
+  if((S.daily.counts.kill||0)!==0) throw new Error('0시 리셋 후에도 일일 진행도가 남아 있다');
+});
 /* ★ v5.9: 몬스터 종 수 검증 — 등급당 5종, 총 20종(설계 기준). 마릿수 선택기 기본값 30.
    종전 120종(등급당 30종)은 "30마리" 마릿수 선택기를 도감 종 수로 오독한 것이었다. */
 step('몬스터 종 수 = 20 (등급당 5종) + 마릿수 기본 30', ()=>{

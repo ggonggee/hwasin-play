@@ -1178,14 +1178,19 @@ function chatTitleCheck(text){
   });
 }
 /* ★ B9/G-120: 일일 미션 6행. 보상은 전부 주사위 X n.
-   noBtn=true 인 '보스 3번 도전'은 수령 버튼 없이 진행 텍스트만 노출한다. */
+   noBtn=true 인 '보스 3번 도전'은 수령 버튼 없이 진행 텍스트만 노출한다.
+   ★ v5.161: 진행도는 **오늘** 실적(dailyCount 카운터) 기준이다. 종전엔 평생 누적 스탯
+   (S.stats.*)을 보고 있어 화면 문구 '매일 0시 리셋'과 어긋났고, 2일차부터 로그인 즉시
+   500/3000/5000 전부 완료 상태로 떠 놀 필요 없이 주사위를 매일 수령하던 상태였다.
+   ⚠비전미확인: 진행도 기준(누적/일일)을 확정한 캡처가 없다 — '일일 미션 · 매일 0시 리셋'
+   이라는 자기 표기와의 정합성으로 판단했다. 확정 캡처가 생기면 재검증할 것. */
 const DAILY_QUESTS = [
-  { t:'로그인 하기',           cnt:()=>1,                          goal:1,    rw:20 },
-  { t:'몬스터 500마리 사냥',   cnt:()=>S.stats.kills,              goal:500,  rw:15 },
-  { t:'몬스터 3000마리 사냥',  cnt:()=>S.stats.kills,              goal:3000, rw:35 },
-  { t:'몬스터 5000마리 사냥',  cnt:()=>S.stats.kills,              goal:5000, rw:10 },
-  { t:'보스 3번 도전',         cnt:()=>S.stats.bossChallenges||0,  goal:3,    rw:3,  noBtn:true },
-  { t:'재료 합성 2회',         cnt:()=>S.stats.synths||0,          goal:2,    rw:15 },
+  { t:'로그인 하기',           cnt:()=>1,                                        goal:1,    rw:20 },
+  { t:'몬스터 500마리 사냥',   cnt:()=>_dc('kill'),                             goal:500,  rw:15 },
+  { t:'몬스터 3000마리 사냥',  cnt:()=>_dc('kill'),                             goal:3000, rw:35 },
+  { t:'몬스터 5000마리 사냥',  cnt:()=>_dc('kill'),                             goal:5000, rw:10 },
+  { t:'보스 3번 도전',         cnt:()=>_dc('boss'),                             goal:3,    rw:3,  noBtn:true },
+  { t:'재료 합성 2회',         cnt:()=>_dc('synth'),                            goal:2,    rw:15 },
 ];
 /* ★ B9/G-125: 7일 출석 보상 — 수량 비율 40 : 40 : 150 : 10 : 50 : 20 : 250
    (7일차가 1일차의 6.25배인 잭팟 곡선) */
@@ -1479,6 +1484,14 @@ function rollDaily(){
 }
 function dailyLeft(key, max){ rollDaily(); return max-(S.daily.counts[key]||0); }
 function dailyUse(key){ rollDaily(); S.daily.counts[key]=(S.daily.counts[key]||0)+1; }
+/* ★ v5.161: 일일 '진행' 카운터 — 일일 미션의 진행도용. 종전엔 평생 누적 스탯(S.stats.kills 등)을
+   그대로 보고 있어 화면 문구('매일 0시 리셋')와 어긋나고, 2일차부터 로그인 즉시 전 미션이
+   완료 상태로 떠 놀 필요 없이 주사위 60개를 매일 수령하던 상태였다(2026-09-12 판정).
+   rollDaily() 가 0시에 counts 를 통째로 비우므로 리셋은 이 함수가 부르는 rollDaily 로 자동.
+   수령 여부(dqc*)와 진행(kill/synth/boss)이 같은 객체에 공존한다 — 키 충돌 없게 접두를 다르게. */
+function dailyCount(key, n){ rollDaily(); S.daily.counts[key]=(S.daily.counts[key]||0)+(n||1); }
+/* 진행도 읽기 — S.daily 미충전 구세이브/초기화 직후에도 안전하게 0 (DAILY_QUESTS cnt 가 사용) */
+function _dc(key){ return (S && S.daily && S.daily.counts && S.daily.counts[key]) || 0; }
 
 /* ----------------------------- 유틸 ----------------------------- */
 const $ = s => document.querySelector(s);
@@ -2550,9 +2563,9 @@ const Battle = (()=>{
      바꾸는 시뮬레이션 상태이므로(이 함수 안에서도!) cosmetic 지대 밖에 그대로 둔다 — 다만
      그 블록엔 RNG가 전혀 없어(고정 수식) 결정론에는 영향 없다. */
   function onKill(m,mx,my,boss){
-    if(mode==='dungeon'&&dg){ dg.killed++; S.stats.kills++; sfx(boss?'legendary':'coin'); cosmetic(()=>addGold(ri(200,600))); return; } // 던전 보상은 결과창에서 일괄
+    if(mode==='dungeon'&&dg){ dg.killed++; S.stats.kills++; dailyCount('kill'); sfx(boss?'legendary':'coin'); cosmetic(()=>addGold(ri(200,600))); return; } // 던전 보상은 결과창에서 일괄
     const t=tierDef();
-    S.stats.kills++; sfx(boss?'legendary':'coin');
+    S.stats.kills++; dailyCount('kill'); sfx(boss?'legendary':'coin');
     /* ★ v5.145: 몬스터 도감 집계 — 표시 전용 상태라 시뮬레이션 되먹임 없음(위 stats.kills 와 동일 급).
        던전 모드는 함수 상단에서 return 되므로 홈 사냥 몬스터만 걸린다.
        ★ v5.149: 첫 조우(0→1)와 등급 전종 조우 순간을 토스트+sysLog 으로 축하한다.
@@ -4474,14 +4487,14 @@ const MODALS = {
            <div class="small mut" style="margin-top:4px">${matIcon(m.k,1.5)} ${m.k} X${fmt(500*n)} → ${matIcon(tg.k,1.5)} ${tg.k} X${n}</div>`,
           ()=>{ if(matAvail(sel)<500*n){ toast('재료가 부족합니다.'); return; }
                 for(let i=0;i<n;i++){ matSpend(sel,500); matGain(tg.k,1); }
-                S.stats.synths=(S.stats.synths||0)+n; sfx('craft');
+                S.stats.synths=(S.stats.synths||0)+n; dailyCount('synth',n); sfx('craft');
                 toast(`${tg.k} 확정 합성 X${n}`); sysLog(`${gradeBadge(tg.g)} ${tg.k} 확정 합성 X${n}`); rd(); refreshHUD(); }); };
       const b1=el('button','btn sm','합 성');
       b1.onclick=()=>{ if(!tg){ toast('더 이상 합성할 수 없습니다.'); return; }
         const n=times(30);
         if(n<1||matAvail(sel)<30*n){ toast('재료가 부족합니다.'); return; }
         let ok=0; for(let i=0;i<n;i++){ matSpend(sel,30); if(Math.random()*100<p){ matGain(tg.k,1); ok++; } }
-        S.stats.synths=(S.stats.synths||0)+n;
+        S.stats.synths=(S.stats.synths||0)+n; dailyCount('synth',n);
         if(ok){ sfx('craft'); toast(`합성 성공 ${ok}/${n}`); sysLog(`${gradeBadge(tg.g)} ${tg.k} 합성 성공 X${ok}`); }
         else toast(`합성 실패… (${n}회)`);
         rd(); refreshHUD(); };
@@ -5466,7 +5479,7 @@ const MODALS = {
         styledConfirm('소환 하시겠습니까?', ()=>{
           if(need.find(m=>matAvail(m[0])<m[1])){ toast('재료가 부족합니다'); return; }
           need.forEach(m=>matSpend(m[0],m[1]));                 // ← 차감은 [예] 이후에만
-          S.stats.bossChallenges=(S.stats.bossChallenges||0)+1; // ★ B9/G-120 일일미션 '보스 3번 도전' 카운터
+          S.stats.bossChallenges=(S.stats.bossChallenges||0)+1; dailyCount('boss'); // ★ B9/G-120 일일미션 '보스 3번 도전' 카운터(누적은 stats, 일일 진행은 dailyCount — v5.161)
           enterDungeonFight({ name:bt.n, col:G.color, foeCP:bt.foe, kind:'boss', dur:30,
             rewardText:`${G.name} 재료 드랍`,
             reward:()=>{ if(bt.drop) bt.drop();
@@ -5766,7 +5779,8 @@ const MODALS = {
           const c=q.cnt(), goal=q.goal, met=c>=goal, done=dailyLeft('dqc'+i,1)<=0;
           const row=el('div','pack');
           row.innerHTML=`<div class="pic">${q.noBtn?eImg("👹",2):done?'✅':met?eImg("🎁",2):'📋'}</div><div class="info"><div class="t">${q.t}</div>`+
-            `<div class="d">${Math.min(c,goal)}/${goal} · 보상 ${eImg("🎲",2)} X${q.rw}</div></div>`;
+            /* ★ v5.161: noBtn 행은 진행 숫자를 아래 dq-prog 에만 보여준다(종전엔 .d 에도 있어 3/3이 두 번). */
+            `<div class="d">${q.noBtn?`하루 도전 누적 · 보상 ${eImg("🎲",2)} X${q.rw}`:`${Math.min(c,goal)}/${goal} · 보상 ${eImg("🎲",2)} X${q.rw}`}</div></div>`;
           if(q.noBtn){ row.appendChild(el('div','dq-prog',`${Math.min(c,goal)}/${goal}`)); }
           else {
             const btn=el('button','btn sm'+(met&&!done?' gold':''),done?'완료':'받기'); btn.disabled=!met||done;
