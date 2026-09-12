@@ -737,6 +737,17 @@ step('곡괭이 제작 → 칭호 조건 플래그', ()=>{
   // 칭호 조건 연결 확인 — titleHave(have) 함수
   if(!ev('TITLES').find(t=>t.id==='minecert').have()) throw new Error('견습 광부증 칭호 조건 미충족');
 });
+/* ★ v5.212: 물약 보유 회복 가산 — 미보유 0 · 종류별 0.05 · 동일이름 중복 1종. */
+step('물약 보유 회복 — 종류당 +0.05/s · 중복 1종', ()=>{
+  const S=ev('S'), pr=ev('potionRegenAdd');
+  const keep=S.equips;
+  S.equips=[];  if(pr()!==0) throw new Error('물약 없는데 '+pr());
+  S.equips=[{grade:'N',slot:'물약'},{grade:'R',slot:'상급 물약'}];
+  if(pr()!==0.1) throw new Error('2종 '+pr()+' ≠ 0.1');
+  S.equips=[{grade:'N',slot:'물약'},{grade:'N',slot:'물약'}];
+  if(pr()!==0.05) throw new Error('중복이 2종으로 셈해짐: '+pr());
+  S.equips=keep;
+});
 step('제작시간 배율 — 버프 on 0.5배 · off 1배 (칭호 기준 상대 비교)', ()=>{
   const S=ev('S'), mul=ev('craftTimeMul'), tmul=ev('titleCraftTimeMul');
   S.buffs.craftUntil=0;

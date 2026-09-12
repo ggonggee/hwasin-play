@@ -1666,6 +1666,20 @@ function heroShardAvail(hid){ const r=HERO_BY_ID[hid]; if(!r) return 0;
   return heroShardOwn(hid) + ((S.shards && S.shards[r.class_id])||0); }
 /* ★ v5.206: 직업 공용 조각 보유 — 소환 화면 칩용(전용 조각 제외, 순수 직업 풀). */
 function heroShardAvailByClass(classId){ return (S.shards && S.shards[classId])||0; }
+/* ★ v5.212: 물약 자동 회복 — 플레이버 '전투 중 자동으로 소모되어 체력을 회복합니다'가
+   구현 없는 허구였다(2026-09-13 감사, 정합 10호 — 고서 v5.210·곡괭이 v5.211 과 같은 축).
+   설계: 보유(착용 불필요)한 물약 종류 수만큼 자연 회복률 가산.
+   - 종류: 물약(N) · 상급 물약(R) — 2종 최대.
+   - 배율: 종류당 자연 회복 +100%(0.05/s → 최대 0.15/s). '소모'는 하지 않는다 —
+     소모 재화로 만들면 전투 중 아이템 관리라는 새 축이 생기는데, 이 데모의 전투는
+     자동이므로 '관리'가 재미가 아니라 짐이 된다. 보유 버프(고서와 동일 원칙)로.
+   - 자연 회복 가산이므로 결정론(D1~D5) 무영향 — RNG 없음. */
+function potionRegenAdd(){ return 0.05 * countPotionKinds(); }
+function countPotionKinds(){
+  const kinds=new Set();
+  (S&&S.equips||[]).forEach(e=>{ if(e && e.slot && e.slot.indexOf('물약')>=0) kinds.add(e.slot); });
+  return kinds.size;
+}
 function heroShardAdd(hid,n){ if(!S.heroShards || typeof S.heroShards!=='object') S.heroShards={};
   S.heroShards[hid]=(S.heroShards[hid]||0)+n; }
 function heroShardSpend(hid,n){ const r=HERO_BY_ID[hid]; if(!r) return false;
@@ -2349,7 +2363,9 @@ const Battle = (()=>{
         }
         return;
       }
-      h.hp = Math.min(1, h.hp + 0.05*dt); // 자연 회복
+      /* 자연 회복 + 물약 보유 가산(v5.212) — 플레이버 '자동으로 소모되어 회복'의 구현.
+         potionRegenAdd 는 순수 계산(보유 종류 수×0.05)이라 RNG·시뮬 상태 무영향. */
+      h.hp = Math.min(1, h.hp + (0.05 + potionRegenAdd())*dt);
       h.atkT -= dt;
       /* 스킬 쿨타임 감소 + 스킬 애니메이션 타이머 */
       if(h.skillCD) for(let si=0;si<4;si++) h.skillCD[si]=Math.max(0,(h.skillCD[si]||0)-dt);
