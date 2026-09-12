@@ -402,7 +402,9 @@ function itemFlavor(name){
   if(n.indexOf('신발')>=0||n.indexOf('목걸이')>=0) return '공격 속도·이동 속도 상승';
   if(n.indexOf('반지')>=0||n.indexOf('귀걸이')>=0||n.indexOf('팔찌')>=0||n.indexOf('인장')>=0) return '치명타 확률·치명타 공격력 상승';
   if(n.indexOf('고서')>=0) return '보유 시 계정 전체 스탯이 상승합니다';
-  if(n.indexOf('정수')>=0) return '보스가 드랍하는 고유 재료로 제작됩니다';
+  /* ★ v5.213: 정수 플레이버 정정 — '보스가 드랍하는 고유 재료로 제작'은 사실이 아니었다:
+     정수는 일반 등급 재료로 제작되는 특수 부위 장비다. 보스 전용 재료라는 재료는 없다. */
+  if(n.indexOf('정수')>=0) return '특수 부위 장비 — 일반 등급 재료로 제작됩니다';
   if(n.indexOf('물약')>=0) return '전투 중 자동으로 소모되어 체력을 회복합니다';
   if(n.indexOf('곡괭이')>=0) return '채굴 칭호 획득 조건 아이템';
   return '마법 공격력·치명타 확률·치명타 공격력·공격 속도 상승';
@@ -2175,6 +2177,9 @@ const Battle = (()=>{
         skillCD:[0,0,0,0],
         animFrame:0, animT:0, skillAnim:null, skillAnimT:0,  /* ★ v5.36: 스프라이트 애니메이션 */
         _lockTarget:null, _lockUntil:0, _row:5,  /* ★ v5.78: 방향 락온 */
+        /* ★ v5.213: 방패 주기 회복 타이머 — 착용 중인 방패(귀속 허용)가 있으면 활성.
+           layoutHeroes 가 파티 변경·모드 전환 때마다 재호출되므로 여기가 유일한 초기화 지점. */
+        shieldT: (S.equips||[]).some(e=>e&&e.equipped&&(!e.heroId||e.heroId===h.hero_id)&&slotSchema(e.slot).part==='방패') ? 17 : undefined,
       };
     });
     partyCP = Math.max(1, heroes.reduce((a,h)=>a+h.cp,0));
@@ -2366,6 +2371,16 @@ const Battle = (()=>{
       /* 자연 회복 + 물약 보유 가산(v5.212) — 플레이버 '자동으로 소모되어 회복'의 구현.
          potionRegenAdd 는 순수 계산(보유 종류 수×0.05)이라 RNG·시뮬 상태 무영향. */
       h.hp = Math.min(1, h.hp + (0.05 + potionRegenAdd())*dt);
+      /* ★ v5.213: 방패 주기 회복 — 플레이버 '17초마다 최대 체력의 20% 회복'이 구현 없는
+         허구였다(정합 11호 — 고서/곡괭이/물약 감사에 이어 발견).
+         착용 중인 방패(이 영웅 귀속)에 한해 17초마다 20%p 회복. 타이머는 시뮬 프레임에서
+         순수 누산이므로 결정론 무영향 — D3(프레임 교란 내성)는 같은 시간이면 같은 결과를
+         보장하므로 회복 시점도 시간의 함수로만 결정된다. */
+      if(h.shieldT!==undefined){
+        h.shieldT -= dt;
+        if(h.shieldT<=0){ h.shieldT += 17; h.hp = Math.min(1, h.hp + 0.2);
+          fx.push({type:'dmg', x:h.x, y:h.y-30, t:0, val:'+20%', crit:false, color:'#7fe08a'}); }
+      }
       h.atkT -= dt;
       /* 스킬 쿨타임 감소 + 스킬 애니메이션 타이머 */
       if(h.skillCD) for(let si=0;si<4;si++) h.skillCD[si]=Math.max(0,(h.skillCD[si]||0)-dt);

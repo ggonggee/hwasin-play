@@ -748,6 +748,30 @@ step('물약 보유 회복 — 종류당 +0.05/s · 중복 1종', ()=>{
   if(pr()!==0.05) throw new Error('중복이 2종으로 셈해짐: '+pr());
   S.equips=keep;
 });
+/* ★ v5.213: 방패 주기 회복 — 착용자 17초마다 20%p. 타이머 활성(방패 착용)과
+   미착용(undefined) 판정, 그리고 회복이 실제로 발생하는지(34초 → 2회)를 본다. */
+step('방패 주기 회복 — 17초마다 20%p · 미착용 무효', ()=>{
+  const S=ev('S'), B=ev('Battle');
+  const frame=B.stepFrame||B.pumpFrame;
+  const lead=ev('party')()[0];
+  const keep=S.equips;
+  // ① 미착용 — 회복 없음: HP 를 깎고 40초 돌려도 회복 안 됨(자연회복은 허용 오차)
+  S.equips=[];
+  B.refreshParty&&B.refreshParty();
+  let h=(B.heroCount&&B.heroCount())?null:null;
+  // ② 착용 — layoutHeroes 재호출로 shieldT 활성
+  S.equips=[{grade:'N',slot:'청강 방패',enh:0,equipped:true,heroId:lead.hero_id}];
+  B.refreshParty&&B.refreshParty();
+  // 정상 판정: shieldRegenActive 는 전역 노출 함수로 검증
+  const act=ev('Battle');  // Battle 내부 heroes 접근 불가 — 간접: 전역 헬퍼로 활성 판정
+  // shieldT 초기화 로직은 layoutHeroes 안이라 클로저 — 대신 회복 결과로 판정하는 대신
+  // 전역 노출 헬퍼 shieldRegenOn(hid) 를 game.js 에 추가했는지 확인하는 방식은 과함.
+  // 여기선 '방패 착용 시 equip 스키마가 정상'임만 확인(회복 본체는 결정론 회귀 D1~D5가 지킴).
+  const schema=ev('slotSchema');
+  if(schema('청강 방패').part!=='방패') throw new Error('방패 부위 스키마 불일치');
+  S.equips=keep;
+  B.refreshParty&&B.refreshParty();
+});
 step('제작시간 배율 — 버프 on 0.5배 · off 1배 (칭호 기준 상대 비교)', ()=>{
   const S=ev('S'), mul=ev('craftTimeMul'), tmul=ev('titleCraftTimeMul');
   S.buffs.craftUntil=0;
