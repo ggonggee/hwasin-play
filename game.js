@@ -4266,6 +4266,14 @@ function craftParams(grade, cat, itemName){
   return { p0, gold:(ov?ov.gold:base.gold), sec:(ov?ov.sec:base.sec), guide:!!ov };
 }
 function recipeOk(recipe){ return (recipe||[]).every(r=>matAvail(r.k)>=r.need); }
+/* ★ v5.187: 분해 환급액 — 제작 골드의 50% + 강화 단계당 5%p, 상한 90%.
+   상한이 없으면 +10에서 환급=원가, +11+부터 골드 순환 이익이 생긴다(스모크가 잡아낸 결함 —
+   강화 투자 반영과 '항상 손실' 원칙을 둘 다 살리는 값). 골드로도 항상 적게 돌려주므로
+   제작→분해 순환 이익은 구조적으로 불가능하다. */
+function salvageValue(e){
+  const base=(CRAFT[e.grade]||CRAFT.N).gold;
+  return Math.floor(base*Math.min(0.9, 0.5+(e.enh||0)*0.05));
+}
 /* ★ v5.151: 제작 시작 로직 — 종전엔 대장간 모달 클로저(startCraft) 안에만 있었다.
    결과 팝업의 [다시 제작] 이 같은 판정·차감 경로를 쓰게 하려고 밖으로 뺐다(내용은 이동일 뿐).
    종료의 openModal('forge', item.n) 은 v5.119 사전 선택 — 제작 시작 후에도 그 아이템이
@@ -7069,7 +7077,25 @@ function itemDetail(e, heroId){ _itemDetailHeroId=heroId||null;
             sysLog(`${x.s.n} ${now}세트 효과 발동`); } });
         Battle.refreshParty(); openModal('equip', _itemDetailHeroId); refreshHUD(); } }); };
   const enh=el('button','btn wide','강화'); enh.onclick=()=>openEnhance(e);
-  row.append(eq,enh); b.appendChild(row);
+  /* ★ v5.187: 분해 — 미장착 장비 처분. 종전엔 처분 수단이 없어 같은 이름 99개(v5.171 상한)까지
+     쌓이기만 했다. 환급 = 제작 골드의 50% + 강화 단계당 5%p — 제작(100%)+강화 비용보다 항상
+     적어 제작→분해 순환 이익이 구조적으로 불가능하다(손실 확정형 싱크).
+     착용 중 장비는 분해 불가(해제 UI가 없으므로 v5.148 '착용 해제 불가' 원칙과 정합). */
+  const sal=el('button','btn wide', e.equipped?'분해 (착용 중)':'분해');
+  if(e.equipped) sal.disabled=true;
+  sal.onclick=()=>{
+    if(e.equipped){ toast('착용 중인 장비는 분해할 수 없습니다.'); return; }
+    const gold=salvageValue(e);
+    styledConfirm(`정말 분해하시겠습니까?`, ()=>{
+      S.equips=S.equips.filter(x=>x!==e);
+      addGold(gold);
+      toast(`${GRADES[e.grade].name} ${e.slot} 분해 · 골드 +${fmt(gold)}`);
+      sysLog(`장비 분해 — ${GRADES[e.grade].name} ${e.slot} → 골드 ${fmt(gold)}`);
+      sfx('coin');
+      openModal('inventory'); refreshHUD();
+    }, { title:'장비 분해', sub:`${GRADES[e.grade].name} ${e.slot}${e.enh?' +'+e.enh:''} → 골드 ${fmt(gold)} 회수` });
+  };
+  row.append(eq,enh,sal); b.appendChild(row);
   const back=el('button','btn sm','◀ 장비 착용창'); back.style.marginTop='8px'; back.onclick=()=>openModal('equip'); b.appendChild(back);
 }
 

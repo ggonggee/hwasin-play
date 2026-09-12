@@ -624,6 +624,17 @@ step('장비 정렬 정본 sortEquipList — 등급→강화→최신 + 원본 �
 });
 /* ★ v5.176: 제작시간 배율 정본 — 표시와 판정(craftStart endAt)이 같은 craftTimeMul 을 쓴다.
    버프 on/off 배율이 어긋나면 화면 시간과 실제 완성 시각이 갈라진다(2026-09-12 실측 결함). */
+/* ★ v5.187: 분해 환급 산식 — ① 제작가 50%+강화 5%p/단 ② 제작 원가보다 항상 적다(순환 이익
+   구조적 불가) ③ 강화 만렙(+20) 환급도 원가 미만. */
+step('장비 분해 — 환급 산식·항상 손실 원칙', ()=>{
+  const sv=ev('salvageValue'), CRAFT=ev('CRAFT');
+  const n={grade:'N',slot:'잿불 단검',enh:0};
+  const l10={grade:'L',slot:'결정 대검',enh:10};
+  if(sv(n)!==Math.floor(CRAFT.N.gold*0.5)) throw new Error('N 환급 오차: '+sv(n));
+  if(sv(l10)!==Math.floor(CRAFT.L.gold*0.9)) throw new Error('L+10 환급 오차(상한 90%): '+sv(l10));
+  if(sv(l10)>=CRAFT.L.gold) throw new Error('환급이 제작 원가 이상 — 순환 이익 경로 생성');
+  if(sv({grade:'N',enh:20})>=CRAFT.N.gold) throw new Error('강화 만렙 환급이 원가 이상');
+});
 step('제작시간 배율 — 버프 on 0.5배 · off 1배 (칭호 기준 상대 비교)', ()=>{
   const S=ev('S'), mul=ev('craftTimeMul'), tmul=ev('titleCraftTimeMul');
   S.buffs.craftUntil=0;
