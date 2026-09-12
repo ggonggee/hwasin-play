@@ -630,6 +630,17 @@ step('세트 구성품 전량이 제작 가능 — 획득 불가 세트 부재',
   ev('GUIDE_CHAIN').forEach(g=>{ if(!names.has(g.slot)) orphans.push('길잡이 '+g.slot); });
   if(orphans.length) throw new Error(`제작할 수 없는 구성품 ${orphans.length}건: `+orphans.join(' / '));
 });
+/* ★ v5.181: 사냥터 CP 곡선 단조성 — 등급 내 순증가 + 등급 경계(N최강 < R최약 < …).
+   곡선이 꺾이면 '더 높은 등급인데 더 약한' 몬스터가 생겨 보상 구조(wp gold/cp 연동)가
+   뒤틀린다. 데이터를 고칠 때 이 게이트가 지켜준다(2026-09-12 감사: 현재 단조 ✓). */
+step('사냥터 CP 곡선 단조성 — 등급 내·등급 경계', ()=>{
+  const HT=ev('HUNT_TIERS');
+  let prev=-1;
+  for(let i=0;i<HT.length;i++){
+    if(HT[i].cp < prev) throw new Error(`CP 비단조 @${HT[i].n}: ${HT[i].cp} < ${prev}`);
+    prev=HT[i].cp;
+  }
+});
 step('재료 24종 전부에 고정 드랍 몬스터가 있는지 (mat+mat2 ⊇ MATS)', ()=>{
   const HT=ev('HUNT_TIERS'), MATS=ev('MATS');
   const dropped=new Set();
