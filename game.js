@@ -1024,7 +1024,8 @@ const TOWER_REWARD = [
      성공 스트릭 5(R,+2%p) → 10(E,+5%p) → 15(L,+7%p)   (성공 축은 '영웅등급 이상' 제작만 집계)
    [e] = 게임 로직에 물리는 효과 데이터. titleEff()/titleGoldMul() 등 헬퍼만 이 필드를 읽는다.
      gold=골드 배수 가산 · exp=경험치 배수 가산 · ctime=제작시간 가산(음수=단축)
-     crate=제작확률 가산(%p) · mine=채굴 권한 · minedmg=채굴 피해 · spawn=몬스터 소환 수 증가 */
+     crate=제작확률 가산(%p) · mine=채굴 권한 · spawn=몬스터 소환 수 증가.
+     ★ v5.226: minedmg(채굴 피해)는 소비처가 없어 폐지 — 이 게임에 채굴 전투가 없다. */
 const TITLE_GRADES = {
   N: { n:'일반',      c:'#9aa0a6' },
   R: { n:'희귀',      c:'#3b82f6' },
@@ -1128,7 +1129,7 @@ const TITLES = [
     have:()=>{ try{ return Object.keys(S.heroEnh||{}).filter(k=>(S.heroEnh[k]|0)>=20).length>=2; }catch(e){ return false; } } },
   { id:'ironhand',   g:'L',  n:'황금 대장장이', fx:'몬스터 골드 획득량 +30%', e:{gold:0.30},
     cond:'루비 75,000개 보유',                              have:()=>S.ruby>=75000 },
-  { id:'laborer',    g:'L',  n:'숙련 광부',    fx:'채굴 권한 + 몬스터 골드 획득량 +15% + 채굴 피해 +100%', e:{mine:true, gold:0.15, minedmg:1.0},
+  { id:'laborer',    g:'L',  n:'숙련 광부',    fx:'채굴 권한 + 몬스터 골드 획득량 +15%', e:{mine:true, gold:0.15},
     cond:'‘찬란한 곡괭이’ 획득',                            have:()=>!!(S.picks&&S.picks.shine) },
   /* ★ A2 정정 — 종전 '코스튬 8종 보유' 매핑은 오답이었다(조건을 세트가 아닌 컬렉션으로 잘못 읽음).
      조건 원문 실측: docs/reference/기능별/10_퀘스트_업적_보상/캡처_2026_07_22_06_37_15_316.png
