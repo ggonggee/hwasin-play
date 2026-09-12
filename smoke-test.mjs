@@ -518,6 +518,15 @@ step('소환 피티 확률식 — 기본/소프트/하드 경계 고정', ()=>{
   }
   if(!ev('S')) throw new Error('S 없음');
 });
+/* ★ v5.167: 공지 미열람 — 새 공지가 있으면 unseen>0, 공지 화면을 열면 읽음 처리되어 0.
+   이 검사가 죽으면 공지가 추가돼도 아무한테 알려지지 않는다(조용히 죽는 유형). */
+step('공지 미열람 배지 — 열람 전 unseen>0, 열람 후 0', ()=>{
+  const S=ev('S');
+  if(ev('noticeUnseen')()<1) throw new Error('미열람 공지가 0 — 새 공지가 없거나 추적이 죽었다');
+  ev('openModal')('notice');
+  if(ev('noticeUnseen')()!==0) throw new Error('공지를 열었는데도 미열람이 남아 있다');
+  if(S.noticeSeen!==ev('NOTICES').length) throw new Error('noticeSeen 이 공지 수와 일치하지 않는다');
+});
 /* ★ v5.9: 몬스터 종 수 검증 — 등급당 5종, 총 20종(설계 기준). 마릿수 선택기 기본값 30.
    종전 120종(등급당 30종)은 "30마리" 마릿수 선택기를 도감 종 수로 오독한 것이었다. */
 step('몬스터 종 수 = 20 (등급당 5종) + 마릿수 기본 30', ()=>{

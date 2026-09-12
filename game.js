@@ -1205,6 +1205,17 @@ const ATTEND_DAYS = [
 ];
 /* ★ B9/G-134: 공지 — 제목 밴드 + 양피지 서술형 본문 (목록 → 상세 2단) */
 const NOTICES = [
+  /* ★ v5.167: 공지판이 7월의 '데모 v0.1.0' 공지에 얼어 있었다 — v5 시즌의 변화를 알리는
+     공지를 최상단에 추가한다(오리지널 문구). NOTICES.length 를 noticeSeen 과 비교해
+     미열람 점이 켜지므로, 공지를 새로 추가하면 점이 자동으로 살아난다. */
+  { cat:'[업데이트]', ic:'📜', t:'대장간의 불이 다시 타오릅니다 — 수집과 연출의 시대', d:'2026-09-12',
+    body:'군주님들께 알립니다.<br><br>화로가 한동안 뜨겁게 달아올랐습니다. 이번 시기의 결실을 전해 드립니다.<br><br>'+
+      '· <b>몬스터 도감</b>이 처치 기록장으로 태어났습니다. 조우한 몬스터마다 처치 수가 새겨지고, 등급 도감을 완성하면 그 업적이 온 전장에 알려집니다.<br>'+
+      '· 사냥터마다 하늘빛이 달라졌습니다. 이끼 낀 평원에서 서리 내린 능선, 잔불 들판을 지나 공허의 땅까지.<br>'+
+      '· 연달아 몰려드는 무리를 한 호흡에 베어내면 <b>연속 처치</b>의 갈채가 화면에 타오릅니다.<br>'+
+      '· 대장간은 이제 <b>지금 만들 수 있는 것</b>부터 보여 줍니다. 실패한 벼림도 한 번에 다시 시작하세요.<br>'+
+      '· 일일 임무가 참된 "일일"이 되었습니다 — 오늘의 실적이 오늘 채워집니다.<br><br>'+
+      '쇠는 두드릴수록 단단해집니다. 군주님의 결정을 기다립니다.' },
   { cat:'[점검]', ic:'🛠️', t:'주간 랭킹 정산 정기 점검 안내', d:'2026-07-27',
     body:'군주님들께 알립니다.<br><br>매일 오전 <b>10:00 ~ 12:00</b> 사이 서버 랭킹 정산 점검이 진행됩니다. 점검 시간 동안에는 월드보스·길드 레이드·점령전 입장이 제한되며, 진행 중이던 전투는 자동으로 종료되고 보상은 그대로 지급됩니다.<br><br>길드 랭킹은 <b>매주 월요일 오전 11시</b>에 초기화됩니다. 초기화 직전에 획득한 기여도는 정산에 반영되지 않을 수 있으니 여유를 두고 참여해 주시기 바랍니다.<br><br>점검으로 불편을 드려 죄송합니다.' },
   { cat:'[이벤트]', ic:'🎉', t:'매월 루비 2배 프로모션', d:'2026-07-20',
@@ -1323,6 +1334,9 @@ function freshState(){
     // ★ B1 신규 — G-01 튜토리얼 진행 관측 / G-04 보상 1회 지급 / G-11 길드 미가입 / G-13 자동전투 표시
     tut:{ base:{}, matBase:null, matN:0, formSig:'', formN:0 },
     _missionPaid:false,
+    /* ★ v5.167: 공지 미열람 추적 — 마지막으로 열람한 시점의 공지 수. NOTICES.length 와 비교해
+       미열람 점(v5.162 rdot)을 켠다. 공지를 새로 추가하면 이 값보다 늘어나 점이 자동 부활. */
+    noticeSeen:0,
     guild:null,
     autoBattle:true,   // ★ v5.28: 신규 사용자 혼란 방지 — 기본 On (전투는 어차피 항상 돌지만 토글 표시 일치)
   };
@@ -1503,6 +1517,8 @@ function attendClaimable(){
   if(!S || S.attendLastDate===today()) return false;
   return ATTEND_DAYS.some((_,i)=>!(S.claimed&&S.claimed.attend&&S.claimed.attend[i]));
 }
+/* ★ v5.167: 공지 미열람 수 — NOTICES.length 가 읽은 수(noticeSeen)보다 많으면 unseen. */
+function noticeUnseen(){ return (S && NOTICES) ? Math.max(0, NOTICES.length-(S.noticeSeen||0)) : 0; }
 function _setDot(parent, on){
   if(!parent) return;
   /* querySelector 대신 children 직접 스캔 — 스모크 스텁 DOM 의 Element.querySelector 는
@@ -1514,10 +1530,11 @@ function _setDot(parent, on){
   else if(!on && dot) dot.remove();
 }
 function refreshClaimBadges(){
-  const q=questClaimable(), a=attendClaimable();
+  const q=questClaimable(), a=attendClaimable(), n=noticeUnseen()>0;
   _setDot(document.querySelector('[data-modal="quest"]'), q);
   _setDot(document.querySelector('[data-modal="attend"]'), a);
-  _setDot(document.getElementById('btnMenuToggle'), q||a);
+  _setDot(document.querySelector('[data-modal="notice"]'), n);   // ★ v5.167: 공지 미열람
+  _setDot(document.getElementById('btnMenuToggle'), q||a||n);
 }
 
 /* ----------------------------- 유틸 ----------------------------- */
@@ -6325,6 +6342,9 @@ const MODALS = {
   /* ★ B9/G-134: 압축 나열 → 제목 밴드 + 양피지 서술형 본문 단일 상세뷰 (다건이므로 목록→상세 2단) */
   notice:{ title:'공지', render(b){
     const list=NOTICES;
+    /* ★ v5.167: 공지를 열면 읽음 처리 — 미열람 점(rdot)이 꺼진다. 목록만 봐도 읽은 것으로
+       친다(제목·날짜가 목록에 전부 보이므로). */
+    S.noticeSeen=list.length;
     const body=el('div'); b.appendChild(body);
     function detail(i){
       const n=list[i]; body.innerHTML='';
