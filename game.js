@@ -1702,9 +1702,16 @@ function heroPortrait(heroId, size){
   return '<img src="assets/heroes/portraits/'+p+'.webp" style="width:'+s+'em;height:'+s+'em;object-fit:contain;image-rendering:pixelated" alt="">';
 }
 
+/* ★ v5.170: 그래픽 품질 설정을 실제 렌더링에 반영한다 — 종전엔 값이 저장·표시만 되는
+   위약 설정이었다(렌더링이 읽는 곳 0건, 2026-09-12 실측).
+   하 = 캔버스 픽셀비 1 + 파티클(spark) 생략 · 중 = 픽셀비 1.5 + 파티클 절반 · 상 = 현행(픽셀비 상한 3).
+   파티클은 cosmetic 연출이라 수를 줉여도 시뮬레이션·판정 무영향(결정론 D1~D5 무관).
+   데미지 숫자·드랍 아이콘·콤보는 정보 전달이므로 품질과 무관하게 유지한다. */
+function gfxQ(){ try{ return (S&&S.settings&&S.settings.graphic)||'상'; }catch(e){ return '상'; } }
+function gfxSpark(){ return gfxQ()==='하'?0:gfxQ()==='중'?0.5:1; }
+
 const Battle = (()=>{
-  let cv, ctx, W=0, H=0, dpr=1;
-  let heroes=[], mobs=[], fx=[], drops=[], wave=1, spawnT=0, last=0, running=false, shake=0, lastBossWave=0;
+  let cv, ctx, W=0, H=0, dpr=1;  let heroes=[], mobs=[], fx=[], drops=[], wave=1, spawnT=0, last=0, running=false, shake=0, lastBossWave=0;
   /* ★ v5.165: 킬 콤보(전투 연출) — 1.5초 안에 연달아 처치하면 콤보가 이어진다. 표시 전용
      모듈 변수라 시뮬레이션 결과·RNG 와 무관(결정론 D1~D5 무영향). 5콤보부터 표시. */
   let combo=0, comboT=0, comboPop=0;
@@ -2033,7 +2040,8 @@ const Battle = (()=>{
     W = cv.offsetWidth || cv.clientWidth || 453;
     H = cv.offsetHeight || cv.clientHeight || 548;
     const ui = (typeof UI_SCALE === 'number' && UI_SCALE > 0) ? UI_SCALE : 1;
-    dpr = Math.min((window.devicePixelRatio||1) * ui, 3);
+    /* ★ v5.170: 그래픽 품질이 픽셀비 상한을 정한다 — 상 3(현행) · 중 1.5 · 하 1. */
+    dpr = Math.min((window.devicePixelRatio||1) * ui, gfxQ()==='하'?1:gfxQ()==='중'?1.5:3);
     cv.width = Math.max(1, Math.round(W*dpr)); cv.height = Math.max(1, Math.round(H*dpr));
     ctx = cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
     layoutHeroes();
@@ -2193,7 +2201,8 @@ const Battle = (()=>{
   }
   function dmgText(x,y,val,crit,color){ fx.push({ type:'dmg', x, y, val, t:0, crit, color: color||(crit?'#ffd36a':'#ffffff') }); }
   /* ★ M1: 파티클 물리(각도·속도)는 연출용 — 시뮬레이션 상태에 되먹임 없음. cosmetic 지대에서 전역 rnd() 유지 */
-  function spark(x,y,color){ cosmetic(()=>{ for(let i=0;i<7;i++){ const a=rnd(0,6.28),s=rnd(30,80); fx.push({type:'spark',x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,t:0,color}); } }); }
+  function spark(x,y,color){ const q=gfxSpark(); if(q<=0) return;   /* ★ v5.170: 품질 '하'는 파티클 생략 — 유일한 발생 통로라 여기서 끊는다 */
+    cosmetic(()=>{ const n=Math.max(1,Math.round(7*q)); for(let i=0;i<n;i++){ const a=rnd(0,6.28),s=rnd(30,80); fx.push({type:'spark',x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,t:0,color}); } }); }
   function drop(x,y,kind){ // 우상단 재화 아이콘으로 흡수(lerp)
     const tx = kind==='gold'? W*0.62 : W*0.5, ty = -H*0.02;
     drops.push({ x, y, sx:x, sy:y, tx, ty, t:0, kind });
@@ -6395,7 +6404,8 @@ const MODALS = {
     const gr=el('div','pack'); gr.innerHTML=`<div class="pic">🖼️</div><div class="info"><div class="t">그래픽 품질</div><div class="d">현재 · ${S.settings.graphic||'상'}</div></div>`;
     const gw=el('div','optbtns');
     ['상','중','하'].forEach(q=>{ const qb=el('button','btn sm'+(S.settings.graphic===q?' gold':''),q);
-      qb.onclick=()=>{ S.settings.graphic=q; toast(`그래픽 품질 · ${q}`); openModal('settings'); }; gw.appendChild(qb); });
+      qb.onclick=()=>{ S.settings.graphic=q; toast(`그래픽 품질 · ${q}`); if(typeof Battle!=='undefined'&&Battle.resize) Battle.resize();   /* ★ v5.170: 픽셀비 상한 즉시 재적용 */
+        openModal('settings'); }; gw.appendChild(qb); });
     gr.appendChild(gw); b.appendChild(gr);
     // ② 계정
     const ar=el('div','pack'); ar.innerHTML=`<div class="pic">👤</div><div class="info"><div class="t">계정</div><div class="d">${S.name} · ${S.server}</div></div>`;

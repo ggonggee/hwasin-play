@@ -527,6 +527,16 @@ step('공지 미열람 배지 — 열람 전 unseen>0, 열람 후 0', ()=>{
   if(ev('noticeUnseen')()!==0) throw new Error('공지를 열었는데도 미열람이 남아 있다');
   if(S.noticeSeen!==ev('NOTICES').length) throw new Error('noticeSeen 이 공지 수와 일치하지 않는다');
 });
+/* ★ v5.170: 그래픽 품질이 위약이 아닌지 — 설정값이 실제 렌더 파라미터(gfxSpark·픽셀비 상한)로
+   내려오는지 잠근다. 다시 죽으면 '하'를 눌러도 아무것도 달라지지 않는 설정으로 되돌아간다. */
+step('그래픽 품질 — 파티클/픽셀비 반영 값', ()=>{
+  const S=ev('S'), g=ev('gfxSpark');
+  for(const [q,want] of [['하',0],['중',0.5],['상',1]]){
+    S.settings.graphic=q;
+    if(g()!==want) throw new Error(`품질 ${q} 파티클 계수 ${g()} ≠ ${want}`);
+  }
+  S.settings.graphic='상';
+});
 /* ★ v5.9: 몬스터 종 수 검증 — 등급당 5종, 총 20종(설계 기준). 마릿수 선택기 기본값 30.
    종전 120종(등급당 30종)은 "30마리" 마릿수 선택기를 도감 종 수로 오독한 것이었다. */
 step('몬스터 종 수 = 20 (등급당 5종) + 마릿수 기본 30', ()=>{
