@@ -1492,6 +1492,33 @@ function dailyUse(key){ rollDaily(); S.daily.counts[key]=(S.daily.counts[key]||0
 function dailyCount(key, n){ rollDaily(); S.daily.counts[key]=(S.daily.counts[key]||0)+(n||1); }
 /* 진행도 읽기 — S.daily 미충전 구세이브/초기화 직후에도 안전하게 0 (DAILY_QUESTS cnt 가 사용) */
 function _dc(key){ return (S && S.daily && S.daily.counts && S.daily.counts[key]) || 0; }
+/* ★ v5.162: 수령 가능 보상 배지 — 일일 미션(받기 가능)과 7일 출석(금일 미수령)을 ☰ 메뉴와
+   해당 항목의 빨간 점으로 알린다. 5초 저장 타이머에 묻어가 전투 중 달성도 최대 5초 안에 켜진다.
+   DOM 표시 전용 — 상태 변경·경제 영향 없음. 부팅 직후(S=null) 5초 틱에 닿지 않게 가드. */
+function questClaimable(){
+  if(!S) return false;
+  return DAILY_QUESTS.some((q,i)=> !q.noBtn && q.cnt()>=q.goal && dailyLeft('dqc'+i,1)>0);
+}
+function attendClaimable(){
+  if(!S || S.attendLastDate===today()) return false;
+  return ATTEND_DAYS.some((_,i)=>!(S.claimed&&S.claimed.attend&&S.claimed.attend[i]));
+}
+function _setDot(parent, on){
+  if(!parent) return;
+  /* querySelector 대신 children 직접 스캔 — 스모크 스텁 DOM 의 Element.querySelector 는
+     스코프를 무시하고 문서 전역을 뒤져(스텁 구조 한계) ☰ 의 점을 퀘스트 항목의 점으로
+     오인하게 된다. 실브라우저에서도 동작이 같은 이 방식이 안전하다. */
+  let dot=null;
+  Array.from(parent.children||[]).forEach(c=>{ if(!dot && c.classList && c.classList.contains('rdot')) dot=c; });
+  if(on && !dot) parent.appendChild(el('div','rdot'));
+  else if(!on && dot) dot.remove();
+}
+function refreshClaimBadges(){
+  const q=questClaimable(), a=attendClaimable();
+  _setDot(document.querySelector('[data-modal="quest"]'), q);
+  _setDot(document.querySelector('[data-modal="attend"]'), a);
+  _setDot(document.getElementById('btnMenuToggle'), q||a);
+}
 
 /* ----------------------------- 유틸 ----------------------------- */
 const $ = s => document.querySelector(s);
@@ -3246,6 +3273,7 @@ function refreshHUD(){
   if(S.craft){ const left=Math.max(0,Math.ceil((S.craft.endAt-Date.now())/1000)); ct.textContent = left>0? mmss(left) : '완성!'; }
   else ct.textContent='00:00';
   tutPoll();   // ★ B1/G-01: 튜토리얼 실제 완료 이벤트 폴링
+  refreshClaimBadges();   // ★ v5.162: 수령 가능 배지 — 수령 직후 즉시 꺼지게(5초 타이머와 별개)
 }
 function mmss(s){ const m=Math.floor(s/60), ss=s%60; return String(m).padStart(2,'0')+':'+String(ss).padStart(2,'0'); }
 function tickClock(){ const base = 6*3600 + Math.floor(S.playSec)*60; const hh=Math.floor(base/3600)%24, mm=Math.floor(base/60)%60; $('#clock').textContent = String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0'); updateSkillCD(); }
@@ -7493,7 +7521,7 @@ function gameLoop(ts){
   hudT-=dt; if(hudT<=0){ hudT=0.5; refreshHUD(); tickClock(); tickForge(); reviveHUDTick(); }
   requestAnimationFrame(gameLoop);
 }
-setInterval(()=>{ save(); }, 5000);
+setInterval(()=>{ save(); refreshClaimBadges(); }, 5000);   /* ★ v5.162: 배지 갱신 동반 — 전투 중 미션 달성도 5초 안에 점이 켜진다 */
 
 function enterHome(){
   $('#title').classList.add('hidden');

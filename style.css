@@ -136,10 +136,19 @@ body{
 .cur .ic{ width:17px; height:17px; display:inline-flex; align-items:center; justify-content:center; font-size:var(--fs-base); }
 .cur span:last-child{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:64px; }
 .cur.gold .ic{ color:var(--gold);} .cur.ruby .ic{ color:var(--ruby);}
-.iconbtn{ flex:0 0 auto; width:26px; height:26px; cursor:pointer;
-  background:linear-gradient(180deg,#31251a,#150f0a); border:1px solid var(--frame); border-radius:50%;
+.iconbtn{ flex:0 0 auto; width:26px; height:26px; cursor:pointer;  background:linear-gradient(180deg,#31251a,#150f0a); border:1px solid var(--frame); border-radius:50%;
   color:var(--txt); font-size:var(--fs-md); display:flex; align-items:center; justify-content:center; }
 .iconbtn:active{ filter:brightness(1.35); }
+
+/* ★ v5.162: 수령 가능 보상 빨간 점 — 일일 미션(받기 가능)·7일 출석(금일 미수령)에 달린다.
+   사이드레일이 ☰ 로 접혀 있으면 항목 점이 안 보이므로 ☰ 자체에도 통합 점이 붙는다
+   (refreshClaimBadges). '받을 게 있다'를 플레이어가 스스로 찾아보게 하지 않기 위한 것.
+   부모(.ci/.smi/.iconbtn)는 relative 로 승격 — 절대배치 점의 기준이 된다. */
+.ci, .smi, .iconbtn{ position:relative; }
+.rdot{ position:absolute; top:2px; right:3px; width:7px; height:7px; border-radius:50%;
+  background:#ff4437; box-shadow:0 0 5px rgba(255,68,55,.85); pointer-events:none; z-index:6;
+  animation:rdot-pulse 1.6s ease-in-out infinite; }
+@keyframes rdot-pulse{ 0%,100%{ transform:scale(1); opacity:1; } 50%{ transform:scale(1.5); opacity:.6; } }
 
 /* --- 전장 --- */
 /* ★ v5.23: 전투 배경 — Theme_Dark Background_02 에셋. 1080x1920 를 cover 로 채운다.

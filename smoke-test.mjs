@@ -480,6 +480,32 @@ step('일일 미션 진행도 — 오늘 처치 기준 + 0시 리셋', ()=>{
   S.daily.date='2000-01-01'; ev('dailyUse')('probe');   // 강제 롤오버
   if((S.daily.counts.kill||0)!==0) throw new Error('0시 리셋 후에도 일일 진행도가 남아 있다');
 });
+/* ★ v5.162: 수령 가능 배지 — 검증 단위를 둘로 나눈다.
+   ① 판정 함수(questClaimable/attendClaimable): 수령 가능 → 수령 처리 → false → 자정 롤오버 → true 복귀.
+   ② _setDot: createElement 노드 위 점 부착/해제/중복 방지.
+   DOM 연결(refreshClaimBadges 의 querySelector)은 스텁이 attribute 선택자를 지원하지 않아
+   (id 외엔 매번 가짜 Node2 반환 — 2026-09-12 실측) 브라우저 전용 몫으로 남는다. */
+step('수령 가능 배지 — 판정 함수 전이 + 점 토글 동작', ()=>{
+  const qc=ev('questClaimable'), ac=ev('attendClaimable'), setDot=ev('_setDot');
+  if(!qc()) throw new Error('신규 상태인데 퀘스트 수령 가능 아님 — 로그인 미션 판정이 죽었다');
+  if(!ac()) throw new Error('금일 미수령인데 출석 수령 가능 아님');
+  ev('dailyUse')('dqc0');                       // 로그인 미션(인덱스 0) 수령 처리
+  ev('S').attendLastDate=ev('today')();          // 출석 금일 완료로 봉인
+  if(qc()) throw new Error('수령 후에도 퀘스트 수령 가능 true');
+  if(ac()) throw new Error('금일 출석 후에도 출석 수령 가능 true');
+  ev('S').daily.date='2000-01-01'; ev('S').attendLastDate='';   // 자정 롤오버 시뮬레이션
+  if(!qc()) throw new Error('롤오버 후 로그인 미션이 다시 수령 가능해야 한다');
+  if(!ac()) throw new Error('롤오버 후 출석이 다시 수령 가능해야 한다');
+  const doc=windowStub.document;
+  const n=doc.createElement('div'); n.appendChild(doc.createElement('span'));
+  const dots=()=>Array.from(n.children).filter(c=>c.classList&&c.classList.contains('rdot'));
+  setDot(n,true);
+  if(dots().length!==1) throw new Error('_setDot(on) 이 점을 정확히 1개 붙이지 못했다');
+  setDot(n,true);
+  if(dots().length!==1) throw new Error('점이 중복으로 붙었다');
+  setDot(n,false);
+  if(dots().length!==0) throw new Error('_setDot(off) 가 점을 못 뗐다');
+});
 /* ★ v5.9: 몬스터 종 수 검증 — 등급당 5종, 총 20종(설계 기준). 마릿수 선택기 기본값 30.
    종전 120종(등급당 30종)은 "30마리" 마릿수 선택기를 도감 종 수로 오독한 것이었다. */
 step('몬스터 종 수 = 20 (등급당 5종) + 마릿수 기본 30', ()=>{
