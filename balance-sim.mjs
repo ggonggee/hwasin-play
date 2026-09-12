@@ -113,28 +113,68 @@ function pickHuntIdx(){
   let idx=0; HT.forEach((t,i)=>{ if(safe(i)) idx=i; });
   return idx;
 }
-/* 아직 제작 불가(재료 부족)인 최고 등급 아이템의 부족 재료 목록 */
-function nextWantedMaterials(){
-  const FS=ev('FORGE_SLOTS'), S=ev('S'), schema=ev('slotSchema'), leader=leaderId();
-  const worn=new Set(S.equips.filter(e=>e.equipped&&(!e.heroId||e.heroId===leader)).map(e=>schema(e.slot).part));
-  const cands=[];
-  FS.forEach(s=>{ if(!s.items) return; ['L','E','R','N'].forEach(g=>{
-    (s.items[g]||[]).forEach(it=>{
-      if(it.n.indexOf('물약')>=0) return;
-      if(S.gold<ev('craftParams')(g,s.k,it.n).gold) return;
-      const lack=(it.recipe||[]).filter(r=>(S.mats[r.k]||0)<r.need);
-      if(lack.length) cands.push({grade:g, part:schema(it.n).part, lack});
-    });
-  });});
-  const order={L:3,E:2,R:1,N:0};
-  cands.sort((a,b)=> order[b.grade]-order[a.grade]);
-  const fresh=cands.filter(c=>!worn.has(c.part));
-  const pick=(fresh[0]||cands[0]);
-  return pick?pick.lack.map(l=>l.k):null;
-}
+/* 부위×등급 후보 전부 수집(골드 무관) — v3.1 정책의 데이터원.
+   v3의 실수: 부위마다 '최고 등급' 하나만 남겼더니 그 등급이 재료 불충분이면
+   하위 등급 업그레이드도 사지 않는 마비 상태가 됐다(시작 직후 제작 0건 실측). */
 function leaderId(){
   // party()[0] — 편성 없으면 전투력 최상. 홈 전투는 이 영웅 1명이 나간다.
   return ev('party')()[0].hero_id;
+}
+function upgradeCandidates(){
+  const FS=ev('FORGE_SLOTS'), S=ev('S'), schema=ev('slotSchema'), leader=leaderId();
+  const order={L:3,E:2,R:1,N:0};
+  const wornGrade={};
+  S.equips.forEach(e=>{ if(e.equipped&&(!e.heroId||e.heroId===leader)){
+    const pt=schema(e.slot).part; wornGrade[pt]=Math.max(wornGrade[pt]||-1, order[e.grade]); }});
+  const out=[];
+  FS.forEach(s2=>{ if(!s2.items) return;
+    for(const g of ['L','E','R','N']){
+      (s2.items[g]||[]).forEach(it=>{
+        if(it.n.indexOf('물약')>=0) return;
+        if(S.equips.filter(x=>x.slot===it.n).length>=99) return;
+        const pt=schema(it.n).part;
+        if((wornGrade[pt]??-1)>=order[g]) return;               // 이미 같거야 높은 등급 착용
+        out.push({grade:g, cat:s2.k, item:it, part:pt,
+                  cost:ev('craftParams')(g,s2.k,it.n).gold,
+                  recOK:ev('recipeOk')(it.recipe)});
+      });
+    }});
+  return out;
+}
+/* 저축형 구매: 재료가 되는 후보 중 '살 수 있는 최고 등급'을 산다. 없으면 null(저축). */
+function bestCraftable(){
+  const S=ev('S'), order={L:3,E:2,R:1,N:0};
+  const can=upgradeCandidates().filter(u=>u.recOK&&S.gold>=u.cost)
+    .sort((a,b)=> order[b.grade]-order[a.grade] || a.cost-b.cost);
+  return can[0]||null;
+}
+/* 파밍 방향 v3.2: 목표는 등급 높은 순, 단 '지금 안전하게 잡을 수 있는 등급'의 재료만.
+   종전엔 항상 최상위(L) 목표의 재료를 쫓게 했다 — L몬스터가 안전하지 않으면 그 재료는
+   지금 얻을 수 없는데도 계속 쫓아 실질 파밍이 멈췄다(3.5h 정체 실측). */
+function nextWantedMaterials(){
+  const order={L:3,E:2,R:1,N:0};
+  const HT=ev('HUNT_TIERS'), cp=myCP(), MAT_BY_KEY=ev('MAT_BY_KEY');
+  let maxSafe=-1;
+  HT.forEach(t=>{ if(cp>=t.cp) maxSafe=Math.max(maxSafe, order[t.drop]); });
+  const ups=upgradeCandidates().sort((a,b)=> order[b.grade]-order[a.grade] || a.cost-b.cost);
+  for(const u of ups){
+    const lack=(u.item.recipe||[]).filter(r=>(ev('S').mats[r.k]||0)<r.need);
+    if(!lack.length) continue;
+    const ok=lack.every(r=>order[(MAT_BY_KEY[r.k]||{}).g]!==undefined && order[MAT_BY_KEY[r.k].g]<=maxSafe);
+    if(ok) return lack.map(l=>l.k);
+  }
+  return null;
+}
+/* 재료 합성 — synth 모달의 실제 규칙(30개→rateOf 확률 / 500개→확정, nextOf 동일 인덱스 상위).
+   시뮬은 확률합성을 batch 로 돌린다(모달의 '합 성 XN' 과 동일한 기대값). */
+/* 제작 후 즉시 판정 — craftStart 로 실제 경로(재료·골드 차감)를 타고, 타이머를 0으로 */
+function craftNow(grade, catKey, item){
+  ev('craftStart')(grade, catKey, item);
+  const S=ev('S');
+  if(!S.craft) return false;
+  S.craft.endAt=0;
+  ev('craftAutoCheck')();
+  return true;
 }
 /* 장착 — itemDetail 의 onYes 와 같은 규칙: 같은 영웅 같은 부위 기존 장비 파괴 */
 function equip(item, heroId){
@@ -149,41 +189,36 @@ function equip(item, heroId){
   item.equipped=true; item.heroId=heroId;
   ev('Battle').refreshParty();
 }
-/* 제작 후 즉시 판정 — craftStart 로 실제 경로(재료·골드 차감)를 타고, 타이머를 0으로 */
-function craftNow(grade, catKey, item){
-  ev('craftStart')(grade, catKey, item);
+/* 일일 콘텐츠 (골드던전 3회 · 요일던전 5회) — 테이블 정본(GOLD_DUNGEON/DD_*)에서
+   실제 지급과 같은 값을 준다. enterDungeonFight 가 UI 클로저라 직접 호출 대신
+   동일 지급을 재현한다(측정 도구로서 합리적 근사 — 수치는 정본 테이블).
+   소환서 골드 구매(상점 15,000,000/10장, 실측 라인 724)도 여기서 — 소환이
+   골드화로 이어지는 게 의도된 F2P 루프다. */
+function dailyStep(){
   const S=ev('S');
-  if(!S.craft) return false;
-  S.craft.endAt=0;
-  ev('craftAutoCheck')();
-  return true;
+  const day=Math.floor(simSec/86400);
+  if(day===dailyStep._day) return; dailyStep._day=day;
+  const cp=myCP();
+  // 골드던전 — 오늘 3회, foeCP ≤ 내 CP 인 최고 단계
+  let left=3;
+  for(let i=ev('GOLD_DUNGEON').length-1;i>=0&&left>0;i--){
+    const d=ev('GOLD_DUNGEON')[i];
+    if(d.foe<=cp*1.5 && ev('matAvail')(d.mat)>=d.need){
+      const n=Math.min(left, Math.floor(ev('matAvail')(d.mat)/d.need));
+      ev('matSpend')(d.mat, d.need*n); ev('addGold')(d.gold*n); left-=n;
+    }
+  }
+  // 요일던전 — 오늘 5회, 3단계(영웅 재료) 가능하면 최대한
+  const DD_RQ=ev('DD_RQ'); const ti=(new Date().getDay()+6)%7;
+  let dl=5;
+  for(const st of [3,2,1]){
+    const rg=['N','R','E'][st-1], qty=Math.max(1,Math.round(DD_RQ[ti]/3*st));
+    const foe=[800,2200,5200][st-1];
+    if(foe<=cp*1.5&&dl>0){ const n=Math.min(dl,5); for(let k=0;k<n;k++) ev('matGainGrade')(rg,qty); dl=0; }
+  }
+  // 소환서 구매 — 골드 여유(16M+)면 10장 팩 (E제작 800k 예산은 항상 확보)
+  while(S.gold>=16000000){ S.gold-=15000000; S.tickHero+=10; }
 }
-/* 제작 가능한 최선 후보 v2 — 안 입은 부위 우선, 같은 부위면 높은 등급.
-   (v1은 등급만 보고 첫 후보를 만들어 같은 부위를 계 갈아끼우는 낭비를 했다) */
-function bestCraftable(){
-  const FS=ev('FORGE_SLOTS'), GORDER=['N','R','E','L'];
-  const S=ev('S'), schema=ev('slotSchema'), leader=leaderId();
-  const worn=new Set(S.equips.filter(e=>e.equipped&&(!e.heroId||e.heroId===leader)).map(e=>schema(e.slot).part));
-  const pool=[];
-  FS.forEach(s=>{ if(!s.items) return; ['L','E','R','N'].forEach(g=>{
-    (s.items[g]||[]).forEach(it=>{
-      const cp=ev('craftParams')(g,s.k,it.n);
-      if(!ev('recipeOk')(it.recipe) || S.gold<cp.gold) return;
-      if(S.equips.filter(x=>x.slot===it.n).length>=99) return;      // v5.171 상한
-      if(it.n.indexOf('물약')>=0) return;                            // 소모성 — 장착 정책에서 제외(실사용자와 동일)
-      pool.push({grade:g, cat:s.k, item:it, part:schema(it.n).part});
-    });
-  });});
-  /* v2.1: 등급 내림차순 정렬 — 종전엔 카테고리 순서(무기 먼저)라 N무기가 R방어구보다 먼저
-     뽑혀 200h에도 N장비를 장착하고 있었다(진단 실측). 등급 우선이 합리적 플레이어다. */
-  const order={L:3,E:2,R:1,N:0};
-  pool.sort((a,b)=> order[b.grade]-order[a.grade]);
-  const fresh=pool.filter(p=>!worn.has(p.part));
-  const list=fresh.length?fresh:pool;
-  return list[0]||null;
-}
-/* 재료 합성 — synth 모달의 실제 규칙(30개→rateOf 확률 / 500개→확정, nextOf 동일 인덱스 상위).
-   시뮬은 확률합성을 batch 로 돌린다(모달의 '합 성 XN' 과 동일한 기대값). */
 function synthStep(){
   const GORDER=['N','R','E','L'], S=ev('S');
   const MAT_BY_GRADE=ev('MAT_BY_GRADE'), MAT_BY_KEY=ev('MAT_BY_KEY');
@@ -234,13 +269,14 @@ S0.settings.sound=false;
 let simSec=0;
 const WINDOW=1800;                 // 30분(시뮬) 전투 창 — 수입률 측정·실제 킬
 const events=[];                   // {t(시), cp, what}
+const craftTally={};               // ★ v5.185 진단: 등급별 제작 시도 집계
 
 events.push({t:0, cp:myCP(), what:'시작 — '+ev('party')()[0].name});
 
 log(`\n[밸런스 시뮬] 시드 42 · 최대 ${MAX_HOURS}시뮬시간 · 창 ${WINDOW/60}분\n`);
 let lastCP=myCP(), lastEventT=0, windows=0;
 const gradeReached={};
-while(simSec < MAX_HOURS*3600 && windows<400){
+while(simSec < MAX_HOURS*3600 && windows<1600){
   // ① 사냥터 선택(합리적 플레이)
   const idx=pickHuntIdx();
   ev('S').huntTier=idx; ev('Battle').setHunt();
@@ -251,7 +287,8 @@ while(simSec < MAX_HOURS*3600 && windows<400){
   battleWindow(WINDOW);
   simSec+=WINDOW; windows++;
 
-  // ③ 합성·소환 (의도 루프: 재료 합성 → 상위 재료, 소환 → 조각 → R영웅 합성)
+  // ③ 일일 콘텐츠·소환서 구매 → 합성·소환 (의도 루프)
+  dailyStep();
   const fusedName=summonStep();
   const synthGot=synthStep();
 
@@ -262,6 +299,7 @@ while(simSec < MAX_HOURS*3600 && windows<400){
   let c=bestCraftable();
   let crafts=0;
   while(c && crafts<5){                       // 창당 최대 5제작 (과도 폭주 방지)
+    craftTally[c.grade]=(craftTally[c.grade]||0)+1;
     craftNow(c.grade, c.cat, c.item);
     const made=ev('S').equips[ev('S').equips.length-1];
     if(made && made.grade===c.grade){ equip(made, leaderId()); crafts++; }   // 리더는 합성으로 바뀔 수 있다
@@ -283,8 +321,8 @@ while(simSec < MAX_HOURS*3600 && windows<400){
 
   // ⑤ 진행 멈춤 감지 — 5창(2.5시뮬시간) 동안 CP 변화 없으면 조기 종료(벽으로 판정)
   if(cp===lastCP && !crafts) lastEventT+=WINDOW; else lastEventT=0;
-  if(lastEventT>=WINDOW*5){
-    events.push({t:+(simSec/3600).toFixed(2), cp, what:'⛔ 정체 — 2.5시간 무성장'});
+  if(lastEventT>=WINDOW*20){
+    events.push({t:+(simSec/3600).toFixed(2), cp, what:'⛔ 정체 — 10시간 무성장'});
     break;
   }
 }
@@ -310,5 +348,16 @@ log(`\n총 시뮬: ${(simSec/3600).toFixed(1)}h · 창 ${windows}회 · 최종 C
   const worn=S.equips.filter(e=>e.equipped&&(!e.heroId||e.heroId===ld.hero_id));
   log(`[진단] 리더 장착 ${worn.length}부위 ·`, worn.map(e=>`${e.grade}${e.slot}${e.enh?'+'+e.enh:''}`).join(', ')||'없음');
   log(`[진단] 보유 영웅별 CP:`, ev('ownedHeroes')().map(h=>`${h.name.slice(0,5)}(${h.grade})=${ev('heroPower')(h)}`).join(' · '));
+  log('[진단] 골드 보유:', Math.floor(S.gold));
+  // E 아이템 첫 후보 왜 안 되는지 — recipeOk/gold 각각 출력
+  const FS2=ev('FORGE_SLOTS');
+  FS2.forEach(s2=>{ if(!s2.items||!s2.items.E) return;
+    const it=s2.items.E[0]; const cp2=ev('craftParams')('E',s2.k,it.n);
+    const lack=(it.recipe||[]).filter(r=>(S.mats[r.k]||0)<r.need).map(r=>`${r.k} ${S.mats[r.k]||0}/${r.need}`);
+    log(`[E탐침] ${it.n}: recipeOk=${ev('recipeOk')(it.recipe)} goldOK=${S.gold>=cp2.gold} 부족=[${lack.join(', ')}]`);
+  });
+  const hist={}; S.equips.forEach(e=>hist[e.grade]=(hist[e.grade]||0)+1);
+  log(`[진단] 제작 시도(등급):`, Object.entries(craftTally).map(([g,n])=>`${g}:${n}`).join(' ')||'0');
+  log(`[진단] S.equips 등급 히스토그램:`, Object.entries(hist).map(([g,n])=>`${g}:${n}`).join(' ')||'빈');
 }
 log('결론은 곡선을 보고 판단 — 공백이 길면 해당 구간의 재료/골드 곡선을 조정한다.');
