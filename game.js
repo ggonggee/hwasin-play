@@ -2137,6 +2137,29 @@ const Battle = (()=>{
       m += GRADES[e.grade].mult*(1+(e.enh||0)*0.12)*0.04; });
     return m;
   }
+  /* ★ v5.215: 치명타 확률 스탯 실전 반영 — 반지·귀걸이·팔찌·인장('치명타 확률·치명타 공격력
+     상승')이 크리티컬 판정(0.22 고정)에 무영향이었다. 착용 반지류의 Σ(등급×강화)×0.01 를
+     가산(상한 +0.08 → 최대 30%). 순수 장비 함수라 같은 장비=같은 확률 → 결정론 유지
+     (D1~D5 는 자기일관성 검사라 기준 해시 갱신 불필요). 적(foe) 크리율은 고정 유지 —
+     장비가 없는 쪽이 가산을 받으면 비대칭. */
+  function heroCritRate(hid){
+    let add=0;
+    (S.equips||[]).forEach(e=>{ if(!e||!e.equipped) return;
+      if(e.heroId && hid && e.heroId!==hid) return;
+      if(slotSchema(e.slot).part!=='반지') return;
+      add += GRADES[e.grade].mult*(1+(e.enh||0)*0.12)*0.01; });
+    return 0.22 + Math.min(0.08, add);
+  }
+  /* ★ v5.215: 치명타 공격력(cdmg) — 크리 배율도 반지류로 가산(기본 1.8, 상한 2.6).
+     확률과 같은 재량(Σ 등급×강화 ×0.04, 상한 +0.8). 플레이버 '치명타 공격력 상승'의 구현. */
+  function heroCritMul(hid){
+    let add=0;
+    (S.equips||[]).forEach(e=>{ if(!e||!e.equipped) return;
+      if(e.heroId && hid && e.heroId!==hid) return;
+      if(slotSchema(e.slot).part!=='반지') return;
+      add += GRADES[e.grade].mult*(1+(e.enh||0)*0.12)*0.04; });
+    return 1.8 + Math.min(0.8, add);
+  }
 
   /* ★ v5.108: 종전에는 getBoundingClientRect() 로 W·H 를 잡았다. 그런데 #device 에는
      transform:scale 이 걸려 있어서 이 값은 '화면에 보이는 크기'다 → 기기마다 게임 월드의
@@ -2407,9 +2430,9 @@ const Battle = (()=>{
       const arenaTargets = (mode==='dungeon'&&dg&&dg.kind==='arena') ? foes.filter(f=>!f.dead) : null;
       if(h.atkT<=0 && !h._moving && (mobs.length || (arenaTargets && arenaTargets.length))){
         h.atkT = bRnd(0.7,1.1);   /* ★ M1: 시드 RNG — 공격 주기 */
-        const crit = _draw01()<0.22;   /* ★ M1: 시드 RNG — 크리티컬 판정 */
+        const crit = _draw01()<heroCritRate(h.hid);   /* ★ M1: 시드 RNG — 판정阈值은 장비 함수(v5.215) */
         const dgMul = (mode==='dungeon'&&dg) ? (dg.dmgMul||1)*(dg.otMul||1) : 1;   // ★ v5.117 가중 포함
-        const dmg = Math.max(1, Math.round(Math.max(10, partyCP*0.08)*(crit?1.8:1)*bRnd(0.85,1.15)*dgMul));   /* ★ M1: 시드 RNG — 데미지 변주 */
+        const dmg = Math.max(1, Math.round(Math.max(10, partyCP*0.08)*(crit?heroCritMul(h.hid):1)*bRnd(0.85,1.15)*dgMul));   /* ★ M1: 시드 RNG — 데미지 변주 · 크리 배율 v5.215 */
         h.dmgDone += dmg;
         /* ★ v5.36: 스킬 4종 — 단일/광역 혼합 + 스킬별 스프라이트 애니메이션.
            1차 (1.5쿨): 광역 (부채꼴 범위), Attack1 애니메이션
