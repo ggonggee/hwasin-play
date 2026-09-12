@@ -4651,6 +4651,13 @@ function rerollFix(){
 function openMatMonsterPopup(matKey, ret){
   const m = MAT_BY_KEY[matKey], grade = m ? m.g : null;
   if(!grade){ toast('재료 소환/합성으로 획득 가능합니다.'); return; }
+  /* ★ v5.232: 리더 기준 위험 판정 — v5.225 가 이 팝업에 확인창을 넣며 MODALS.monster 의
+     danger/leadCP 변수만 인용하고 선언을 가져오지 않아 'danger is not defined' 로
+     [사냥] 버튼이 실브라우저에서 전부 죽어 있었다(스모크는 MODALS 키만 순회해 이 전역
+     팝업이 커버리지 사각이었다 — 실물 errbar 3건으로 발견). 정의를 이곳에 둔다.
+     ⚠ 표기도 종전 총전투력 기준이었는데 v5.185 정신(홈 전투 주체=리더 1명)과 어긋나
+     안내↔판정이 갈렸다 — 리더 기준으로 통일. */
+  const leadCP=heroPower(party()[0]||ownedHeroes()[0]);
   const all = HUNT_TIERS.map((t,i)=>({t,i})).filter(x=>x.t.drop===grade);
   const dropsIt = x => x.t.mat===matKey || x.t.mat2===matKey;
   const mons = [...all.filter(dropsIt), ...all.filter(x=>!dropsIt(x))];
@@ -4662,13 +4669,14 @@ function openMatMonsterPopup(matKey, ret){
     : `<b style="color:${GRADES[grade].color}">${matKey}</b> 을(를) 고정 드랍하는 몬스터가 없습니다. 같은 등급 사냥 중 낮은 확률로 나오거나, 재료 소환·합성으로 얻습니다.`));
   mons.forEach(({t,i})=>{
     const isHunting = (S.huntTier||0)===i;
+    const danger = leadCP < t.cp;   /* ★ v5.185 기준: 홈 전투 주체는 리더 1명 (v5.232 정의 추가) */
     const row=el('div','pack');
     row.innerHTML=`<div class="pic" style="border-color:${t.c}">
       <img src="assets/monsters/${t.img}.webp" style="width:40px;height:40px;object-fit:contain">
     </div>
     <div class="info">
       <div class="t" style="color:${t.c}">${t.n} ${isHunting?'<span class="small" style="color:var(--ok)">사냥중</span>':''}${(t.mat===matKey||t.mat2===matKey)?'<span class="small" style="color:var(--g-legend)">고정 드랍</span>':'<span class="small mut">랜덤</span>'}</div>
-      <div class="d">드랍: ${matIcon(t.mat)} ${t.mat}${t.mat2?` · ${matIcon(t.mat2)} ${t.mat2}`:''} · 권장 전투력 ${fmt(t.cp)}${totalCP()<t.cp?' ⚠':''}</div>
+      <div class="d">드랍: ${matIcon(t.mat)} ${t.mat}${t.mat2?` · ${matIcon(t.mat2)} ${t.mat2}`:''} · 권장 전투력 ${fmt(t.cp)}${danger?' ⚠':''}</div>
     </div>`;
     const btn=el('button','btn sm'+(isHunting?'':' gold'), isHunting?'사냥중':'사냥');
     if(isHunting) btn.disabled=true;

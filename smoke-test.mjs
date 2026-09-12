@@ -973,6 +973,33 @@ step('전 모달 클릭 후 재화 무결성', ()=>{
   Object.keys(S.mats||{}).forEach(k=>{ const v=S.mats[k]; if(typeof v!=='number'||!isFinite(v)||v<0) bad.push('mats.'+k+'='+v); });
   if(bad.length) throw new Error(bad.join(', '));
 });
+/* ★ v5.232: 파밍 팝업(openMatMonsterPopup) [사냥] 핸들러 회귀 — MODALS 키 순회 커버리지의
+   사각. v5.225 가 이 전역 팝업의 onclick 에서 danger/leadCP 를 정의 없이 인용해
+   'danger is not defined' 로 [사냥] 이 실브라우저에서 전부 죽어 있었다(2026-09-13 실물
+   errbar 3건으로 발견). 커버리지가 못 잡은 구조적 이유 2개 — ① 이 팝업은 MODALS 엔트리가
+   아니라 재료 칩 onclick 안에서 열린다(칩은 커버리지가 누르지만 팝업의 '새' 버튼까지는
+   수집 안 됨) ② 커버리지의 catch(e){} 가 예외를 삼킨다. 여기선 전 재료 × 전 버튼의
+   onclick 을 직접 호출해 예외를 명시적으로 걸어낸다. */
+step('파밍 팝업 [사냥] 핸들러 — 정의 누락 회귀(danger is not defined)', ()=>{
+  const MATS=ev('MATS');   // 배열: {k:재료명, g:등급, ...}
+  let btns=0; const errs=[];
+  MATS.forEach(mt=>{
+    const mk2=mt.k;
+    try{ ev('openMatMonsterPopup')(mk2,'inventory'); }
+    catch(e){ errs.push('render '+mk2+': '+e.message); return; }
+    const body=ev("$('#modalBody')");   // document 스텁은 vm 안 — 게임 컨텍스트의 $ 로 접근
+    const walk=n=>{ (n.children||[]).forEach(c=>{
+      if(c.tagName==='BUTTON' && typeof c.onclick==='function'){
+        btns++;
+        try{ c.onclick(); }catch(e){ errs.push(mk2+' [사냥]: '+e.message); }
+      }
+      walk(c);
+    }); };
+    walk(body);
+  });
+  if(errs.length) throw new Error(errs.slice(0,4).join(' | '));
+  if(btns<100) throw new Error('호출한 [사냥] 버튼 '+btns+'개 — 24재료×최대 5행 기준 너무 적음');
+});
 step('save→JSON 직렬화 왕복 무손실', ()=>{
   /* 바로 위 검사가 모달 클릭을 다시 전수 실행하면서 [데이터 초기화]·[가져오기]를 또 눌러
      저장을 재봉인한다(사유는 [7] 끝 주석 참조). 이 검사는 save() 가 실제로 써야 성립하므로
