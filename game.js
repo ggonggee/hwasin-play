@@ -6758,8 +6758,21 @@ const MODALS = {
         </div></div>`;
       const btn=el('button','btn sm'+(cur?'':' gold'),cur?'사냥중':'사냥');
       if(cur) btn.disabled=true;
-      btn.onclick=()=>{ S.huntTier=i; Battle.setHunt(); sfx('tap');
-        toast(`${t.n} 소환 — 홈 필드에 출현합니다${danger?' · ⚠ 부대가 버틸 수 있을지…':''}`);
+      btn.onclick=()=>{
+        /* ★ v5.227: 전멸 위험 확인창 — 파밍 팝업(v5.225)에만 있던 안전장치를 몬스터 선택
+           화면에도 동일하게 적용. 위험(리더 전투력 < 권장)일 때만 확인을 받고, 안전한 선택은
+           그대로 즉시 실행한다(모든 카드에 확인창을 걸면 저티어 회귀가 귀찮아진다). */
+        if(danger){
+          styledConfirm(`${t.n} 사냥을 시작하시겠습니까?`, ()=>{
+            S.huntTier=i; Battle.setHunt(); sfx('tap');
+            toast(`${t.n} 소환 — 출격 영웅 전투력이 권장(${fmt(t.cp)})보다 낮습니다`);
+            sysLog(`몬스터 소환 → <span style="color:${t.c}">${t.n}</span> (${GRADES[t.drop].name} 재료)`);
+            closeModal(); refreshHUD();
+          }, { title:'⚠ 전멸 위험', sub:`권장 ${fmt(t.cp)} · 내 출격 영웅 ${fmt(leadCP)} — 전멸 시 최하급으로 후퇴`, yes:'사냥' });
+          return;
+        }
+        S.huntTier=i; Battle.setHunt(); sfx('tap');
+        toast(`${t.n} 소환 — 홈 필드에 출현합니다`);
         sysLog(`몬스터 소환 → <span style="color:${t.c}">${t.n}</span> (${GRADES[t.drop].name} 재료)`);
         closeModal(); refreshHUD(); };
       row.appendChild(btn); b.appendChild(row);
