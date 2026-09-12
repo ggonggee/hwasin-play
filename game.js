@@ -5913,13 +5913,27 @@ const MODALS = {
           }
           body.appendChild(row); });
       } else {
-        // ★ B9/G-122: 폐지된 quest2 모달의 업적 진행바를 이 탭으로 이식
-        body.appendChild(el('div','hint','누적 처치·제작·소환 업적. (데모)'));
-        [['몬스터 처치',S.stats.kills,100],['제작 성공',S.stats.crafts,10],['소환',S.stats.summons,20],['투기장 승리',S.stats.arenaWins,15],['재료 합성',S.stats.synths||0,10],['보스 도전',S.stats.bossChallenges||0,10]]
-          .forEach(([t,v,goal])=>{ const row=el('div'); row.style.margin='8px 0';
-            row.innerHTML=`<div class="kv"><span>${t}</span><b>${v}/${goal}</b></div>`;
-            const pb=el('div','pbar'); pb.appendChild(el('i')); pb.firstChild.style.width=clamp(v/goal*100,0,100)+'%';
-            row.appendChild(pb); body.appendChild(row); });
+        /* ★ B9/G-122 → v5.172: 업적 탭 — 종전엔 '(데모)' 라벨의 고정 목표 6줄 진행바였다
+           (100처치/10제작… 단일 목표, 100% 찍으면 그대로 죽는 화면).
+           누적 마일스톤 사다리로 바꿔 '다음 목표와 현재 위치'가 항상 보이게 한다.
+           보상은 붙이지 않는다 — 대조 근거 없이 보상을 설계한 적이 이 저장소의
+           사고를 낸 바 있다(몬스터 소환권, HANDOFF 6장). 순수 진행 표시. */
+        body.appendChild(el('div','hint','누적 업적 — 다음 마일스톤까지의 진행.'));
+        [ ['몬스터 처치',S.stats.kills,[100,1000,5000,20000]],
+          ['제작 성공',S.stats.crafts,[10,100,500]],
+          ['소환',S.stats.summons,[20,100,500]],
+          ['투기장 승리',S.stats.arenaWins,[15,50,200]],
+          ['재료 합성',S.stats.synths||0,[10,100,500]],
+          ['보스 도전',S.stats.bossChallenges||0,[10,50,200]],
+        ].forEach(([t,v,ms])=>{
+          const done=ms.filter(m=>v>=m).length, next=ms.find(m=>v<m);
+          const row=el('div'); row.style.margin='8px 0';
+          row.innerHTML=`<div class="kv"><span>${t}${done?` <span class="mut small">(${done}/${ms.length})</span>`:''}</span>`
+            +`<b>${next?`${fmt(v)} / ${fmt(next)}`:`${fmt(v)} · 전부 달성 ✓`}</b></div>`;
+          const pb=el('div','pbar'); pb.appendChild(el('i'));
+          pb.firstChild.style.width=(next?clamp(v/next*100,0,100):100)+'%';
+          row.appendChild(pb); body.appendChild(row);
+        });
       }
     }
     render();
