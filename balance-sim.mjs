@@ -342,10 +342,13 @@ while(simSec < MAX_HOURS*3600 && windows<1600){
     events.push({t:+(simSec/3600).toFixed(2), cp, what:did.trim()||'CP 상승'});
     lastCP=cp;
   }
-  // 등급 도달 기록
+  /* 등급 도달 기록 — ★ 실제 사냥 개시 게이트(리더 전투력, v5.185)와 같은 기준으로 잰다.
+     종전 총전투력 기준은 벤치 성장(v5.186)만으로 등급을 '도달'로 세어 실제 사냥보다
+     이르게 기록했다(E 6.5h 표기가 그 예다 — 리더가 4200을 못 넘으면 E사냥은 못 시작). */
   const HT=ev('HUNT_TIERS');
+  const leadNow=ev('heroPower')(ev('party')()[0]);
   HT.forEach((t,i)=>{
-    if(cp>=t.cp && gradeReached[t.drop]===undefined) gradeReached[t.drop]=(simSec/3600).toFixed(1);
+    if(leadNow>=t.cp && gradeReached[t.drop]===undefined) gradeReached[t.drop]=(simSec/3600).toFixed(1);
   });
 
   /* ★ 정체 판정기 수정 — 종전엔 위 push 가 lastCP 를 갱신한 뒤 비교해 cp===lastCP 가
