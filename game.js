@@ -5861,7 +5861,10 @@ const MODALS = {
     // ① 영웅 상태바 — {직업} {N}LV [경험치바 %]
     const p0=(typeof party==='function')?party()[0]:null;
     if(p0){
-      const pct=clamp((S.stats.kills%100), 0, 100);   // 데모: 누적 처치 기반 진행률
+      /* ★ v5.180: 진행 바를 실제 경험치로 — 종전엔 '누적 처치 % 100' 데모값이었다(v5.169 주석 참조).
+         영웅 카드(v5.169)와 같은 정본 식: exp / 레벨×250. */
+      const st=(S.heroes&&S.heroes[p0.hero_id])||{};
+      const pct=clamp((st.exp||0)/((p0.level||1)*250)*100, 0, 100);
       const bar=el('div','settle-hero');
       bar.innerHTML=`<div class="sh-top"><b style="color:${GRADES[p0.grade].color}">${p0.job.name}</b><span>${p0.level}LV</span></div>`;
       const pb=el('div','pbar'); pb.appendChild(el('i')); pb.firstChild.style.width=pct+'%'; bar.appendChild(pb);
