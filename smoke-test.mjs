@@ -466,6 +466,25 @@ step('몬스터 도감 집계 — 홈 사냥 킬이 codexKills 에 기록된다'
   for(const k of Object.keys(S.codexKills||{})) if(!names.has(k)) throw new Error('실재하지 않는 몬스터명이 집계됨: '+k);
   for(const k of Object.keys(S.codexBossKills||{})) if(!names.has(k)) throw new Error('실재하지 않는 몬스터명이 보스 집계에 있음: '+k);
 });
+/* ★ v5.186: 벤치 영웅 XP 분배 — 홈 전투는 리더 1명이라 비참여 보유 영웅이 성장하려면
+   이 분배가 살아 있어야 한다. 죽으면 9영웅 로스터 중 리더만 자라는 기아 상태로 되돌아간다
+   (시뮬 600h 실측: 비리더 전원 Lv7 정지). 전투 프레임 후 벤치 exp/레벨이 오르는지 본다. */
+step('벤치 영웅 XP 분배 — 비참여 보유 영웅도 성장', ()=>{
+  const S=ev('S'), B=ev('Battle');
+  const owned=ev('ownedHeroes')();
+  if(!B || !(B.stepFrame||B.pumpFrame)) return;   // 인터페이스 호환
+  if(owned.length<2) throw new Error('보유 영웅 2 미만 — 테스트 전제 실패(세이브 상태 확인)');
+  const leader=ev('party')()[0].hero_id;
+  const bench=owned.find(h=>h.hero_id!==leader);
+  if(!bench) throw new Error('벤치 영웅을 못 찾음');
+  const st=S.heroes[bench.hero_id];
+  const before=(st.exp||0)+(st.level||1)*100000;   // 레벨+exp 통합 지표(레벨업으로 exp 리셋되어도 상승 반영)
+  const frame=B.stepFrame||B.pumpFrame;
+  for(let i=0;i<2000;i++) frame(0.016);            // ≒32초 전투
+  const st2=S.heroes[bench.hero_id];
+  const after=(st2.exp||0)+(st2.level||1)*100000;
+  if(after<=before) throw new Error('벤치 영웅 경험치/레벨이 오르지 않는다 — 분배 회귀');
+});
 /* ★ v5.161: 일일 미션 진행도 회귀 — 종전엔 평생 누적 스탯을 보고 있어 화면 문구 '매일 0시 리셋'과
    어긋났고 2일차부터 로그인 즉시 전 미션 완료 상태가 됐다. 세 가지를 잠근다:
    ① 위 전투로 오늘 처치 카운터가 실제로 오르는가 ② 미션 cnt 가 누적 스탯이 아닌 오늘 카운터를

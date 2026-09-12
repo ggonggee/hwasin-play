@@ -2737,6 +2737,24 @@ const Battle = (()=>{
         }
       }
     }); } catch(ee) { if(typeof console!=='undefined') console.error('EXP error:', ee.message, 'heroes:', heroes.length, 'first hid:', heroes[0]&&heroes[0].hid); }
+    /* ★ v5.186: 벤치 영웅 XP 분배 — 전투에 나가지 않은 보유 영웅도 참여자의 50% 를 받는다.
+       문제(시뮬 600h 실측): 홈 전투는 리더 1명(v5.107)이라 XP를 리더가 독점 — 비리더 8영웅이
+       합성 승계 레벨에서 영원히 정지했다(Lv7, CP 208). 파티 던전(3인)이 '리더+허수 2명'으로
+       돌아가고 9영웅 로스터의 성장 축이 죽어 있었다.
+       50% 지분은 자체 설계(캡처 근거 없음 — 리더 우위는 유지하되 로스터 전체가 자라게).
+       벤치 레벨업은 조용히 — fx·토스트 없이 리더의 순간을 방해하지 않는다. */
+    try {
+      const benchExp=Math.max(1, Math.round(baseExp*expMul*0.5));
+      const inBattle={}; heroes.forEach(h=>{ if(h.hid) inBattle[h.hid]=1; });
+      ownedHeroes().forEach(e=>{
+        if(inBattle[e.hero_id]) return;
+        const st=S.heroes[e.hero_id]; if(!st) return;
+        st.exp=(st.exp||0)+benchExp;
+        while(st.exp >= (st.level||1)*250 && (st.level||1)<999){
+          st.exp-=(st.level||1)*250; st.level=(st.level||1)+1;
+        }
+      });
+    } catch(ee) { if(typeof console!=='undefined') console.error('bench EXP error:', ee.message); }
     partyCP = Math.max(1, heroes.reduce((a,h)=>a+h.cp,0));
   }
 
