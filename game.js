@@ -5023,6 +5023,24 @@ const MODALS = {
     mid.onclick=()=>{ sfx('tap'); openSub('optionReroll', cur.hero_id); }; fn.appendChild(mid);   // ★ v5.1 착용창 위 오버레이
     center.appendChild(fn); doll.append(colL,center,colR); b.appendChild(doll);
     b.appendChild(el('div','warn','⚠ 새 장비를 걸치면 같은 부위의 낡은 장비는 화로에 녹아 사라집니다 · 강화 실패로도 파괴될 수 있습니다(방지: 망치 / 단계 유지: 하락 방지권)'));
+    /* ★ v5.203: 활성 세트 스트립 — 착용창에서 '내가 지금 어떤 세트를 몇 칸 채우는지'가
+       안 보였다(세트효과 화면을 따로 열어야 함). 세트 보너스는 장착의 핵심 동기인데
+       그 진행도가 장착 현장에 없으면 '다음 조각을 노리는' 재미가 끊긴다.
+       진행 중 세트(1칸 이상)만 노출, 탭하면 세트효과 화면(v5.153 허브). 임계 근접(1칸 남음)은 금색. */
+    const act=activeSets();
+    if(act.length){
+      const strip=el('div'); strip.style.cssText='display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;';
+      act.forEach(a=>{
+        const def=setByName(a.n), max=(SET_PIECES[a.n]||[]).length;
+        const nextT=(def&&def.tiers||[]).find(t=>t.k>a.c);
+        const near=nextT && (nextT.k-a.c)===1;
+        const chip=el('div','mat-chip'+(near?'':' lack')); chip.style.cursor='pointer'; chip.title=near?'다음 세트 효과 1칸 남음!':(nextT?`다음 임계 ${nextT.k}세트`:'최고 단계 달성');
+        chip.innerHTML=`<div class="mi" style="font-size:11px">${a.n}</div><div class="have${near?'':' lack'}">${a.c}/${max}${near?' ◀':''}</div>`;
+        chip.onclick=()=>openModal('setfx');
+        strip.appendChild(chip);
+      });
+      b.appendChild(strip);
+    }
     b.appendChild(el('div','small mut',`보유 장비 ${S.equips.length}종 (탭하여 강화)`));
     const tray=el('div','grid c5'); tray.style.marginTop='6px';
     if(!S.equips.length) tray.appendChild(el('div','hint','아직 장비가 없습니다. 대장간(⚒️)에서 제작하세요.'));
