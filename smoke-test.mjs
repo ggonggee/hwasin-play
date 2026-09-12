@@ -537,6 +537,18 @@ step('그래픽 품질 — 파티클/픽셀비 반영 값', ()=>{
   }
   S.settings.graphic='상';
 });
+/* ★ v5.171: 재료 보유 상한 — 안내 문구(2000/900, 초과분 미획득)가 코드에서도 참이어야 한다.
+   위약으로 되돌아가면 상한 없이 무한히 쌓이는 게 실제 동작이 된다. 넘친 구세이브 값은 유지(비파괴). */
+step('재료 보유 상한 — 2000/900 초과분 미획득 + 비파괴 클램프', ()=>{
+  const S=ev('S'), gain=ev('matGain'), MATS=ev('MATS');
+  const nm=MATS.find(m=>m.g==='N'), em=MATS.find(m=>m.g==='E');
+  S.mats[nm.k]=1999; gain(nm.k,10);
+  if(S.mats[nm.k]!==2000) throw new Error(`일반 상한 2000 미만: ${S.mats[nm.k]}`);
+  S.mats[em.k]=899; gain(em.k,5);
+  if(S.mats[em.k]!==900) throw new Error(`영웅 상한 900 미만: ${S.mats[em.k]}`);
+  S.mats[nm.k]=2600; gain(nm.k,5);          // 구세이브 비파괴 — 넘친 값이 깎이면 안 된다
+  if(S.mats[nm.k]!==2600) throw new Error(`넘친 보유량이 깎였다: 2600 → ${S.mats[nm.k]}`);
+});
 /* ★ v5.9: 몬스터 종 수 검증 — 등급당 5종, 총 20종(설계 기준). 마릿수 선택기 기본값 30.
    종전 120종(등급당 30종)은 "30마리" 마릿수 선택기를 도감 종 수로 오독한 것이었다. */
 step('몬스터 종 수 = 20 (등급당 5종) + 마릿수 기본 30', ()=>{

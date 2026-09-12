@@ -266,7 +266,16 @@ function iconizeEmoji(root, size){
 // 보유 수량 = 그 재료 하나. 공용풀 합산 없음(위 주석 참조).
 function matAvail(k){ return MAT_BY_KEY[k] ? (S.mats[k]||0) : 0; }
 function matSpend(k,n){ if(!MAT_BY_KEY[k]) return; S.mats[k]=Math.max(0,(S.mats[k]||0)-n); }
-function matGain(k,n){ if(!MAT_BY_KEY[k]) return; S.mats[k]=(S.mats[k]||0)+n; }
+/* ★ v5.171: 재료 보유 상한 — 인벤토리 안내('일반·희귀 최대 2000개 · 영웅·레전더리 최대 900개,
+   초과분 미획득')가 실측 설계인데 종전 코드는 어디서도 강제하지 않는 위약 문구였다(2026-09-12 실측:
+   matGain 무상한). matGain 이 전체 획득 경로의 단일 통로라 여기서 자른다.
+   Math.max(cur, …) — 구세이브에서 이미 넘친 값은 깎지 않고 성장만 멈춘다(파괴적 클램프 금지). */
+const MAT_CAP = { N:2000, R:2000, E:900, L:900 };
+function matGain(k,n){
+  const m=MAT_BY_KEY[k]; if(!m) return;
+  const cap=MAT_CAP[m.g]||Infinity, cur=S.mats[k]||0;
+  S.mats[k]=Math.max(cur, Math.min(cap, cur+n));
+}
 // 등급별 합계 — 요약 표시 전용(정산·절전 그리드). 소모는 언제나 개별 재료 단위다.
 function matGradeTotal(g){ return (MAT_BY_GRADE[g]||[]).reduce((a,m)=>a+(S.mats[m.k]||0),0); }
 // 등급만 정해진 획득처(드랍·상점·보상)는 그 등급 재료 중 하나로 실체화한다.
@@ -4227,6 +4236,9 @@ function recipeOk(recipe){ return (recipe||[]).every(r=>matAvail(r.k)>=r.need); 
    선택된 채로 대장간이 열린다(종전엔 기본값 N/무기로 리셋돼 재시작 때마다 탭을 다시 눌렀다). */
 function craftStart(grade, catKey, item){
   if(S.craft){ toast('이미 제작중입니다.'); return; }                       // G-25
+  /* ★ v5.171: 무기 종류당 99개 보유 상한 — 인벤토리 안내의 실측 설계. 시작 전에 막아
+     재료·골드를 쓰고 아이템을 못 받는 낭비를 방지한다(장착 분도 '보유'에 포함). */
+  if(S.equips.filter(x=>x.slot===item.n).length>=99){ toast(`${item.n} 은(는) 종류당 최대 99개까지 보유 가능합니다.`); return; }
   const cp=craftParams(grade,catKey,item.n);
   if(!recipeOk(item.recipe)){ toast('재료가 부족합니다.'); return; }         // G-26
   // ★ F2: 칭호 '빈털터리' — 조건은 '골드가 모자란 상태에서 제작 버튼을 연속 클릭'이다.
