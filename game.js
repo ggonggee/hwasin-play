@@ -4850,7 +4850,11 @@ const MODALS = {
        소비처가 0 이던 고아 재화였다 — 두 문제를 한 축으로 묶는다.
      기록서 무과금 획득: 회색코인 상점 / 시련의 탑 웨이브 상자 교환(v5.8 에서 함께 신설). */
   awaken:{ title:'각성', render(b){
-    const lv=S.awaken, BASE_CAP=12, DEEP_CAP=20;
+    /* ★ v5.193: 심화 상한 20→30 — 밸런스 시뮬(600h) 확정 곡선에서 L 완성(~139h) 이후
+     성장 축이 레벨·강화뿐이었다. 각성은 기록서(회색코인 상점·탑 상자)라는 별도 재화를
+     쓰는 엔드게임 싱크라 상한 확장이 경제를 흔들지 않는다 — 21~30단계는 +15%p 계정 스탯.
+     자체 설계(캡처 근거 없음). */
+    const lv=S.awaken, BASE_CAP=12, DEEP_CAP=30;
     const deep = lv>=BASE_CAP;                       // 심화 구간 진입 여부
     const shardCost = Math.round(250*Math.pow(1.08, lv));
     const recCost   = 1 + Math.floor((lv-BASE_CAP)/2);   // 13~14:1권 · 15~16:2권 …

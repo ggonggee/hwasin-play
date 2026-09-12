@@ -273,6 +273,23 @@ function enhanceStep(){
   }
   return ups;
 }
+/* 각성 정책 — 조각(직업 공용)이 여유일 때(전 영웅 보유 후 남는 조각) 기본 12단계까지.
+   심화(기록서)는 회색코인 경제라 시뮬 범위 밖 — 12단계(+18%)까지만 모델링. */
+function awakenStep(){
+  const S=ev('S');
+  if(S.guideStep<ev('GUIDE_CHAIN').length) return 0;
+  const owned=ev('ownedHeroes')().length;
+  if(owned<9) return 0;                        // 로스터 우선 — 조각은 합성이 먼저
+  let steps=0;
+  while(S.awaken<12 && steps<20){
+    const cost=Math.round(250*Math.pow(1.08, S.awaken));
+    const tot=Object.values(S.shards||{}).reduce((a,b)=>a+b,0);
+    if(tot<cost+200) break;                    // 다음 R 재합성 대비 200 여유
+    Object.keys(S.shards).forEach(k=>S.shards[k]=Math.max(0,(S.shards[k]||0)-cost/5));
+    S.awaken++; steps++;
+  }
+  return steps;
+}
 function synthStep(){
   const GORDER=['N','R','E','L'], S=ev('S');
   const MAT_BY_GRADE=ev('MAT_BY_GRADE'), MAT_BY_KEY=ev('MAT_BY_KEY');
@@ -347,6 +364,7 @@ while(simSec < MAX_HOURS*3600 && windows<1600){
 
   // ③ 일일 콘텐츠·소환서 구매 → 합성·소환 (의도 루프)
   dailyStep();
+  const awakenUps=awakenStep();
   const fusedName=summonStep();
   const synthGot=synthStep();
 
@@ -423,7 +441,7 @@ log(`\n총 시뮬: ${(simSec/3600).toFixed(1)}h · 창 ${windows}회 · 최종 C
 /* 진단: 리더·장착·보유영웅 — CP 정체의 원인을 구분한다(리더 등급? 레벨? 장비 기여?) */
 {
   const S=ev('S'), ld=ev('party')()[0];
-  log(`[진단] 리더 ${ld.name}(grade ${ld.grade} · Lv${ld.level}) · 보유 영웅 ${ev('ownedHeroes')().length}/9 · 조각`,
+  log(`[진단] 각성 +${S.awaken} · 리더 ${ld.name}(grade ${ld.grade} · Lv${ld.level}) · 보유 영웅 ${ev('ownedHeroes')().length}/9 · 조각`,
     Object.entries(S.shards).map(([k,v])=>`${k}:${Math.floor(v)}`).join(' '));
   const worn=S.equips.filter(e=>e.equipped&&(!e.heroId||e.heroId===ld.hero_id));
   log(`[진단] 리더 장착 ${worn.length}부위 ·`, worn.map(e=>`${e.grade}${e.slot}${e.enh?'+'+e.enh:''}`).join(', ')||'없음');
