@@ -1758,6 +1758,44 @@ function heroPower(h){
   return Math.round((100 + h.level*30) * g * aw * (1 + eq*0.05) * (S&&S.classTrait?1.02:1) * costume * setm * tomeMul());
 }
 function totalCP(){ const hs=ownedHeroes(); if(!hs.length) return 0; return hs.reduce((a,h)=>a+heroPower(h),0); }
+/* ★ v5.220: 전투력 구성 상세 — 각 성장축이 몇 %를 기여하는지. heroPower 정본 공식:
+   (100 + level×30) × 등급mult × 각성 × (1 + 장비eq×0.05) × 직업특성 × 코스튬 × 세트 × 고서
+   각 팩터를 '없을 때' 대비 배율로 환산해 표시한다. 순수 표시 — 상태 변경 없음. */
+function openCPBreakdown(){
+  const h=heroEntry(party()[0].hero_id); if(!h){ toast('보유 영웅이 없습니다.'); return; }
+  const eq=(S.equips||[]).filter(e=>e.equipped&&(!e.heroId||e.heroId===h.hero_id))
+    .reduce((a,e)=>a+(1+(e.enh||0)*0.12)*GRADES[e.grade].mult,0);
+  const base=(100+h.level*30);
+  const g=GRADES[h.grade].mult;
+  const aw=1+S.awaken*0.015;
+  const eqMul=1+eq*0.05;
+  const costume=costumeStatMul();
+  const setm=setDamageMul();
+  const tome=tomeMul();
+  const trait=(S&&S.classTrait)?1.02:1;
+  const final=Math.round(base*g*aw*eqMul*trait*costume*setm*tome);
+  const row=(label,contrib,pct)=>`<div class="stat-line"><span>${label}</span><span class="v">${contrib} <span class="mut small">(${pct}%)</span></span></div>`;
+  const total=final;
+  const pct=v=>((v/total)*100).toFixed(1);
+  // 각 팩터 기여도 = 최종값 - 그 팩터를 제거했을 때의 값
+  const without=(f)=>Math.round(base* (f==='g'?1:g) * (f==='aw'?1:aw) * (f==='eq'?1:eqMul)
+    * (f==='trait'?1:trait) * (f==='costume'?1:costume) * (f==='setm'?1:setm) * (f==='tome'?1:tome));
+  setModalTitle('전투력 구성');
+  const b=$('#modalBody'); b.innerHTML='';
+  b.appendChild(el('div','center',`<div class="big" style="color:var(--g-legend)">${fmt(totalCP())}</div><div class="small mut">총 전투력 (영웅 9종 합계) · 아래는 리더 [${h.name}] 기준</div>`));
+  b.appendChild(el('div','',row('기본 (Lv '+h.level+')', fmt(base), pct(base))));
+  b.appendChild(el('div','',row('등급 ('+GRADES[h.grade].name+')', '×'+g.toFixed(1), pct(final-without('g')))));
+  b.appendChild(el('div','',row('각성 +'+S.awaken, '×'+aw.toFixed(2), pct(final-without('aw')))));
+  b.appendChild(el('div','',row('장비 (eq '+eq.toFixed(1)+')', '×'+eqMul.toFixed(2), pct(final-without('eq')))));
+  b.appendChild(el('div','',row('세트 효과', '×'+setm.toFixed(2), pct(final-without('setm')))));
+  b.appendChild(el('div','',row('고서 보유', '×'+tome.toFixed(2), pct(final-without('tome')))));
+  if(trait>1) b.appendChild(el('div','',row('직업 특성', '×'+trait.toFixed(2), pct(final-without('trait')))));
+  if(costume>1) b.appendChild(el('div','',row('코스튬', '×'+costume.toFixed(2), pct(final-without('costume')))));
+  const bk=el('button','btn wide','닫기'); bk.style.marginTop='8px';
+  bk.onclick=()=>{ closeModal(); openModal('equip'); };
+  b.appendChild(bk);
+  $('#modal-root').classList.add('on'); currentModal='cpBreakdown';
+}
 /* ★ B4/G-52: 타 콘텐츠는 3인 유지(투기장 4인은 B6 의 arenaParty 소관).
    편성 우선순위 = S.formations[활성 진영] → 레거시 S.formation → 전투력 순.
    편성값은 hero_id 가 정본이지만 구세이브의 직업 id 도 heroResolve 로 해석한다. */
@@ -5126,7 +5164,10 @@ const MODALS = {
     [['강화','⚒️',()=>{ if(!S.equips.length){toast('장비 없음 · 대장간에서 제작');return;}
         const tgt=S.equips.find(x=>x.equipped && (!x.heroId || x.heroId===cur.hero_id)) || S.equips.find(x=>x.equipped) || S.equips[0];
         openEnhance(tgt); }],
-     ['스탯','📊',()=>toast(`전투력 ${fmt(totalCP())}`)],
+     /* ★ v5.220: 전투력 구성 상세 — toast 1줄뿐이었다. '내 CP가 왜 이 값인지'가 안 보여
+        성장 방향을 잡기 어려웠다. heroPower 공식의 각 항(기본·등급·레벨·장비·각성·세트·버프)을
+        팩터별로 나눠 보여준다 — 정본 공식에서 파생하므로 어긋날 수 없다. */
+     ['스탯','📊',()=>{ openCPBreakdown(); }],
      ['각성','⚡',()=>openModal('awaken')],
      ['스킬','✨',()=>toast('직업별 스킬 4종을 자동으로 사용합니다')]].forEach(([t,ic,cb])=>{ const rb=el('div','round-btn'); rb.innerHTML=`<span class="gi">${eImg(ic,1.5)}</span><span>${t}</span>`; rb.onclick=cb; fn.appendChild(rb); });
     // ★ N1/§5-4 해소: 정중앙 원형 버튼(🎲) = 장비 옵션 재설정(주사위 리롤) 진입점
