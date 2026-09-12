@@ -4274,6 +4274,26 @@ function salvageValue(e){
   const base=(CRAFT[e.grade]||CRAFT.N).gold;
   return Math.floor(base*Math.min(0.9, 0.5+(e.enh||0)*0.05));
 }
+/* ★ v5.188: 일괄 분해 — 등급별 미장착 전체를 한 번에. 개별 분해(v5.187)로 60개를
+   누르는 건 노동이다. 환급은 개별과 같은 salvageValue 총합 — 상한 논리도 동일하게 적용된다.
+   doSalvageBulk 만 실행(차감·삭제), salvageBulk 는 계산만(스모크가 직접 검증). */
+function salvageBulk(grade){
+  const list=S.equips.filter(e=>!e.equipped && e.grade===grade);
+  return { count:list.length, gold:list.reduce((a,e)=>a+salvageValue(e),0) };
+}
+function doSalvageBulk(grade){
+  const {count,gold}=salvageBulk(grade);
+  if(!count){ toast('분해할 미장착 장비가 없습니다.'); return; }
+  styledConfirm(`정말 일괄 분해하시겠습니까?`, ()=>{
+    const again=salvageBulk(grade);                    // 차감 직전 재검증(같은 패턴)
+    if(!again.count){ toast('이미 처리되었습니다.'); return; }
+    S.equips=S.equips.filter(e=>e.equipped||e.grade!==grade);
+    addGold(again.gold);
+    toast(`${GRADES[grade].name} 등급 ${again.count}개 분해 · 골드 +${fmt(again.gold)}`);
+    sysLog(`일괄 분해 — ${GRADES[grade].name} ${again.count}개 → 골드 ${fmt(again.gold)}`);
+    sfx('coin'); openModal('inventory'); refreshHUD();
+  }, { title:'일괄 분해', sub:`${GRADES[grade].name} 미장착 ${count}개 → 골드 ${fmt(gold)} 회수` });
+}
 /* ★ v5.151: 제작 시작 로직 — 종전엔 대장간 모달 클로저(startCraft) 안에만 있었다.
    결과 팝업의 [다시 제작] 이 같은 판정·차감 경로를 쓰게 하려고 밖으로 뺐다(내용은 이동일 뿐).
    종료의 openModal('forge', item.n) 은 v5.119 사전 선택 — 제작 시작 후에도 그 아이템이
@@ -5476,6 +5496,12 @@ const MODALS = {
     const TABS=[['무기','무기'],['벨트','방어구·장신구']];
     const isWeapon=n=>slotSchema(n).part==='무기';
     const tb=el('div','inv-tabs'); const list=el('div','grid c4'); list.style.marginTop='6px';
+    /* ★ v5.188: 등급별 일괄 분해 — 탭 행 옆에 항상 노출(보유 수가 0이면 클릭 시 안내). */
+    ['N','R'].forEach(g=>{
+      const bs=el('button','btn xs',`${GRADES[g].name} 일괄분해`);
+      bs.onclick=()=>doSalvageBulk(g);
+      tb.appendChild(bs);
+    });
     function drawList(){
       list.innerHTML='';
       const arr=S.equips.filter(e=>!e.equipped).filter(e=> S.invTab==='무기' ? isWeapon(e.slot) : !isWeapon(e.slot));

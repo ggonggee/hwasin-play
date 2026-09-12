@@ -635,6 +635,21 @@ step('장비 분해 — 환급 산식·항상 손실 원칙', ()=>{
   if(sv(l10)>=CRAFT.L.gold) throw new Error('환급이 제작 원가 이상 — 순환 이익 경로 생성');
   if(sv({grade:'N',enh:20})>=CRAFT.N.gold) throw new Error('강화 만렙 환급이 원가 이상');
 });
+/* ★ v5.188: 일괄 분해 — ① 해당 등급 미장착만 집계 ② 환급은 개별 salvageValue 총합
+   ③ 착용 중·타 등급은 절대 안 집계(실수로 리더 장비가 사라지면 대참사). */
+step('일괄 분해 집계 — 등급·미장착 필터 정확성', ()=>{
+  const S=ev('S'), bulk=ev('salvageBulk'), sv=ev('salvageValue');
+  const nA={grade:'N',slot:'잿불 단검',enh:0,equipped:false};
+  const nB={grade:'N',slot:'잿불 투구',enh:3,equipped:false};
+  const nWorn={grade:'N',slot:'잿불 신발',enh:0,equipped:true};   // 착용 중 N — 절대 제외
+  const r={grade:'R',slot:'청강 대검',enh:0,equipped:false};
+  S.equips=[nA,nB,nWorn,r];
+  const got=bulk('N');
+  if(got.count!==2) throw new Error('N 집계 '+got.count+' ≠ 2 (착용 중 포함 여부 확인)');
+  if(got.gold!==sv(nA)+sv(nB)) throw new Error('환급 총합 불일치');
+  const gotR=bulk('R');
+  if(gotR.count!==1 || gotR.gold!==sv(r)) throw new Error('R 집계 오류');
+});
 step('제작시간 배율 — 버프 on 0.5배 · off 1배 (칭호 기준 상대 비교)', ()=>{
   const S=ev('S'), mul=ev('craftTimeMul'), tmul=ev('titleCraftTimeMul');
   S.buffs.craftUntil=0;
