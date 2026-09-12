@@ -227,8 +227,41 @@ function dailyStep(){
     const foe=[800,2200,5200][st-1];
     if(foe<=cp*1.5&&dl>0){ const n=Math.min(dl,5); for(let k=0;k<n;k++) ev('matGainGrade')(rg,qty); dl=0; }
   }
+  // 시련의 탑 소탕(일 1회) 근사 — 도달층 w는 'foe(600+w×450) ≤ 리더전투력×1.5' 안전 기준.
+  // 실제 탑은 3인 파티로 도전하지만 시뮬은 탑 전투를 돌리지 않으므로 보수적으로 리더 기준.
+  {
+    const ld=ev('heroPower')(ev('party')()[0]);
+    const w=Math.max(0, Math.floor((ld*1.5-600)/450));
+    if(w>=1 && ev('dailyLeft')('towerSweep',1)>0){
+      ev('dailyUse')('towerSweep');
+      ev('addGold')(Math.floor(w*400000*0.5));
+      S.stones=(S.stones||0)+Math.floor(w*3*0.5);
+    }
+  }
   // 소환서 구매 — 골드 여유(16M+)면 10장 팩 (E제작 800k 예산은 항상 확보)
   while(S.gold>=16000000){ S.gold-=15000000; S.tickHero+=10; }
+}
+/* 안전 강화 — 리더 장착 9부위를 +10까지(p≥0.82 구간, 파괴 위험 0, 실패 시 -1은 재시도 비용).
+   골드는 소환서 저축분(16M) 위의 여유만 써서 스크롤 케이던스를 해치지 않게 한다.
+   성공률·비용은 게임의 실제 표(openEnhance)와 동일한 값 — 강화의 CP 반영은
+   정본 heroPower(1+enh×0.12)가 자동으로 한다. */
+function enhanceStep(){
+  const S=ev('S'), leader=leaderId();
+  const items=S.equips.filter(e=>e.equipped&&(!e.heroId||e.heroId===leader)&&e.enh<10)
+    .sort((a,b)=>a.enh-b.enh);
+  let ups=0;
+  for(const it of items){
+    let guard=0;
+    while(it.enh<10 && guard++<60){
+      const cost=[50000,300000,1500000,6000000][Math.min(3,Math.floor(it.enh/5))];
+      const stoneCost=1+Math.floor(it.enh/5);
+      if(S.gold < 16000000+cost || (S.stones||0)<stoneCost) return ups;
+      S.gold-=cost; S.stones-=stoneCost;
+      if(Math.random() < (it.enh<5?0.95:0.82)){ it.enh++; ups++; }
+      else it.enh=Math.max(0,it.enh-1);
+    }
+  }
+  return ups;
 }
 function synthStep(){
   const GORDER=['N','R','E','L'], S=ev('S');
@@ -334,6 +367,8 @@ while(simSec < MAX_HOURS*3600 && windows<1600){
     c=bestCraftable();
   }
   if(crafts>0) did+=`${crafts}제작·장착 @${tier.n}`;
+  const ups=enhanceStep();
+  if(ups>0) did+=` 강화+${ups}`;
 
   // ⑤ 기록 — CP 변화 or 이벤트
   const cp=myCP();
@@ -382,6 +417,7 @@ log(`\n총 시뮬: ${(simSec/3600).toFixed(1)}h · 창 ${windows}회 · 최종 C
     Object.entries(S.shards).map(([k,v])=>`${k}:${Math.floor(v)}`).join(' '));
   const worn=S.equips.filter(e=>e.equipped&&(!e.heroId||e.heroId===ld.hero_id));
   log(`[진단] 리더 장착 ${worn.length}부위 ·`, worn.map(e=>`${e.grade}${e.slot}${e.enh?'+'+e.enh:''}`).join(', ')||'없음');
+  log(`[진단] 강화석 보유: ${Math.floor(S.stones||0)} · 리더 평균 강화: ${(worn.reduce((a,e)=>a+(e.enh||0),0)/(worn.length||1)).toFixed(1)}`);
   log(`[진단] 보유 영웅별 CP:`, ev('ownedHeroes')().map(h=>`${h.name.slice(0,5)}(${h.grade})=${ev('heroPower')(h)}`).join(' · '));
   log('[진단] 골드 보유:', Math.floor(S.gold));
   // E 아이템 첫 후보 왜 안 되는지 — recipeOk/gold 각각 출력
