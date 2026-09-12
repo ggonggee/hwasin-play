@@ -4604,10 +4604,15 @@ const MODALS = {
       const e=heroEntry(r.hero_id); const G=GRADES[r.grade];
       const need=heroFuseNeed(r.hero_id), sh=heroShardAvail(r.hero_id);   // ★ B7/F1: 전용 + 직업 공용
       const card=el('div','herocard gframe grade-'+r.grade); card.style.setProperty('--gc',G.color);
+      /* ★ v5.169: 실제 경험치 진행 바 — exp 는 레벨×250 필요량으로 쌓이는데(onKill) 어디에도
+         보이지 않아 성장이 레벨업 토스트로만 느껴졌다. 정산 화면의 바는 데모용 가짜 값. */
+      const st=S.heroes[r.hero_id]||{};
+      const xpPct=e.own?clamp((st.exp||0)/((e.level||1)*250)*100,0,100):0;
       card.innerHTML=`<div class="hc-grade" style="color:${G.color}">${G.name}</div>
         <div class="hc-art" style="${e.own?'':'filter:grayscale(1);opacity:.35'}">${heroPortrait(r.hero_id,3)}</div>
         <div class="hc-name">${r.name}</div>
         <div class="hc-job">${e.job.name}${e.own?` · Lv${e.level}`:''}</div>
+        ${e.own?`<div class="hc-xp" title="다음 레벨까지 ${fmt((e.level||1)*250-(st.exp||0))}"><i style="width:${xpPct}%"></i></div>`:''}
         <div class="hc-shard ${e.own?'':(sh>=need?'ok':'lack')}">🔥 ${e.own?'보유':`${fmt(sh)}/${fmt(need)}`}</div>`;
       // [합성] — 우상단
       const fu=el('button','btn xs hc-fuse','합성');

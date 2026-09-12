@@ -828,6 +828,9 @@ body{
 .herocard .hc-name{ font-size:var(--fs-sm); font-weight:700; color:var(--txt-hi); line-height:1.25; letter-spacing:-.03em; }
 .herocard .hc-job{ font-size:var(--fs-xs); color:var(--txt-dim); margin-top:1px; }
 .herocard .hc-shard{ font-size:var(--fs-xs); font-weight:700; color:#cdbf9f; margin-top:3px; }
+/* ★ v5.169: 실제 경험치 진행 바 — exp/레벨×250 (onKill 집계). 미보유 영웅은 렌더 자체를 안 한다. */
+.herocard .hc-xp{ height:4px; margin-top:3px; border-radius:2px; background:#0c0906; border:1px solid #241c10; overflow:hidden; }
+.herocard .hc-xp i{ display:block; height:100%; background:linear-gradient(90deg,#8ee6c0,#f0cd82); }
 .herocard .hc-shard.ok{ color:var(--ok,#8ee6c0); } .herocard .hc-shard.lack{ color:#c96a5a; }
 .herocard .hc-fuse{ position:absolute; top:3px; right:3px; padding:2px 6px; font-size:var(--fs-xs); }
 .herocard .hc-act{ display:flex; align-items:center; justify-content:center; gap:6px; margin-top:6px; }
