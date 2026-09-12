@@ -14,7 +14,8 @@
     "setup": "git config core.hooksPath .githooks && echo \"pre-push hook installed (.githooks)\"",
     "bump": "node version.mjs",
     "version:check": "node version.mjs --check",
-    "icons:webp": "python png2webp.py assets/icons"
+    "icons:webp": "python png2webp.py assets/icons",
+    "sim": "node balance-sim.mjs"
   },
   "engines": {
     "node": ">=18"
