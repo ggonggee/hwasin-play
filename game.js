@@ -4230,6 +4230,54 @@ function rerollFix(){
   if(typeof S.rerollSpent!=='number' || !isFinite(S.rerollSpent) || S.rerollSpent<0) S.rerollSpent=0;
 }
 
+/* 재료를 떨구는 몬스터 목록 팝업 — 같은 등급의 모든 몬스터 표시.
+   ★ v5.163: 대장간 클로저에서 전역으로 추출 — 인벤토리 재료 칩에서도 쓴다.
+   ret = 닫기/사냥 후 돌아갈 모달 키(기본 'forge'). 호출처: 대장간 재료 칩(ret='forge'),
+   인벤토리 재료 칩(ret='inventory').
+   ★ v5.111: 종전에는 '같은 등급 몬스터 전체'를 무조건 보여줬다. 몬스터는 저마다 고정 재료
+   1종만 떨구므로(onKill 참조), 흑염석을 눌러도 청연석·무쇠조각 몬스터가 같이 떴고 —
+   고정 드랍이 없던 잿가루/서리결정/천공수정/금강석은 5종 전부가 '그 재료를 안 주는 몬스터'였다.
+   즉 안내대로 사냥해도 원하는 재료가 안 나왔다. 이제 실제 드랍 몬스터를 먼저 지목하고,
+   나머지는 '랜덤 10%' 라벨을 달아 구분해서 보여준다. */
+function openMatMonsterPopup(matKey, ret){
+  const m = MAT_BY_KEY[matKey], grade = m ? m.g : null;
+  if(!grade){ toast('재료 소환/합성으로 획득 가능합니다.'); return; }
+  const all = HUNT_TIERS.map((t,i)=>({t,i})).filter(x=>x.t.drop===grade);
+  const dropsIt = x => x.t.mat===matKey || x.t.mat2===matKey;
+  const mons = [...all.filter(dropsIt), ...all.filter(x=>!dropsIt(x))];
+  const hit = all.filter(dropsIt).length;
+  setModalTitle(`${matKey} 파밍 — ${GRADES[grade].name} 몬스터`);
+  const b=$('#modalBody'); b.innerHTML='';
+  b.appendChild(el('div','hint', hit
+    ? `<b style="color:${GRADES[grade].color}">${matKey}</b> 을(를) 고정 드랍하는 몬스터입니다. 아래쪽 몬스터는 같은 등급이라 낮은 확률로만 나옵니다.`
+    : `<b style="color:${GRADES[grade].color}">${matKey}</b> 을(를) 고정 드랍하는 몬스터가 없습니다. 같은 등급 사냥 중 낮은 확률로 나오거나, 재료 소환·합성으로 얻습니다.`));
+  mons.forEach(({t,i})=>{
+    const isHunting = (S.huntTier||0)===i;
+    const row=el('div','pack');
+    row.innerHTML=`<div class="pic" style="border-color:${t.c}">
+      <img src="assets/monsters/${t.img}.webp" style="width:40px;height:40px;object-fit:contain">
+    </div>
+    <div class="info">
+      <div class="t" style="color:${t.c}">${t.n} ${isHunting?'<span class="small" style="color:var(--ok)">사냥중</span>':''}${(t.mat===matKey||t.mat2===matKey)?'<span class="small" style="color:var(--g-legend)">고정 드랍</span>':'<span class="small mut">랜덤</span>'}</div>
+      <div class="d">드랍: ${matIcon(t.mat)} ${t.mat}${t.mat2?` · ${matIcon(t.mat2)} ${t.mat2}`:''} · 권장 전투력 ${fmt(t.cp)}${totalCP()<t.cp?' ⚠':''}</div>
+    </div>`;
+    const btn=el('button','btn sm'+(isHunting?'':' gold'), isHunting?'사냥중':'사냥');
+    if(isHunting) btn.disabled=true;
+    btn.onclick=()=>{
+      S.huntTier=i; Battle.setHunt(); sfx('tap');
+      toast(`${t.n} 사냥 시작`);
+      sysLog(`몬스터 사냥 → <span style="color:${t.c}">${t.n}</span>`);
+      closeModal(); openModal(ret||'forge');
+    };
+    row.appendChild(btn); b.appendChild(row);
+  });
+  const closeBtn=el('button','btn wide','닫기');
+  closeBtn.style.marginTop='10px';
+  closeBtn.onclick=()=>{ closeModal(); openModal(ret||'forge'); };
+  b.appendChild(closeBtn);
+  $('#modal-root').classList.add('on'); currentModal='matMonster';
+}
+
 const MODALS = {
 
   /* ---------- [B1] 온보딩 ---------- */
@@ -4304,11 +4352,9 @@ const MODALS = {
       _forgeCraftFn=()=>startCraft(item);
       b2Overlay(MODALS.forgeItemPopup.title,(bd,close)=>MODALS.forgeItemPopup.render(bd,close));
     }
-    /* ★ v5.61: 재료 칩 — 클릭 시 팝업으로 해당 등급의 모든 몬스터 표시. */
-    function matToGrade(matKey){
-      const m = MAT_BY_KEY[matKey];
-      return m ? m.g : null;
-    }
+    /* ★ v5.61: 재료 칩 — 클릭 시 팝업으로 해당 등급의 모든 몬스터 표시.
+       ★ v5.163: 파밍 팝업 본체(openMatMonsterPopup)는 전역으로 추출됐다 — 인벤토리 재료 칩에서도
+       쓰기 위해서. 여기서는 호출만 한다(ret='forge': 닫으면 대장간으로 복귀). */
     function matChips(recipe){
       const matn=el('div','mat-need');
       (recipe||[]).forEach(r=>{ const have=matAvail(r.k), lack=have<r.need;
@@ -4316,53 +4362,9 @@ const MODALS = {
         chip.style.cursor='pointer';
         chip.innerHTML=`<div class="mi">${matIcon(r.k)}</div><div class="have${lack?' lack':''}">${fmt(have)}/${r.need}</div>`;
         /* 재료 칩 클릭 → 팝업으로 몬스터 목록 */
-        chip.onclick=()=>openMatMonsterPopup(r.k);
+        chip.onclick=()=>openMatMonsterPopup(r.k,'forge');
         matn.appendChild(chip); });
       return matn;
-    }
-    /* 재료를 떨구는 몬스터 목록 팝업 — 같은 등급의 모든 몬스터 표시. */
-    /* ★ v5.111: 종전에는 '같은 등급 몬스터 전체'를 무조건 보여줬다. 몬스터는 저마다 고정 재료
-       1종만 떨구므로(onKill 참조), 흑염석을 눌러도 청연석·무쇠조각 몬스터가 같이 떴고 —
-       고정 드랍이 없던 잿가루/서리결정/천공수정/금강석은 5종 전부가 '그 재료를 안 주는 몬스터'였다.
-       즉 안내대로 사냥해도 원하는 재료가 안 나왔다. 이제 실제 드랍 몬스터를 먼저 지목하고,
-       나머지는 '랜덤 10%' 라벨을 달아 구분해서 보여준다. */
-    function openMatMonsterPopup(matKey){
-      const grade = matToGrade(matKey);
-      if(!grade){ toast('재료 소환/합성으로 획득 가능합니다.'); return; }
-      const all = HUNT_TIERS.map((t,i)=>({t,i})).filter(x=>x.t.drop===grade);
-      const dropsIt = x => x.t.mat===matKey || x.t.mat2===matKey;
-      const mons = [...all.filter(dropsIt), ...all.filter(x=>!dropsIt(x))];
-      const hit = all.filter(dropsIt).length;
-      setModalTitle(`${matKey} 파밍 — ${GRADES[grade].name} 몬스터`);
-      const b=$('#modalBody'); b.innerHTML='';
-      b.appendChild(el('div','hint', hit
-        ? `<b style="color:${GRADES[grade].color}">${matKey}</b> 을(를) 고정 드랍하는 몬스터입니다. 아래쪽 몬스터는 같은 등급이라 낮은 확률로만 나옵니다.`
-        : `<b style="color:${GRADES[grade].color}">${matKey}</b> 을(를) 고정 드랍하는 몬스터가 없습니다. 같은 등급 사냥 중 낮은 확률로 나오거나, 재료 소환·합성으로 얻습니다.`));
-      mons.forEach(({t,i})=>{
-        const isHunting = (S.huntTier||0)===i;
-        const row=el('div','pack');
-        row.innerHTML=`<div class="pic" style="border-color:${t.c}">
-          <img src="assets/monsters/${t.img}.webp" style="width:40px;height:40px;object-fit:contain">
-        </div>
-        <div class="info">
-          <div class="t" style="color:${t.c}">${t.n} ${isHunting?'<span class="small" style="color:var(--ok)">사냥중</span>':''}${(t.mat===matKey||t.mat2===matKey)?'<span class="small" style="color:var(--g-legend)">고정 드랍</span>':'<span class="small mut">랜덤</span>'}</div>
-          <div class="d">드랍: ${matIcon(t.mat)} ${t.mat}${t.mat2?` · ${matIcon(t.mat2)} ${t.mat2}`:''} · 권장 전투력 ${fmt(t.cp)}${totalCP()<t.cp?' ⚠':''}</div>
-        </div>`;
-        const btn=el('button','btn sm'+(isHunting?'':' gold'), isHunting?'사냥중':'사냥');
-        if(isHunting) btn.disabled=true;
-        btn.onclick=()=>{
-          S.huntTier=i; Battle.setHunt(); sfx('tap');
-          toast(`${t.n} 사냥 시작`);
-          sysLog(`몬스터 사냥 → <span style="color:${t.c}">${t.n}</span>`);
-          closeModal(); openModal('forge');
-        };
-        row.appendChild(btn); b.appendChild(row);
-      });
-      const closeBtn=el('button','btn wide','닫기');
-      closeBtn.style.marginTop='10px';
-      closeBtn.onclick=()=>{ closeModal(); openModal('forge'); };
-      b.appendChild(closeBtn);
-      $('#modal-root').classList.add('on'); currentModal='matMonster';
     }
     function render2(){
       body.innerHTML='';
@@ -5304,7 +5306,12 @@ const MODALS = {
     const mg=el('div','mat-grid24'); mg.style.marginTop='8px';
     MATS.forEach(m=>{ const c=el('div','cell gframe grade-'+m.g); c.style.setProperty('--gc',GRADES[m.g].color);
       c.innerHTML=`<div class="ei">${matIcon(m.k,1.5)}</div><div class="cn">${m.k}</div><div class="mq">${fmt(S.mats[m.k]||0)}</div>`;
-      c.onclick=()=>toast(`${m.k} · 보유 ${fmt(S.mats[m.k]||0)} (등급풀 포함 가용 ${fmt(matAvail(m.k))})`);
+      /* ★ v5.163: 재료 칩 클릭 → 파밍 팝업. 종전엔 보유 수만 토스트로 띄웠다 — '이 재료
+         어디서 얻지?'가 인벤토리에서는 답이 없어 대장간을 돌아가야 했다. 대장간 재료 칩과
+         같은 팝업(v5.111)을 띄우고, 닫으면 인벤토리로 돌아온다. 보유/가용 수는 title 툴팁으로 보존. */
+      c.title=`${m.k} · 보유 ${fmt(S.mats[m.k]||0)} (등급풀 포함 가용 ${fmt(matAvail(m.k))})`;
+      c.style.cursor='pointer';
+      c.onclick=()=>openMatMonsterPopup(m.k,'inventory');
       mg.appendChild(c); });
     b.appendChild(mg);
     /* 기타 재화.
