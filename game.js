@@ -1513,17 +1513,25 @@ function today(){ try{ return new Date().toDateString(); }catch(e){ return 'demo
    최초 접속일(first)은 지급하지 않는다 — 보상은 '다시 왔을 때'의 훅이다. */
 /* ★ v5.201: 코드 값 규약 — 양수=주사위, 음수=기타(아래 매핑). 초안에 3일차를 20(양수)으로
    적어 '강화석 20'이 '주사위 20'으로 지급되는 결함을 스모크가 배포 전에 잡았다 —
-   매핑 표는 기호 규약을 지켜야 한다. 강화석=-4. */
+   매핑 표는 기호 규약을 지켜야 한다. 강화석=-4.
+   ★ v5.202: loginReward(일차) 를 순수 조회(무엇을 줄지)로, loginRewardGive 를 지급으로 분리 —
+   퀘스트 탭 미리보기(v5.202)가 같은 정본을 쓴다. 표 복붙은 이 저장소의 정본 단일 원칙 위반. */
 const LOGIN_REWARDS=[30,-1,-4,-2,60,-3,-1];   // index=(day-1)%7
-function loginRewardGive(day){
+function loginReward(day){
   const v=LOGIN_REWARDS[(day-1)%7];
   if(v===undefined) return null;
-  if(v>0){ S.dice=(S.dice||0)+v; return `주사위 X${v}`; }
-  if(v===-1){ S.tickHero=(S.tickHero||0)+1; return '영웅 소환권 X1'; }
-  if(v===-2){ S.tickMat=(S.tickMat||0)+2; return '재료 소환권 X2'; }
-  if(v===-3){ S.records=(S.records||0)+1; return '영웅 기록서 X1'; }
-  if(v===-4){ S.stones=(S.stones||0)+20; return '강화석 X20'; }
+  if(v>0)  return { txt:`주사위 X${v}`, give:()=>{ S.dice=(S.dice||0)+v; } };
+  if(v===-1) return { txt:'영웅 소환권 X1', give:()=>{ S.tickHero=(S.tickHero||0)+1; } };
+  if(v===-2) return { txt:'재료 소환권 X2', give:()=>{ S.tickMat=(S.tickMat||0)+2; } };
+  if(v===-3) return { txt:'영웅 기록서 X1', give:()=>{ S.records=(S.records||0)+1; } };
+  if(v===-4) return { txt:'강화석 X20',   give:()=>{ S.stones=(S.stones||0)+20; } };
   return null;
+}
+function loginRewardGive(day){
+  const r=loginReward(day);
+  if(!r) return null;
+  r.give();
+  return r.txt;
 }
 function rollDaily(){
   const t=today(); if(S.daily.date===t) return;
@@ -6059,6 +6067,13 @@ const MODALS = {
         // ★ B9/G-121: 상단 날짜 헤더 (장식 프레임)
         body.appendChild(el('div','datehead', `${todayLabel()} · ${S.day||1}일차`));
         body.appendChild(el('div','small mut','일일 미션 · 매일 0시 리셋'));
+        /* ★ v5.202: 접속 보상 미리보기 — v5.201 보상이 자동 지급이라 '무엇을 받았는지/
+           내일 뭘 받는지'를 볼 곳이 없었다. 오늘 지급분(이미 받음)과 내일 예고를 한 줄로.
+           loginRewardGive 는 순수 계산이 아니라 지급 함수라 여기선 표 전용 조회 함수 사용. */
+        const lrShow=(day)=>{ const r=loginReward(day); return r?r.txt:'—'; };
+        body.appendChild(el('div','hint',
+          `🎁 오늘(${S.day||1}일차) 접속 보상 <b>${lrShow(S.day||1)}</b> · 자동 지급됨<br>`+
+          `<span class="mut">내일(${(S.day||1)+1}일차) — <b>${lrShow((S.day||1)+1)}</b></span>`));
         /* ★ B9/G-120: 6행 구성. 보상은 전부 주사위 🎲 X n.
            '보스 3번 도전'은 수령 버튼 없이 진행 텍스트(N/3)만 표시한다. */
         DAILY_QUESTS.forEach((q,i)=>{
