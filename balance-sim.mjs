@@ -281,7 +281,8 @@ S0.settings.sound=false;
 let simSec=0;
 const WINDOW=1800;                 // 30분(시뮬) 전투 창 — 수입률 측정·실제 킬
 const events=[];                   // {t(시), cp, what}
-const craftTally={};               // ★ v5.185 진단: 등급별 제작 시도 집계
+const craftTally={};
+const killLog=[];               // ★ v5.185 진단: 등급별 제작 시도 집계
 
 events.push({t:0, cp:myCP(), what:'시작 — '+ev('party')()[0].name});
 
@@ -295,8 +296,10 @@ while(simSec < MAX_HOURS*3600 && windows<1600){
   const tier=ev('HUNT_TIERS')[idx];
 
   // ② 전투 창
-  const goldBefore=ev('S').gold;
+  const goldBefore=ev('S').gold, killsBefore=ev('S').stats.kills;
   battleWindow(WINDOW);
+  const killsNow=ev('S').stats.kills-killsBefore;    // ★ 진단: 창당 킬 수(전멸 루프 탐지)
+  if(windows>200) killLog.push(`${(simSec/3600).toFixed(0)}h:${killsNow}`);
   simSec+=WINDOW; windows++;
 
   // ③ 일일 콘텐츠·소환서 구매 → 합성·소환 (의도 루프)
@@ -334,6 +337,7 @@ while(simSec < MAX_HOURS*3600 && windows<1600){
 
   // ⑤ 기록 — CP 변화 or 이벤트
   const cp=myCP();
+  const cpStart=lastCP;          // ★ 판정기용: 창 시작 시점 CP(아래 push 가 lastCP 를 갱신하기 전)
   if(crafts>0 || fusedName || synthGot>0 || cp!==lastCP){
     events.push({t:+(simSec/3600).toFixed(2), cp, what:did.trim()||'CP 상승'});
     lastCP=cp;
@@ -344,10 +348,13 @@ while(simSec < MAX_HOURS*3600 && windows<1600){
     if(cp>=t.cp && gradeReached[t.drop]===undefined) gradeReached[t.drop]=(simSec/3600).toFixed(1);
   });
 
-  // ⑤ 진행 멈춤 감지 — 5창(2.5시뮬시간) 동안 CP 변화 없으면 조기 종료(벽으로 판정)
-  if(cp===lastCP && !crafts) lastEventT+=WINDOW; else lastEventT=0;
-  if(lastEventT>=WINDOW*20){
-    events.push({t:+(simSec/3600).toFixed(2), cp, what:'⛔ 정체 — 10시간 무성장'});
+  /* ★ 정체 판정기 수정 — 종전엔 위 push 가 lastCP 를 갱신한 뒤 비교해 cp===lastCP 가
+     거의 항상 참이었고, 성장 중에도 타이머가 매창 쌓여 48h 무성장 오판으로 강제 종료했다.
+     (이 버그가 세션 내내 실곡선을 가렸다 — 131~139h 구간 CP 상승 중 종료된 실측으로 발견.)
+     창 시작 시점 CP(cpStart)와 비교해 진짜 무성장만 센다. */
+  if(cp===cpStart && !crafts && !fusedName) lastEventT+=WINDOW; else lastEventT=0;
+  if(lastEventT>=WINDOW*96){
+    events.push({t:+(simSec/3600).toFixed(2), cp, what:'⛔ 정체 — 48시간 무성장'});
     break;
   }
 }
@@ -397,5 +404,6 @@ log(`\n총 시뮬: ${(simSec/3600).toFixed(1)}h · 창 ${windows}회 · 최종 C
   }
   log('[진단] guideStep', gs+'/'+CH.length, '| prog', S.guideProg, extra);
 }
+log('[킬률] 창(30분)당 킬 — 최근:', killLog.slice(-10).join(' '));
 if(globalThis.__fuseLog){ const c={}; globalThis.__fuseLog.forEach(x=>c[x]=(c[x]||0)+1); log('[fuse로그]', JSON.stringify(c)); }
 log('결론은 곡선을 보고 판단 — 공백이 길면 해당 구간의 재료/골드 곡선을 조정한다.');
