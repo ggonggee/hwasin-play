@@ -7642,6 +7642,29 @@ function gameLoop(ts){
   requestAnimationFrame(gameLoop);
 }
 setInterval(()=>{ save(); refreshClaimBadges(); }, 5000);   /* ★ v5.162: 배지 갱신 동반 — 전투 중 미션 달성도 5초 안에 점이 켜진다 */
+/* ★ v5.173: 백그라운드 탭 복귀 정산 — rAF 는 백그라운드에서 스로틀돼 방치 수입이 멈추는데,
+   5초 저장 타이머는 살아 있어 lastSeen 이 계속 갱신된다 → 숨김 구간은 오프라인 정산
+   (computeOffline, 세션 로드 시 1회)에도 못 들어가 완전히 증발했다.
+   숨김 구간을 오프라인과 같은 배율(분당 1,000G · 상한 8시간)로 offlinePending 에 쌓는다 —
+   새 경제가 아니라 기존 오프라인 규칙의 사각만 메우는 것이다.
+   _visibilitySettle(hideTs, nowTs) 를 나눈 건 스모크에서 시계 없이 검증하기 위해서다. */
+let _tabHideTs=0;
+function _visibilitySettle(hideTs, nowTs){
+  if(!S || !hideTs) return 0;
+  const elapsed=(nowTs-hideTs)/1000, cap=8*3600;
+  const add = elapsed>60 ? Math.floor(1000/60*Math.min(elapsed,cap)) : 0;
+  if(add>0){
+    S.offlinePending=(S.offlinePending||0)+add;
+    toast(`복귀 정산 — 오프라인 골드 ${fmt(add)} G 대기 (좌상단 시계 → 정산에서 수령)`);
+    refreshHUD();
+  }
+  return add;
+}
+document.addEventListener('visibilitychange', ()=>{
+  if(document.hidden){ _tabHideTs=Date.now(); return; }
+  const ts=_tabHideTs; _tabHideTs=0;
+  if(ts) _visibilitySettle(ts, Date.now());
+});
 
 function enterHome(){
   $('#title').classList.add('hidden');
