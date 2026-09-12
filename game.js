@@ -1341,6 +1341,8 @@ function freshState(){
             craftWin:0,  craftWinBest:0,    // 영웅등급 이상 장비 제작 연속 성공
             poorClick:0, poorBest:0,        // 골드 부족 상태에서의 제작 연속 시도
             ddStage:0,                      // 요일던전 최고 클리어 단계
+            salvages:0,                     // ★ v5.219: 장비 분해 누적 (업적 축)
+            legendCrafts:0,                 // ★ v5.219: 레전더리 등급 제작 성공 누적 (업적 축)
             bossTop:0,                      // 레전더리 보스 처치 횟수
             rubyBox:0,                      // 루비 상자(충전 상품) 구매 횟수
             chat:{} },                      // 월드챗 문구 칭호 전송 플래그
@@ -4466,6 +4468,7 @@ function doSalvageBulk(grade){
     if(!again.count){ toast('이미 처리되었습니다.'); return; }
     S.equips=S.equips.filter(e=>e.equipped||e.grade!==grade);
     addGold(again.gold);
+    S.stats.salvages=(S.stats.salvages||0)+again.count;   // ★ v5.219: 업적 집계
     toast(`${GRADES[grade].name} 등급 ${again.count}개 분해 · 골드 +${fmt(again.gold)}`);
     sysLog(`일괄 분해 — ${GRADES[grade].name} ${again.count}개 → 골드 ${fmt(again.gold)}`);
     sfx('coin'); openModal('inventory'); refreshHUD();
@@ -6267,12 +6270,20 @@ const MODALS = {
            보상은 붙이지 않는다 — 대조 근거 없이 보상을 설계한 적이 이 저장소의
            사고를 낸 바 있다(몬스터 소환권, HANDOFF 6장). 순수 진행 표시. */
         body.appendChild(el('div','hint','누적 업적 — 다음 마일스톤까지의 진행.'));
+        /* ★ v5.219: 업적 축 4종 추가(영웅 합성·각성·분해·레전더리 제작) — v5.172 개편 당시
+           6개 축만 있었다. 이 세션에서 합성 승계(v5.184)·각성 심화 30(v5.193)·분해(v5.187)가
+           핵심 축으로 자리 잡았는데 업적에 없었다. 임계값은 실측 곡선 기준(레전더리 제작
+           첫 성공 ≈ 6일). 보상 없음(종전 원칙). */
         [ ['몬스터 처치',S.stats.kills,[100,1000,5000,20000]],
           ['제작 성공',S.stats.crafts,[10,100,500]],
           ['소환',S.stats.summons,[20,100,500]],
           ['투기장 승리',S.stats.arenaWins,[15,50,200]],
           ['재료 합성',S.stats.synths||0,[10,100,500]],
           ['보스 도전',S.stats.bossChallenges||0,[10,50,200]],
+          ['영웅 합성',S.stats.fuses||0,[1,4,8]],
+          ['각성 단계',S.awaken||0,[3,12,30]],
+          ['장비 분해',S.stats.salvages||0,[10,100,1000]],
+          ['레전더리 제작',S.stats.legendCrafts||0,[1,5,9]],
         ].forEach(([t,v,ms])=>{
           const done=ms.filter(m=>v>=m).length, next=ms.find(m=>v<m);
           const row=el('div'); row.style.margin='8px 0';
@@ -7422,6 +7433,7 @@ function itemDetail(e, heroId){ _itemDetailHeroId=heroId||null;
     styledConfirm(`정말 분해하시겠습니까?`, ()=>{
       S.equips=S.equips.filter(x=>x!==e);
       addGold(gold);
+      S.stats.salvages=(S.stats.salvages||0)+1;   // ★ v5.219: 업적 집계
       toast(`${GRADES[e.grade].name} ${e.slot} 분해 · 골드 +${fmt(gold)}`);
       sysLog(`장비 분해 — ${GRADES[e.grade].name} ${e.slot} → 골드 ${fmt(gold)}`);
       sfx('coin');
@@ -7525,6 +7537,7 @@ function resolveCraft(forceSuccess){
        일반 성공과 같은 소리·표시였다. 금색 토스트 + legendary 음 + 시스템 로그 강조.
        E(80%)는 일반 연출 유지 — 희소성이 연출의 크기를 정한다. */
     if(grade==='L'){ sfx('legendary');
+      S.stats.legendCrafts=(S.stats.legendCrafts||0)+1;   // ★ v5.219: 업적 집계
       toast(`✨ <b style="color:var(--g-legend)">레전더리 ${slot} 제작 성공!</b>`);
       sysLog(`<b style="color:var(--g-legend)">레전더리 ${slot} 탄생 — 40% 확률을 뚫었습니다</b>`); }
     Battle.refreshParty(); guideCheck('craft',{grade,cat,slot}); }
