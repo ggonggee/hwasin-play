@@ -772,6 +772,21 @@ step('방패 주기 회복 — 17초마다 20%p · 미착용 무효', ()=>{
   S.equips=keep;
   B.refreshParty&&B.refreshParty();
 });
+/* ★ v5.218: 합성 확률·비용 정합 — rateOf는 실측값(G-31)이라 바뀌면 안 된다.
+   · N→R 50% · R→E 0.8% · E→L 0.08% · 비용: 확률 30개/확정 500개.
+   이 값이 어긋나면 확률 합성의 기대값 경제가 통째로 흔들린다. */
+step('합성 확률·비용 — G-31 실측값 고정', ()=>{
+  const src = fs.readFileSync(D+'game.js','utf8');
+  const m = src.match(/function rateOf\(g\)\{ return g==='R'\?(\d+(?:\.\d+)?):g==='E'\?(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)/);
+  if(!m) throw new Error('rateOf 함수를 못 찾음 — 시그니처 변경');
+  const [_,r,e,l]=m;
+  if(r!=='50') throw new Error('N→R 확률 '+r+'% ≠ 50% (G-31)');
+  if(e!=='0.8') throw new Error('R→E 확률 '+e+'% ≠ 0.8% (G-31)');
+  if(l!=='0.08') throw new Error('E→L 확률 '+l+'% ≠ 0.08% (G-31)');
+  // 비용 상수
+  if(!src.includes('matSpend(sel,30)')) throw new Error('확률 합성 비용 30 누락');
+  if(!src.includes('matSpend(sel,500)')) throw new Error('확정 합성 비용 500 누락');
+});
 step('제작시간 배율 — 버프 on 0.5배 · off 1배 (칭호 기준 상대 비교)', ()=>{
   const S=ev('S'), mul=ev('craftTimeMul'), tmul=ev('titleCraftTimeMul');
   S.buffs.craftUntil=0;
