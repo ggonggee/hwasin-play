@@ -6717,8 +6717,17 @@ const MODALS = {
                   + rankPct + costPct + holdPct + tGoldPct;
     const expPct  = (S.villTrain-1)*VILL_BUFF_PP + (S.buffs.expUntil>now?100:0) + (joined?5:0) + (master?35:0) + tExpPct;
     const days = ts => ts>now ? `${Math.ceil((ts-now)/86400000)}일 남음` : '미보유';
-    b.appendChild(el('div','center small mut','현재 적용 중인 버프 집계 (11종)'));
-    [ ['🪙','최종 골드',        `+${goldPct.toFixed(2)}%`],
+    /* ★ v5.217: 보유 버프 4종 추가(고서·물약·각성·세트) — v5.210~215 로 구현된
+       보유형 버프가 버프 화면에 없었다. '내가 무엇을 받고 있는가'의 전체 목록이 한곳에. */
+    const tomeKinds=new Set((S.equips||[]).filter(e=>e&&e.slot&&e.slot.indexOf('고서')>=0).map(e=>e.slot)).size;
+    const potKinds=new Set((S.equips||[]).filter(e=>e&&e.slot&&e.slot.indexOf('물약')>=0).map(e=>e.slot)).size;
+    const setsOn=activeSets().filter(x=>x.c>0);
+    b.appendChild(el('div','center small mut','현재 적용 중인 버프 집계 (15종)'));
+    [ ['📕','고서 보유',        tomeKinds>0?`계정 스탯 +${(tomeKinds*3)}% (${tomeKinds}종)`:'미보유'],
+      ['🧪','물약 보유',        potKinds>0?`자연 회복 +${(potKinds*100)}% (${potKinds}종)`:'미보유'],
+      ['⚡','각성',             `+${(S.awaken*1.5).toFixed(1)}% (${S.awaken}단계)`],
+      ['🧩','세트 효과',        setsOn.length?setsOn.map(x=>`${x.n} ${x.c}`).join(' · '):'미착용'],
+      ['🪙','최종 골드',        `+${goldPct.toFixed(2)}%`],
       ['📈','최종 경험치',      `+${expPct.toFixed(2)}%`],
       ['🗡️','약탈 활성화 버프', S.raidOn ? '길드레이드 피해 +50% · 골드 획득 +20%' : '비활성'],
       ['🛡️','길드 버프',        joined ? '골드 +5% · 경험치 +5%' : '길드 미가입'],
