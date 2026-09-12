@@ -6271,6 +6271,9 @@ const MODALS = {
     b.appendChild(g);
     const close=el('button','btn wide','닫기'); close.style.marginTop='10px'; close.onclick=()=>closeModal(); b.appendChild(close);
   }},
+  /* ★ v5.229: '장기 목표'의 강화 기대 비용 3.2억은 시뮬 실측값. 종전 4.8억은 몬테카를로가
+     '실패마다 망치 10개 소모'로 계산한 것 — 실제 규칙(openEnhance)은 실패 중 파괴 분기(50%)에서만
+     망치가 소모된다. 실측(600h 시뮬, 상시 보호 정책): 부위당 기대 시도 약 26회 · 망치 약 41개. */
   strategy:{ title:'공략', render(b){ b.innerHTML=`<div class="hint" style="line-height:1.8">
     <b style="color:#f0cd82">■ 성장 로드맵 (실측 곡선 기준)</b><br>
     1) 대장간 '지금 제작 가능' 표시를 따라 장비를 채운다 (일반 전 장비 약 2시간)<br>
@@ -6283,7 +6286,7 @@ const MODALS = {
     · 골드: 골드던전(일 3회) · 마을회관 · 오프라인 정산(최대 8시간)<br>
     · 창고: 하위 등급은 일괄분해로 골드 회수 (환급 90% 상한)<br><br>
     <b style="color:#f0cd82">■ 장기 목표 (레전더리 완성 이후)</b><br>
-    · 강화 +11~20: 망치로 파괴를 막으며 도전 — 부위당 약 4.8억 골드<br>
+    · 강화 +11~20: 망치로 파괴를 막으며 도전 — 부위당 약 3.2억 골드 (전 부위 약 32억)<br>
     · 심화 각성 13~30단계: 영웅 기록서(탑 상자·회색코인)로 계정 스탯 상승<br>
     · 시련의 탑 고층 도전 · 몬스터 도감 전종(20종) 완성</div>`; }},
 

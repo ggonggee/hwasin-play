@@ -257,21 +257,78 @@ function dailyStep(){
     }
   }
   // 소환서 구매 — 골드 여유(16M+)면 10장 팩 (E제작 800k 예산은 항상 확보)
-  while(S.gold>=16000000){ S.gold-=15000000; S.tickHero+=10; }
+  /* ★ v5.229: 로스터 완성(9/9) 후엔 산다. 조각 소비처가 합성(끝)·영웅 강화(레전더리
+     이상 전용 — 현재 로스터 N5+R4엔 없음)뿐이라 완성 후 소환서는 골드를 죽은 조각으로
+     바꾸기만 한다(실측: 직업당 조각 3,700+ 잉여). 엔드게임 골드는 위험 강화 망치로. */
+  while(S.gold>=16000000 && ev('ownedHeroes')().length<9){ S.gold-=15000000; S.tickHero+=10; }
 }
-/* ── +11~20 위험 강화의 엔드게임 기대값 (2026-09-12 측정, 몬테카를로 2만 회) ──
-   규칙(실측): 실패 시 50% 파괴(전설망치 10개=골드 4M로 방지, enh 유지) · 나머지 50% enh-1.
-   성공률 +11~14: 63% · +15~19: 44%. 골드 1.5M/6M · 강화석 3~4.
-   결과: 부위당 기대 시도 38회 · 골드 154M + 망치 81개(325M) = 479M · 강화석 133개.
-        9부위 = 약 43.1억 골드 + 강화석 1,199개 — 엔드게임 소득(던전+전투 ≈ 1억/일)으로
-        한 달+ 그라인드. CP 보상: enh 배율 2.2→3.4(부위당) ≈ 리더 ×1.35.
-   판정: +11~20은 망치 골드 구매(실측 상점가)로 충분히 실현 가능한 장기 엔드게임
-   싱크다 — 밸런스 변경 불필요. 시뮬 정책은 안전(+10)까지만 모델링하고, 위
-   구간은 이 기대값으로 별도 산출한다(강제 파괴 리스크가 정책 복잡도를 높여
-   본 시뮬의 비교 목적에는 불필요). */
-/* 안전 강화 — 리더 장착 9부위를 +10까지(p≥0.82 구간, 파괴 위험 0, 실패 시 -1은 재시도 비용).
-   골드는 소환서 저축분(16M) 위의 여유만 써서 스크롤 케이던스를 해치지 않게 한다.
-   성공률·비용은 게임의 실제 표(openEnhance)와 동일한 값 — 강화의 CP 반영은
+/* ── +11~20 위험 강화의 엔드게임 기대값 — 몬테카를로(2026-09-12) → 시뮬 내 측정(v5.229) ──
+   구 몬테카를로(부위당 479M)는 '실패마다 망치 소모'로 계산해 실제 규칙보다 비쌌다 —
+   openEnhance 는 실패 중 파괴 분기(50%)에서만 망치를 소모한다.
+   시뮬 실측(600h · 상시 보호 정책 · L장비 한정): 위험 강화 개시 약 166h(L 10부위 +10 직후) ·
+   부위당 기대 시도 약 26회 · 망치 약 41개 → 약 3.2억 골드(10부위 ≈ 32억 ≈ 한 달 그라인드).
+   파괴는 상시 보호 정책 기준 0건. CP 기여: 부위 배율 2.2(+10) → 3.4(+20). */
+/* ── +11~20 위험 강화 — 시뮬 내 직접 측정 (v5.229, 남은 과제 '강화 축 시뮬 반영') ──
+   종전(2026-09-12)엔 몬테카를로 2만 회 별도 산출(부위당 479M)로 시뮬 밖 처리였다.
+   v5.228로 세트가 풀리고 부위 9→10개·소득 곡선이 바뀌어 그 수치가 낡았다 — 이제
+   정책을 시뮬 안에 넣고 실곡선 위에서 측정한다.
+   정책(합리적 플레이어): 리더 착용 전 부위가 +10 이상일 때, 가장 낮은 부위부터
+   +11+ 도전. 파괴 보호 망치는 상점 정본가(전설 40M/10개·일반 15M/10개)로 10개씩
+   구매해 상시 보호 — 보호 없는 도전은 게임 UI(v5.222 기대 손실 표시)도 비추천한다.
+   규칙은 openEnhance 그대로: 성공률 +11~14 63% · +15~19 44%, 실패 시 (현 단계 ≥ +11이면)
+   50% 파괴[망치 prot.n개 소모로 방지 가능] / 나머지 50% 단계 -1(와드 없음 정책).
+   파괴되면 다음 창의 upgradeCandidates가 같은 부위를 재제작(안전 강화 → 재도전) —
+   실제 플레이어가 겪는 나선을 그대로 재현한다. */
+const riskTally={tries:0,success:0,drop:0,saved:0,destroyed:0,hammerGold:0,max20:0};
+function riskEnhanceStep(){
+  const S=ev('S'), leader=leaderId(), PC=ev('PROTECT_COST');
+  const worn=S.equips.filter(e=>e.equipped&&(!e.heroId||e.heroId===leader));
+  if(!worn.length) return {ups:0,ev:''};
+  const minEnh=Math.min(...worn.map(e=>e.enh||0));
+  if(minEnh<10) return {ups:0,ev:''};                 // 안전 구간이 남았으면 위험 도전 안 한다
+  /* 제작 업그레이드가 남아 있으면 장비부터 — 강화는 그 다음(합리적 플레이어 순서). */
+  if(upgradeCandidates().some(u=>u.recOK)) return {ups:0,ev:''};
+  const tgt=worn.slice().sort((a,b)=>(a.enh||0)-(b.enh||0))[0];
+  if((tgt.enh||0)>=20) return {ups:0,ev:''};
+  /* ★ L등급 장비에만 도전 — 하위 등급(N/E) +11+은 L 전환 시 같은 부위가 파괴되는
+     매몰비용이다(실측: 72h에 E장비 +11~13 → L 교체로 전부 소멸). 합리적 플레이어는
+     최상위 등급에만 위험 투자를 한다. */
+  if(tgt.grade!=='L') return {ups:0,ev:''};
+  let ups=0, evDesc='';
+  let guard=0;
+  while((tgt.enh||0)<20 && guard++<40 && S.equips.includes(tgt)){
+    const enh=tgt.enh, grade=tgt.grade;
+    const p = enh<5?0.95:enh<10?0.82:enh<15?0.63:0.44;
+    const cost=[50000,300000,1500000,6000000][Math.min(3,Math.floor(enh/5))];
+    const stoneCost=1+Math.floor(enh/5);
+    const prot=PC[grade]||PC.N;
+    const have = prot.cur==='hammerN'?(S.hammerN||0):(S.hammers||0);
+    const risky = enh>=11;                            // 파괴 가능 구간 (openEnhance 실측)
+    if(risky && have<prot.n){
+      const price = prot.cur==='hammerN'?15000000:40000000;   // 상점 X10 묶음 정본가
+      if(S.gold < 16000000+price+cost) break;         // 소환서 예산(16M)은 항상 확보
+      S.gold-=price; riskTally.hammerGold+=price;
+      if(prot.cur==='hammerN') S.hammerN=(S.hammerN||0)+10; else S.hammers=(S.hammers||0)+10;
+    } else if(S.gold < 16000000+cost) break;
+    if((S.stones||0)<stoneCost) break;
+    S.gold-=cost; S.stones-=stoneCost; riskTally.tries++;
+    if(Math.random()<p){ tgt.enh++; ups++; riskTally.success++;
+      if(tgt.enh===20) riskTally.max20++;
+    }
+    else if(risky && Math.random()<0.5){
+      const have2 = prot.cur==='hammerN'?(S.hammerN||0):(S.hammers||0);
+      if(have2>=prot.n){
+        if(prot.cur==='hammerN') S.hammerN-=prot.n; else S.hammers-=prot.n;
+        riskTally.saved++;                            // 보호 소모 — 단계 유지
+      } else { S.equips=S.equips.filter(x=>x!==tgt); riskTally.destroyed++; evDesc='파괴'; break; }
+    }
+    else { tgt.enh=Math.max(0,tgt.enh-1); riskTally.drop++; }
+  }
+  return {ups,ev:evDesc};
+}
+/* 안전 강화 — 리더 착용 전 부위(v5.228부터 10부위)를 +10까지(p≥0.82 구간, 파괴 위험 0,
+   실패 시 -1은 재시도 비용). 골드는 소환서 저축분(16M) 위의 여유만 써서 스크롤 케이던스를
+   해치지 않게 한다. 성공률·비용은 게임의 실제 표(openEnhance)와 동일한 값 — 강화의 CP 반영은
    정본 heroPower(1+enh×0.12)가 자동으로 한다. */
 function enhanceStep(){
   const S=ev('S'), leader=leaderId();
@@ -416,6 +473,10 @@ while(simSec < MAX_HOURS*3600 && windows<1600){
   if(crafts>0) did+=`${crafts}제작·장착 @${tier.n}`;
   const ups=enhanceStep();
   if(ups>0) did+=` 강화+${ups}`;
+  /* ★ v5.229: 위험 강화(+11~20) — 안전 강화가 끝난 뒤에만 도전한다(정책 상세는 함수 주석). */
+  const rk=riskEnhanceStep();
+  if(rk.ups>0) did+=` 위험강화+${rk.ups}`;
+  if(rk.ev==='파괴') did+=' ⚠파괴';
 
   // ⑤ 기록 — CP 변화 or 이벤트
   const cp=myCP();
@@ -481,6 +542,9 @@ log(`\n총 시뮬: ${(simSec/3600).toFixed(1)}h · 창 ${windows}회 · 최종 C
   log(`[진단] 세트 배율 ×${ev('setDamageMul')().toFixed(3)} · 활성(3+)`,
     ev('activeSets')().filter(x=>x.c>=3).map(x=>`${x.n} ${x.c}세트`).join(', ')||'없음');
   log(`[진단] 강화석 보유: ${Math.floor(S.stones||0)} · 리더 평균 강화: ${(worn.reduce((a,e)=>a+(e.enh||0),0)/(worn.length||1)).toFixed(1)}`);
+  /* ★ v5.229: 위험 강화 축 집계 — 시도/성공/하락/보호/파괴와 망치 구매 골드.
+     부위당 기대 비용은 hammerGold/파괴 재제작까지 합쳐 실측된다(종전 몬테카를로 479M 갱신). */
+  log(`[진단] 위험강화: 시도 ${riskTally.tries} · 성공 ${riskTally.success} · 하락 ${riskTally.drop} · 보호 ${riskTally.saved} · 파괴 ${riskTally.destroyed} · +20도달 ${riskTally.max20}부위 · 망치구매 ${(riskTally.hammerGold/1e6).toFixed(0)}M`);
   log(`[진단] 보유 영웅별 CP:`, ev('ownedHeroes')().map(h=>`${h.name.slice(0,5)}(${h.grade})=${ev('heroPower')(h)}`).join(' · '));
   log('[진단] 골드 보유:', Math.floor(S.gold));
   // E 아이템 첫 후보 왜 안 되는지 — recipeOk/gold 각각 출력
