@@ -613,6 +613,18 @@ step('제작시간 배율 — 버프 on 0.5배 · off 1배 (칭호 기준 상대
   if(Math.abs(mul()-0.5*tmul())>1e-12) throw new Error('버프 배율이 0.5×칭호가 아니다: '+mul());
   S.buffs.craftUntil=0;
 });
+/* ★ v5.177: 세트 구성품 획득 가능성 불변식 — SET_PIECES 의 모든 구성품이 제작 풀
+   (FORGE_SLOTS)에 존재해야 한다. 하나라도 빠지면 '영원히 모을 수 없는 세트'가 조용히
+   생긴다(2026-09-12 감사: 현재 54/54 — 이 검사로 못 박는다). 세트나 제작 풀을 고칠 때
+   이 게이트가 커버리지를 다시 확인해 준다(HANDOFF 3-7 정신). */
+step('세트 구성품 전량이 제작 가능 — 획득 불가 세트 부재', ()=>{
+  const FS=ev('FORGE_SLOTS'), SP=ev('SET_PIECES');
+  const names=new Set();
+  FS.forEach(s=>{ if(s.items) Object.values(s.items).forEach(arr=>arr.forEach(it=>names.add(it.n))); });
+  const orphans=[];
+  for(const set in SP) SP[set].forEach(n=>{ if(!names.has(n)) orphans.push(set+' → '+n); });
+  if(orphans.length) throw new Error(`제작할 수 없는 세트 구성품 ${orphans.length}건: `+orphans.join(' / '));
+});
 step('재료 24종 전부에 고정 드랍 몬스터가 있는지 (mat+mat2 ⊇ MATS)', ()=>{
   const HT=ev('HUNT_TIERS'), MATS=ev('MATS');
   const dropped=new Set();
