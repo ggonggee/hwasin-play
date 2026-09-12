@@ -6255,7 +6255,8 @@ const MODALS = {
     const offSec=Math.min(8*3600, Math.floor((S.offlinePending||0)/OFFLINE_GPM*60));   /* ★ v5.196: 정본 비율로 환산 */
     const two=el('div'); two.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin:10px 0';
     two.innerHTML=`<div class="gframe" style="padding:10px;text-align:center"><div class="small mut">1분당 획득 골드</div><div style="font-size:15px;font-weight:800;color:var(--gold)">${fmt(rate)} G</div></div>
-      <div class="gframe" style="padding:10px;text-align:center"><div class="small mut">오프라인 골드 ${mmss(offSec)}</div><div style="font-size:15px;font-weight:800;color:var(--gold)">${fmt(S.offlinePending||0)} G</div></div>`;
+      <div class="gframe" style="padding:10px;text-align:center"><div class="small mut">오프라인 골드 ${mmss(offSec)}</div><div style="font-size:15px;font-weight:800;color:var(--gold)">${fmt(S.offlinePending||0)} G</div>
+      <div class="small mut" style="margin-top:2px">인게임 방치의 ${Math.round(OFFLINE_GPM/18885*100)}% · 최대 8시간</div></div>`;
     b.appendChild(two);
     if(S.offlinePending>0){
       const btn=el('button','btn gold wide','수령'); btn.style.marginTop='6px';
