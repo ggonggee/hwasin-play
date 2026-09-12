@@ -6395,6 +6395,17 @@ const MODALS = {
     mcL.onclick=()=>mcSet((S.mobCount||30)+1);
     mcR.onclick=()=>mcSet((S.mobCount||30)-1);
     mc.append(mcL,mcVal,mcR); b.appendChild(mc);
+    /* ★ v5.191: 마릿수 프리셋 칩 — ▲▼ 스테퍼만으로 5→30 을 바꾸려면 25번 클릭한다.
+       자주 쓰는 값(최소/중간/최대)을 원클릭으로. mcSet 재사용 — 범위 클램프는 그대로. */
+    const mcPre=el('div'); mcPre.style.cssText='display:flex;justify-content:center;gap:6px;margin:2px 0 8px;';
+    [[5,'최소'],[15,'중간'],[30,'최대']].forEach(([v,label])=>{
+      const chip=el('div','mc-btn',`${label} ${v}`);
+      chip.style.cssText+=';padding:3px 10px;font-size:11px;';
+      if((S.mobCount||30)===v) chip.style.borderColor='var(--g-legend)';
+      chip.onclick=()=>{ mcSet(v); openModal('monster'); };   // 재렌더로 칩 하이라이트 갱신
+      mcPre.appendChild(chip);
+    });
+    b.appendChild(mcPre);
     if(gi===3){ const bd=el('div','mon-diff','난이도 X1'); b.appendChild(bd); }   // 레전더리 탭 배지
     b.appendChild(el('div','hint',`선택한 몬스터가 <b>홈 필드에 계속 출현</b>합니다. 홈 출격 <b style="color:#f0d59a">${(party()[0]||ownedHeroes()[0]).name}</b> 전투력 <b style="color:#f0d59a">${fmt(leadCP)}</b> — 권장보다 약하면 전멸합니다. <span class="mut">(총 전투력 ${fmt(totalCPv)} · 홈은 영웅 1명, 던전은 3인 파티)</span>`));
     const g0=GT[gi][0];
