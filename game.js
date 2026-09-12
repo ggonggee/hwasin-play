@@ -5864,14 +5864,22 @@ const MODALS = {
         if(dailyLeft('wb',1)<=0){toast('오늘 도전 완료');return;}
         if(S.ticket<1){toast('입장권 부족');return;}
         S.ticket--; dailyUse('wb');                              // ← 차감은 [예] 이후에만
+        const _wbPrev=(S._wbdmg||0);                              // ★ v5.209: 최고 데미지 신기록 판정용(전투 전 캡처)
         enterDungeonFight({ name:'월드보스 · 재의 용', col:'#f2b23a', foeCP:Math.round(totalCP()*3), kind:'boss', dur:15, race:true,
           rewardText:'참가 보상 (전투 보상 X2)',
           reward:(st)=>{ const dmg=(st&&st.dmg)||0; S._wbdmg=Math.max(S._wbdmg||0,dmg);
             S.wbScore=(S.wbScore||0)+wbScoreOf(st);   // 정수 점수는 보상과 무관하게 별도 적립
             grantWorldBossReward(); },
-          resultExtra:(bx,win,st)=>{ const rk=wbRankOf((st&&st.dmg)||0), pt=wbScoreOf(st);
+          resultExtra:(bx,win,st)=>{ const rk=wbRankOf((st&&st.dmg)||0), pt=wbScoreOf(st), dmg=(st&&st.dmg)||0;
             bx.appendChild(el('div','center small',`<b style="color:var(--g-legend)">${pt}점</b> · 누적 ${fmt(S.wbScore||0)}점`));
-            bx.appendChild(el('div','center small mut',`서버 순위 ${rk}위 (누적 데미지 기준)`)); } });
+            bx.appendChild(el('div','center small mut',`서버 순위 ${rk}위 (누적 데미지 기준)`));
+            /* ★ v5.209: 최고 데미지 신기록 배너 — 탑(v5.208)과 같은 원칙. _wbdmg 는
+               reward 에서 Math.max 갱신되므로 판정은 전투 전 캡처값(_wbPrev)과 비교. */
+            if(dmg>_wbPrev && _wbPrev>0){
+              bx.appendChild(el('div','center',`<div style="color:var(--g-legend);font-weight:800;font-size:14px">🗡️ 최고 데미지 경신! (${fmt(_wbPrev)} → ${fmt(dmg)})</div>`));
+              sfx('legendary');
+            }
+          } });
       }, { title:'월드보스 · 재의 용', sub:`입장권 1개 차감 · 오늘 ${left}/1회`, yesFirst:true });
     };
     b.appendChild(btn);
