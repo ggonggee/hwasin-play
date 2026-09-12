@@ -1000,6 +1000,24 @@ step('파밍 팝업 [사냥] 핸들러 — 정의 누락 회귀(danger is not de
   if(errs.length) throw new Error(errs.slice(0,4).join(' | '));
   if(btns<100) throw new Error('호출한 [사냥] 버튼 '+btns+'개 — 24재료×최대 5행 기준 너무 적음');
 });
+/* ★ v5.234: 공략 화면 '내 장기 목표 진행' 카드 — 세트·강화·각성·탑의 실시간 수치가
+   실제 상태를 반영하는지. 정적 문구 벽이 아니라 체크리스트로 기능하는지 잠근다. */
+step('공략 진행 카드 — 장기 목표 실시간 수치 반영', ()=>{
+  const S=ev('S'), M=ev('MODALS');
+  const hid=ev('party')()[0].hero_id;
+  const keep={eq:JSON.parse(JSON.stringify(S.equips)), aw:S.awaken, tw:S._tower, rec:S.records};
+  S.equips=[{grade:'N',slot:'투구',enh:3,equipped:true,heroId:hid},
+            {grade:'N',slot:'상의',enh:5,equipped:true,heroId:hid}];
+  S.awaken=13; S._tower=12; S.records=2;
+  const b=new Node2('div');
+  M.strategy.render(b);
+  const html=b.innerHTML;
+  S.equips=keep.eq; S.awaken=keep.aw; S._tower=keep.tw; S.records=keep.rec;
+  const need=['내 장기 목표 진행','+4.0','+13','기록서 2권','12 Wave'];
+  const miss=need.filter(t=>!html.includes(t));
+  if(miss.length) throw new Error('공략 진행 카드 누락: '+miss.join(', '));
+  if(!/다음: <b[^>]*>[가-힣]+ \d세트/.test(html)) throw new Error('다음 세트 목표 라인 없음');
+});
 step('save→JSON 직렬화 왕복 무손실', ()=>{
   /* 바로 위 검사가 모달 클릭을 다시 전수 실행하면서 [데이터 초기화]·[가져오기]를 또 눌러
      저장을 재봉인한다(사유는 [7] 끝 주석 참조). 이 검사는 save() 가 실제로 써야 성립하므로

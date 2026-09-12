@@ -6297,7 +6297,30 @@ const MODALS = {
   /* ★ v5.229: '장기 목표'의 강화 기대 비용 3.2억은 시뮬 실측값. 종전 4.8억은 몬테카를로가
      '실패마다 망치 10개 소모'로 계산한 것 — 실제 규칙(openEnhance)은 실패 중 파괴 분기(50%)에서만
      망치가 소모된다. 실측(600h 시뮬, 상시 보호 정책): 부위당 기대 시도 약 26회 · 망치 약 41개. */
-  strategy:{ title:'공략', render(b){ b.innerHTML=`<div class="hint" style="line-height:1.8">
+  strategy:{ title:'공략', render(b){
+    /* ★ v5.234: 장기 목표의 '내 진행 상황' 카드 — 시뮬(600h)로 확정한 엔드게임 3축
+       (세트·위험 강화·심화 각성)+탑의 현재값을 실시간 수치로 보여준다. '무엇을 하면
+       되는지'가 텍스트 벽이 아니라 체크리스트로 보이게 — 장기 목표의 성취 체감용.
+       정본 접근자만 사용: activeSets/setPieceCount(세트) · S.equips(리더 착용 강화) ·
+       S.awaken/S.records(각성) · S._tower(탑 최고). */
+    const lead=party()[0]||ownedHeroes()[0];
+    const worn=lead? S.equips.filter(e=>e.equipped&&(!e.heroId||e.heroId===lead.hero_id)):[];
+    const enhAvg=worn.length? (worn.reduce((a,e)=>a+(e.enh||0),0)/worn.length).toFixed(1):'0.0';
+    const act=activeSets().sort((a,b)=>b.c-a.c);
+    /* 다음 세트 목표: 달성 전 임계(k)까지 조각이 가장 가까운 세트 */
+    let next=null;
+    SETS.forEach(st=>{
+      const c=setPieceCount(st.n);
+      const tier=st.tiers.filter(t=>c<t.k).sort((a,b2)=>a.k-b2.k)[0];
+      if(tier){ const gap=tier.k-c; if(!next||gap<next.gap) next={n:st.n,c,k:tier.k,gap}; }
+    });
+    const awakenMaxed=(S.awaken||0)>=30;
+    b.innerHTML=`<div class="hint" style="line-height:1.8">
+    <b style="color:#f0cd82">■ 내 장기 목표 진행</b> <span class="mut small">(실시간)</span><br>
+    · 세트: ${act.length? act.slice(0,3).map(x=>`${x.n} ${x.c}/${(SET_PIECES[x.n]||[]).length}`).join(' · ') : '3조각부터 발동'}${next?` — 다음: <b style="color:var(--g-legend)">${next.n} ${next.k}세트</b> (${next.gap}조각 남음)`:''}<br>
+    · 강화: 홈 출격 영웅 평균 <b>+${enhAvg}</b> / 목표 +20 (+11부터 망치 필수)<br>
+    · 각성: <b>+${S.awaken||0}</b> / 30${(S.awaken||0)>=12?` · 기록서 ${S.records||0}권 보유`:''}${awakenMaxed?' · 완료 🎉':''}<br>
+    · 시련의 탑: 최고 <b>${S._tower||0} Wave</b> (일 1회 도전·소탕)<br><br>
     <b style="color:#f0cd82">■ 성장 로드맵 (실측 곡선 기준)</b><br>
     1) 대장간 '지금 제작 가능' 표시를 따라 장비를 채운다 (일반 전 장비 약 2시간)<br>
     2) 소환과 길잡이로 영웅 9종을 모은다 — 합성은 레벨 100% 승계라 즉시 전력이 된다<br>
@@ -6311,7 +6334,8 @@ const MODALS = {
     <b style="color:#f0cd82">■ 장기 목표 (레전더리 완성 이후)</b><br>
     · 강화 +11~20: 망치로 파괴를 막으며 도전 — 부위당 약 3.2억 골드 (전 부위 약 32억)<br>
     · 심화 각성 13~30단계: 영웅 기록서(탑 상자·회색코인)로 계정 스탯 상승<br>
-    · 시련의 탑 고층 도전 · 몬스터 도감 전종(20종) 완성</div>`; }},
+    · 시련의 탑 고층 도전 · 몬스터 도감 전종(20종) 완성</div>`;
+    }},
 
   /* ---------- 방치 수익 정산 ---------- */
   /* ★ B9/G-135(§4-9): settle = '정산 상세' 전용.
