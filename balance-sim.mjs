@@ -245,22 +245,42 @@ function dailyStep(){
     const foe=[800,2200,5200][st-1];
     if(foe<=cp*1.5&&dl>0){ const n=Math.min(dl,5); for(let k=0;k<n;k++) ev('matGainGrade')(rg,qty); dl=0; }
   }
-  // 시련의 탑 소탕(일 1회) 근사 — 도달층 w는 'foe(600+w×450) ≤ 리더전투력×1.5' 안전 기준.
-  // 실제 탑은 3인 파티로 도전하지만 시뮬은 탑 전투를 돌리지 않으므로 보수적으로 리더 기준.
+  /* 시련의 탑 (v5.230 정본 공식 통합) — 도전(일 1회)·소탕(일 1회)·상자→기록서 교환.
+     · 도전: 시작 baseCP = 600+최고기록×450, 웨이브당 ×1.18 지수 상승(Battle 2814),
+       몹 HP = foeCP×0.08. 도달 = 1+floor(ln(리더전투력/base)/ln1.18) — 1:1 전투력
+       클리어 기준(시뮬 관례: 골드던전 cp×1.5, 탑은 리더 단독[soloSurvival]라 1.0).
+       보상: 골드 도달×40만 · 강화석 도달×3 · 상자 max(1,floor(도달/2)).
+     · 소탕: 최고기록 기준 50% — 상자 max(1,floor(최고/4)).
+     · 교환: 상자 8개 = 기록서 1권(towerExchange 정본). 심화 각성(awakenStep)로 이어진다.
+     ★ 일일 횟수는 dailyStep 로컬 카운터로 센다 — 게임의 dailyUse/rollDaily 는 '실제 날짜'
+       변경 시 리셋되는데 시뮬은 몇 초 만에 여러 시뮬-일을 지나므로 dailyUse 를 쓰면
+     시뮬 전체에서 1회만 실행된다(골드던전이 로컬 left=3 을 쓰는 것과 같은 이유).
+     입장권(40초 자동 충전·상한 30)은 일 1회 소비에 사실상 무제한이라 생략. */
   {
     const ld=ev('heroPower')(ev('party')()[0]);
-    const w=Math.max(0, Math.floor((ld*1.5-600)/450));
-    if(w>=1 && ev('dailyLeft')('towerSweep',1)>0){
-      ev('dailyUse')('towerSweep');
-      ev('addGold')(Math.floor(w*400000*0.5));
-      S.stones=(S.stones||0)+Math.floor(w*3*0.5);
+    const best=S._tower||0, base=600+best*450;
+    const reach=Math.max(1, 1+Math.floor(Math.log(Math.max(1,ld)/base)/Math.log(1.18)));
+    if(ld>=600 && dailyStep._towerCh!==day){
+      dailyStep._towerCh=day;
+      ev('addGold')(reach*400000); S.stones=(S.stones||0)+reach*3;
+      S.towerBox=(S.towerBox||0)+Math.max(1,Math.floor(reach/2));
+      S._tower=Math.max(best, reach);
     }
+    if(best>=1 && dailyStep._towerSw!==day){
+      dailyStep._towerSw=day;
+      ev('addGold')(Math.floor(best*400000*0.5));
+      S.stones=(S.stones||0)+Math.floor(best*3*0.5);
+      S.towerBox=(S.towerBox||0)+Math.max(1,Math.floor(best/4));
+    }
+    const ex=Math.floor((S.towerBox||0)/8);
+    if(ex>0){ S.towerBox-=ex*8; S.records=(S.records||0)+ex; }
   }
   // 소환서 구매 — 골드 여유(16M+)면 10장 팩 (E제작 800k 예산은 항상 확보)
-  /* ★ v5.229: 로스터 완성(9/9) 후엔 산다. 조각 소비처가 합성(끝)·영웅 강화(레전더리
-     이상 전용 — 현재 로스터 N5+R4엔 없음)뿐이라 완성 후 소환서는 골드를 죽은 조각으로
-     바꾸기만 한다(실측: 직업당 조각 3,700+ 잉여). 엔드게임 골드는 위험 강화 망치로. */
-  while(S.gold>=16000000 && ev('ownedHeroes')().length<9){ S.gold-=15000000; S.tickHero+=10; }
+  /* ★ v5.230: 로스터 완성(9/9) 후에도 '각성<12'면 계속 산다 — 조각의 소비처는 합성뿐이
+     아니라 기본 각성(단계당 250×1.08^n개)이고, 12단계까지 총 약 4,700개가 필요하다.
+     9/9에서 끊으면 각성이 조각 기아에 걸린다(실측: 600h 각성 +0). 심화(기록서)는
+     소환서가 아니라 탑 상자로 가므로 12단계까지만. */
+  while(S.gold>=16000000 && (ev('ownedHeroes')().length<9 || (S.awaken||0)<12)){ S.gold-=15000000; S.tickHero+=10; }
 }
 /* ── +11~20 위험 강화의 엔드게임 기대값 — 몬테카를로(2026-09-12) → 시뮬 내 측정(v5.229) ──
    구 몬테카를로(부위당 479M)는 '실패마다 망치 소모'로 계산해 실제 규칙보다 비쌌다 —
@@ -349,7 +369,9 @@ function enhanceStep(){
   return ups;
 }
 /* 각성 정책 — 조각(직업 공용)이 여유일 때(전 영웅 보유 후 남는 조각) 기본 12단계까지.
-   심화(기록서)는 회색코인 경제라 시뮬 범위 밖 — 12단계(+18%)까지만 모델링. */
+   ★ v5.230: 심화 각성(13~30) 통합 — 기록서는 탑 상자 교환(dailyStep)으로 수급하고
+   비용은 정본 공식 1+floor((lv-12)/2) (13~14:1권 · 15~16:2권 … 30단계까지 총 90권).
+   heroPower의 aw=1+lv×0.015가 곡선에 자동 반영된다. */
 function awakenStep(){
   const S=ev('S');
   if(S.guideStep<ev('GUIDE_CHAIN').length) return 0;
@@ -362,6 +384,11 @@ function awakenStep(){
     if(tot<cost+200) break;                    // 다음 R 재합성 대비 200 여유
     Object.keys(S.shards).forEach(k=>S.shards[k]=Math.max(0,(S.shards[k]||0)-cost/5));
     S.awaken++; steps++;
+  }
+  while(S.awaken>=12 && S.awaken<30 && steps<40){   // 심화 — 기록서 축
+    const cost=1+Math.floor((S.awaken-12)/2);
+    if((S.records||0)<cost) break;
+    S.records-=cost; S.awaken++; steps++;
   }
   return steps;
 }
@@ -535,6 +562,8 @@ log(`\n총 시뮬: ${(simSec/3600).toFixed(1)}h · 창 ${windows}회 · 최종 C
   const S=ev('S'), ld=ev('party')()[0];
   log(`[진단] 각성 +${S.awaken} · 리더 ${ld.name}(grade ${ld.grade} · Lv${ld.level}) · 보유 영웅 ${ev('ownedHeroes')().length}/9 · 조각`,
     Object.entries(S.shards).map(([k,v])=>`${k}:${Math.floor(v)}`).join(' '));
+  /* ★ v5.230: 심화 각성 축 상태 — 탑 기록·상자·기록서. */
+  log(`[진단] 탑 최고 ${S._tower||0}Wave · 상자 ${S.towerBox||0}개 · 기록서 ${S.records||0}권 (심화 각성 재화)`);
   const worn=S.equips.filter(e=>e.equipped&&(!e.heroId||e.heroId===ld.hero_id));
   log(`[진단] 리더 장착 ${worn.length}부위 ·`, worn.map(e=>`${e.grade}${e.slot}${e.enh?'+'+e.enh:''}`).join(', ')||'없음');
   /* ★ v5.228: 세트 최종 상태 — 그리디 제작 정책에서 세트가 실제로 완성됐는지.
