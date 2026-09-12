@@ -4464,8 +4464,12 @@ const MODALS = {
         const info=el('div','small mut'); info.style.lineHeight='1.55';
         /* ★ 2차 UI 정리: 우측 패널 포맷은 "제작시간 : / 필요 골드 : / 제작 확률 :" 콜론 라벨.
            종전 "제작확률 100% / 골드 / 시간" 순서·라벨을 시간→골드→확률 순서로 통일한다.
-           근거: 실측 판독 "제작시간 :30초 / 필요 골드 :1,500,000 / 제작 확률 100%". */
-        info.innerHTML=`제작시간 : <b>${mmss(cp.sec)}</b><br>필요 골드 : <b style="color:${G.color}">${fmt(cp.gold)}</b><br>제작 확률 : <b style="color:${G.color}">${Math.round(cp.p0*100)}%</b>`
+           근거: 실측 판독 "제작시간 :30초 / 필요 골드 :1,500,000 / 제작 확률 100%".
+           ★ v5.176: 제작시간은 실제 소요(cp.sec × craftTimeMul — 버프·칭호)을 보여준다.
+           종전엔 원값만 표기해 프리미엄 버프(-50%)가 켜져 있으면 '30초'라 쓰고 15초에
+           완성되던 표시↔판정 불일치였다. 할인 중이면 금색+버프 표시로 체감도 준다. */
+        const effSec=Math.ceil(cp.sec*craftTimeMul());
+        info.innerHTML=`제작시간 : <b${effSec<cp.sec?' style="color:var(--g-legend)"':''}>${mmss(effSec)}</b>${effSec<cp.sec?' <span style="color:var(--g-legend)">버프 적용</span>':''}<br>필요 골드 : <b style="color:${G.color}">${fmt(cp.gold)}</b><br>제작 확률 : <b style="color:${G.color}">${Math.round(cp.p0*100)}%</b>`
           + (cp.guide?'<br><b style="color:var(--g-legend)">길잡이 단계</b>':'');
         side.appendChild(info);
         /* ★ v5.58: 제작 버튼 클릭 시 제작 팝업(확률/비용 표시) → 확인 후 startCraft. */
@@ -4536,7 +4540,7 @@ const MODALS = {
       matn.appendChild(chip); });
     b.appendChild(matn);
     /* ★ v5.60: 제작 정보를 명확히 3줄로 표시. */
-    b.appendChild(el('div','stat-line',`<span>제작시간</span><span class="v" style="color:#f0cd82">${mmss(c.cp.sec)}</span>`));
+    b.appendChild(el('div','stat-line',`<span>제작시간</span><span class="v" style="color:#f0cd82">${mmss(Math.ceil(c.cp.sec*craftTimeMul()))}${c.cp.sec*craftTimeMul()<c.cp.sec?' · 버프':''}</span>`));   /* ★ v5.176: 실제 소요 기준 */
     b.appendChild(el('div','stat-line',`<span>필요 골드</span><span class="v" style="color:${G.color}">${fmt(c.cp.gold)}</span>`));
     b.appendChild(el('div','stat-line',`<span>제작 확률</span><span class="v" style="color:${c.cp.p0>=1?'var(--ok)':'var(--warn)'}">${Math.round(c.cp.p0*100)}%</span>`));
     b.appendChild(el('div','warn','⚠ 실패 시 재료 90% 환급'));

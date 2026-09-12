@@ -603,6 +603,16 @@ step('장비 정렬 정본 sortEquipList — 등급→강화→최신 + 원본 �
   if(JSON.stringify(dummy.map(e=>e.slot))!==JSON.stringify(['잿불 단검','결정 대검','흑철 대검','심연 대검']))
     throw new Error('입력 배열 원본이 정렬로 바뀌었다 — slice() 사본이어야 한다');
 });
+/* ★ v5.176: 제작시간 배율 정본 — 표시와 판정(craftStart endAt)이 같은 craftTimeMul 을 쓴다.
+   버프 on/off 배율이 어긋나면 화면 시간과 실제 완성 시각이 갈라진다(2026-09-12 실측 결함). */
+step('제작시간 배율 — 버프 on 0.5배 · off 1배 (칭호 기준 상대 비교)', ()=>{
+  const S=ev('S'), mul=ev('craftTimeMul'), tmul=ev('titleCraftTimeMul');
+  S.buffs.craftUntil=0;
+  if(Math.abs(mul()-tmul())>1e-12) throw new Error('버프 없는데 배율이 칭호 기준과 다르다: '+mul()+' vs '+tmul());
+  S.buffs.craftUntil=Date.now()+3600e3;
+  if(Math.abs(mul()-0.5*tmul())>1e-12) throw new Error('버프 배율이 0.5×칭호가 아니다: '+mul());
+  S.buffs.craftUntil=0;
+});
 step('재료 24종 전부에 고정 드랍 몬스터가 있는지 (mat+mat2 ⊇ MATS)', ()=>{
   const HT=ev('HUNT_TIERS'), MATS=ev('MATS');
   const dropped=new Set();
