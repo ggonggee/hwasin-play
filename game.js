@@ -2123,6 +2123,20 @@ const Battle = (()=>{
      사거리 밖이면 대상을 향해 이동, 사거리 내면 공격.
      홈 모드(solo)는 이동 없이 말뚝딜. 던전/투기장은 이동 활성화. */
   const MELEE_RANGE=70, RANGED_RANGE=200, HERO_SPEED=55;
+  /* ★ v5.214: 이동 속도 스탯 실전 반영 — 종전엔 장신구(신발·목걸이)의 '이동 속도 상승'
+     플레이버가 STAT_DEF 표시일 뿐 전투 이동(HERO_SPEED 고정 55)에 무영향이었다.
+     착용 중인 보조 부위(목걸이·신발) 장비 등급·강화가 이속 배율로 환산된다:
+     배율 = 1 + Σ(등급 mult×(1+enh×0.12))×0.04 — 최대(결정 2종+10강) 약 +1.6배까지.
+     순수 계산(장비 상태의 함수)이라 결정론 무영향. 이속은 전투 배치 이동에만 쓰이고
+     공격 주기(0.7~1.1s 시드 난수)는 그대로 — 밸런스 곡선(시뮬)에 영향 없음을 확인. */
+  function heroSpeedMul(hid){
+    let m=1;
+    (S.equips||[]).forEach(e=>{ if(!e||!e.equipped) return;
+      if(e.heroId && hid && e.heroId!==hid) return;
+      if(slotSchema(e.slot).part!=='보조') return;
+      m += GRADES[e.grade].mult*(1+(e.enh||0)*0.12)*0.04; });
+    return m;
+  }
 
   /* ★ v5.108: 종전에는 getBoundingClientRect() 로 W·H 를 잡았다. 그런데 #device 에는
      transform:scale 이 걸려 있어서 이 값은 '화면에 보이는 크기'다 → 기기마다 게임 월드의
@@ -2487,14 +2501,16 @@ const Battle = (()=>{
           if(d > range){
             /* 사거리 밖 — 대상에게 이동 */
             const dx=nearest.x-h.x, dy=nearest.y-h.y, dl=Math.max(1,Math.hypot(dx,dy));
-            h.x += (dx/dl)*HERO_SPEED*dt;
-            h.y += (dy/dl)*HERO_SPEED*dt;
+            const spd=HERO_SPEED*heroSpeedMul(h.hid);   /* ★ v5.214: 보조 부위 이속 반영 */
+            h.x += (dx/dl)*spd*dt;
+            h.y += (dy/dl)*spd*dt;
             h._moving = true;
           } else { h._moving = false; }
         } else {
           /* 대상 없음 — baseX/baseY로 복귀 */
           const dx=h.baseX-h.x, dy=h.baseY-h.y, dl=Math.hypot(dx,dy);
-          if(dl > 3){ h.x += (dx/dl)*HERO_SPEED*dt; h.y += (dy/dl)*HERO_SPEED*dt; h._moving = true; }
+          if(dl > 3){ const spd2=HERO_SPEED*heroSpeedMul(h.hid);   /* ★ v5.214 */
+            h.x += (dx/dl)*spd2*dt; h.y += (dy/dl)*spd2*dt; h._moving = true; }
           else { h._moving = false; }
         }
         /* 화면 경계 클램프 */
