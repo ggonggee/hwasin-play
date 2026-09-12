@@ -1718,6 +1718,16 @@ function costumeOwned(id,i){ return costumeHas(id) || ((S&&S.costumes)||0)>i; }
 /* ★ v5.65: heroPower — 장비는 '착용 중'(equipped=true)인 것만 합산.
    종전엔 모든 보유 장비가 합산되어 제작만 하면 모든 영웅이 강해지는 문제.
    영웅별 장비 귀속은 S.equips에 heroId 필드로 구현 — 착용 시 해당 영웅에게 귀속. */
+/* ★ v5.210: 고서 보유 버프 — itemFlavor 가 '보유 시 계정 전체 스탯이 상승합니다'라고
+   안내하는데 어디에도 구현돼 있지 않았다(2026-09-13 heroPower 전수 감사, 표시↔판정 8호).
+   보유(착용 불필요)한 고서 종류당 +3% 계정 스탯 — 등급 배율과 무관한 '종류 수' 기준.
+   고서 3종(N 청류·심연·태초) 전 보유 시 +9%. 고서는 희귀 제작템(특수 부위)이라
+   종류당 3%는 각성 2단계 상당 — 희소성 대비 과하지 않다(자체 설계). */
+function tomeMul(){
+  const kinds=new Set();
+  (S.equips||[]).forEach(e=>{ if(e && e.slot && e.slot.indexOf('고서')>=0) kinds.add(e.slot); });
+  return 1 + kinds.size*0.03;
+}
 function heroPower(h){
   const g = GRADES[h.grade].mult;
   /* 착용 중이고 이 영웅에게 귀속된 장비만 합산 */
@@ -1727,7 +1737,7 @@ function heroPower(h){
   const aw = 1 + S.awaken*0.015;
   const costume = costumeStatMul();
   const setm = setDamageMul();
-  return Math.round((100 + h.level*30) * g * aw * (1 + eq*0.05) * (S&&S.classTrait?1.02:1) * costume * setm);
+  return Math.round((100 + h.level*30) * g * aw * (1 + eq*0.05) * (S&&S.classTrait?1.02:1) * costume * setm * tomeMul());
 }
 function totalCP(){ const hs=ownedHeroes(); if(!hs.length) return 0; return hs.reduce((a,h)=>a+heroPower(h),0); }
 /* ★ B4/G-52: 타 콘텐츠는 3인 유지(투기장 4인은 B6 의 arenaParty 소관).

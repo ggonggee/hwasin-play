@@ -709,6 +709,19 @@ step('연속 접속 보상 — 7일 주기 지급·큐 적립', ()=>{
   const queued=Array.isArray(S._pendingLoginToast);
   if(S.dice<=dice0 && !queued) throw new Error('보상 미지급·미큐잉');
 });
+/* ★ v5.210: 고서 보유 버프 — '보유 시 계정 스탯 상승' 안내가 5년째 허구였던 것을
+   구현. 종류 수 기준(+3%/종) 판정과 미보유 시 1배를 잠근다. */
+step('고서 보유 버프 — 종류당 +3% · 미보유 1배', ()=>{
+  const S=ev('S'), tm=ev('tomeMul');
+  const keep=S.equips;
+  S.equips=[];
+  if(tm()!==1) throw new Error('고서 없는데 '+tm());
+  S.equips=[{grade:'N',slot:'고서',enh:0,equipped:false},{grade:'R',slot:'청류 고서',enh:0,equipped:false}];
+  if(tm()!==1.06) throw new Error('고서 2종 '+tm()+' ≠ 1.06');
+  S.equips=[{grade:'N',slot:'고서'},{grade:'N',slot:'고서'}];   // 동일 이름 중복 = 1종
+  if(tm()!==1.03) throw new Error('중복 고서가 2종으로 셈해짐: '+tm());
+  S.equips=keep;
+});
 step('제작시간 배율 — 버프 on 0.5배 · off 1배 (칭호 기준 상대 비교)', ()=>{
   const S=ev('S'), mul=ev('craftTimeMul'), tmul=ev('titleCraftTimeMul');
   S.buffs.craftUntil=0;
