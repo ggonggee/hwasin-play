@@ -1664,6 +1664,8 @@ function heroFuseNeed(hid){ const r=HERO_BY_ID[hid]; return r ? (HERO_SHARD_NEED
 function heroShardOwn(hid){ return (S && S.heroShards && S.heroShards[hid]) || 0; }
 function heroShardAvail(hid){ const r=HERO_BY_ID[hid]; if(!r) return 0;
   return heroShardOwn(hid) + ((S.shards && S.shards[r.class_id])||0); }
+/* ★ v5.206: 직업 공용 조각 보유 — 소환 화면 칩용(전용 조각 제외, 순수 직업 풀). */
+function heroShardAvailByClass(classId){ return (S.shards && S.shards[classId])||0; }
 function heroShardAdd(hid,n){ if(!S.heroShards || typeof S.heroShards!=='object') S.heroShards={};
   S.heroShards[hid]=(S.heroShards[hid]||0)+n; }
 function heroShardSpend(hid,n){ const r=HERO_BY_ID[hid]; if(!r) return false;
@@ -5146,6 +5148,20 @@ const MODALS = {
     pbar.firstChild.style.width=clamp(pf/70*100,0,100)+'%';
     b.appendChild(pbar);
     b.appendChild(el('div','small mut',`연속 ${fmt(pf)}회 · 하드 피티까지 ${pLeft}회${pf>=40?' — 보정 구간(+2%p/회)':''}`));
+    /* ★ v5.206: 직업별 조각 보유 — 소환의 결과가 조각인데 '내 직업 조각이 몇 개인지'가
+       이 화면에 없었다(영웅 화면의 합성 진행에서만 보임). 소환 전략(어느 직업을 노릴지)은
+       이 화면에서 결정되므로 여기에 있어야 한다. 합성 가능(조각≥need) 직업은 금색. */
+    const srow=el('div'); srow.style.cssText='display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;';
+    JOBS.forEach(j=>{
+      const av=Math.floor(heroShardAvailByClass(j.id));
+      const ready=av>=HERO_SHARD_NEED.R;   // R 합성 필요량(80) 도달 = 합성 가능 신호
+      const chip=el('div','mat-chip'+(ready?'':' lack')); chip.title=`${j.name} 공용 조각 — [영웅]에서 R 등급 합성(${HERO_SHARD_NEED.R}개)`;
+      chip.innerHTML=`<div class="mi">${jobIcon(j.id,1.1)}</div><div class="have${ready?'':' lack'}">${j.el} ${fmt(av)}</div>`;
+      chip.style.cursor='pointer';
+      chip.onclick=()=>openModal('hero');
+      srow.appendChild(chip);
+    });
+    b.appendChild(srow);
     const grid=el('div','grid c2 summon-grid'); grid.style.marginTop='8px';
     // 석판 타일 — 확인 오버레이(G-58) 경유 후에만 실제 소환
     const mkTile=(ic,title,sub,costTxt,qty,can,run,gr,id)=>{
