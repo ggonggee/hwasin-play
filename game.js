@@ -6091,8 +6091,13 @@ const MODALS = {
     foot.appendChild(el('div','dg-portrait gframe','<div class="dp-ic">🗿</div><div class="dp-n">재의 골렘</div>'));
     const right=el('div','dg-right');
     right.appendChild(el('div','gr-my',`내 누적점수 <b>${fmt(S.guildRaidScore||0)}</b>점`));
-    const pb=el('div','pbar'); pb.appendChild(el('i')); pb.firstChild.style.width='62%'; right.appendChild(pb);
-    right.appendChild(el('div','center small mut','보스 HP 62% · 누적 데미지가 길드 점수가 됩니다'));
+    /* ★ v5.179: 보스 HP 바 — 종전엔 하드코딩 '62%' 장식이라 아무리 때려도 변하지 않았다.
+       내 누적 점수(=입힌 데미지 누적)로 파생해 참전할 때마다 눈에 보이게 꺼지게 한다.
+       순수 연출 파생값 — 판정·보상과 무관. 보스 처치·리셋 콘텐츠가 아니므로 15%에서
+       멈춘다(0%가 되면 '처치됐는데 아무 일도 없는' 어색함이 생긴다). 5,000점=1%p. */
+    const hpPct=Math.max(15, 95 - Math.floor((S.guildRaidScore||0)/5000));
+    const pb=el('div','pbar'); pb.appendChild(el('i')); pb.firstChild.style.width=hpPct+'%'; right.appendChild(pb);
+    right.appendChild(el('div','center small mut',`보스 HP ${hpPct}% · 누적 데미지가 길드 점수가 됩니다`));
     foot.appendChild(right); b.appendChild(foot);
     b.appendChild(el('div','dg-limit','- 입장 제한 시간 -  10:00 ~ 12:00'));
     const arow=el('div','gd-autorow');
