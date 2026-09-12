@@ -1341,7 +1341,13 @@ function freshState(){
     picks:{ old:false, shine:false },  // 오래된 곡괭이 / 찬란한 곡괭이
     titleOwn:{},             // 상점·패키지로 지급된 칭호 소유 플래그 (B9 TITLES 와 id 로 연결)
     mats:freshMats(),                        // ★ 재료 24종 딕셔너리 + 등급풀 4키 (스키마: MATS)
-    shards:{ flame:60, frost:20, earth:0, shadow:0, wind:0 }, // 영웅 조각 (직업 공용)
+    /* ★ v5.231: 초기 조각 킷은 '튜토리얼 STEP7(합성)을 반드시 통과시킨다'가 설계 조건이다.
+       불 60 = 첫 소환에서 자동 해금(도르카 등장) 수업, 얼음 80 = [합성]으로 비케(R)를
+       해금하는 수업(리엔 보유=선행 충족, HERO_SHARD_NEED.R=80).
+       종전 얼음 20였는데 — N등급은 합성 불가(v5.86), R 합성은 80 필요라 신규 유저의
+       STEP7 이 영원히 봉쇄됐다(2026-09-13 실브라우저 재현). 소환 1회의 분산(+평균 4/직업)만으론
+       못 채우므로 시작 킷이 보장해야 한다. 전량 판독 문서에서도 튜토리얼 합성은 재료가 보장됐다. */
+    shards:{ flame:60, frost:80, earth:0, shadow:0, wind:0 }, // 영웅 조각 (직업 공용)
     heroShards:{}, // ★ B7/F1: hero_id -> 영웅 전용 조각 (상점 영웅 탭·영웅 패키지 구매분). 구세이브는 deepFill 이 {} 로 채움
 
     heroes:{},    // ★ B4/G-50: hero_id -> {level, own} (등급·직업·이름은 HERO_ROSTER 가 정본)
@@ -1536,6 +1542,11 @@ function mergeDefaults(){ deepFill(S, freshState());
   migrateEquipNames(); // ★ v5.108: 브랜드 통일로 바뀐 L등급 장비명 이관 (세트 매칭 보존)
   migrateMatPools(); // ★ v4.3: 폐지된 등급 공용풀 잔량을 같은 등급 재료로 분배
   migrateMonTickets(); // ★ 2026-09-10: 폐지된 몬스터 소환권 보유분을 회색코인으로 환불
+  /* ★ v5.231: 튜토리얼 STEP7 봉쇄 구제 — 초기 얼음 조각이 20이던 시절(v5.230 이전) 세이브는
+     R 합성(비케, 80)을 영원히 못 만들어 튜토리얼이 7/9에서 막혔다. 합성 전(fuses 0)·튜토리얼
+     미완료 세이브의 얼음 조각을 80으로 보충한다(신규 킷과 동일). 합성을 이미 했다면 스킵 —
+     무료 조각 중복 지급 방지. 멱등: 세이브 로드마다 조건 재판정. */
+  if(!S.classTrait && !(S.stats.fuses>0) && (S.shards.frost||0)<80) S.shards.frost=80;
   // ★ v4.7: 몬스터 8종 → 120종 확장. 구세이브의 0~7 인덱스를 같은 등급·상대위치로 옮긴다.
   if(typeof S.huntTier==='number' && S.huntTier<HUNT_MIGRATE_V47.length && S._huntV!==47){
     S.huntTier = HUNT_MIGRATE_V47[S.huntTier]; }
@@ -5560,7 +5571,11 @@ const MODALS = {
     row.appendChild(enter); b.appendChild(row);
     const autoRow=el('div','btnrow'); autoRow.style.marginTop='6px';
     const autoBtn=el('button','btn sm'+(S.arenaAuto?' gold':'')+' wide',`⟳ 자동입장 ${S.arenaAuto?'ON':'OFF'}`);
-    autoBtn.onclick=()=>{ if(busyFight())return; S.arenaAuto=!S.arenaAuto;
+    autoBtn.onclick=()=>{ if(busyFight())return;
+      /* ★ v5.231: 튜토리얼 중 자동입장 금지 — 연전이 입장권 자동 충전(40초/1개)으로
+         사실상 무한히 이어져 미션 완료 보상 팝업(STEP9)을 영영 막는다(실측). */
+      if(!S.seenTutorial){ toast('튜토리얼 완료 후 사용할 수 있습니다'); return; }
+      S.arenaAuto=!S.arenaAuto;
       // 자동입장 연전은 확인 오버레이를 건너뛴다(G-82 예외)
       if(S.arenaAuto && S.ticket>0){ S.ticket--; refreshHUD(); arenaFight(); }
       else openModal('arena'); };
@@ -8018,6 +8033,11 @@ function arenaResult(win, foeName, foeCP, foeTier){
   if(S.arenaAuto) b.appendChild(el('div','center small mut','자동 연전 중…'));
   $('#modal-root').classList.add('on'); currentModal='arenaResult'; refreshHUD();
   setTimeout(()=>{ if(currentModal!=='arenaResult') return;
+    /* ★ v5.231: 튜토리얼 중엔 자동 연전을 끊는다 — 입장권이 40초 자동 충전(상한 30)이라
+       연전이 사실상 무한히 이어지는데, 전투가 계속 걸려 있으면 tutPoll 이 미션 완료 보상
+       팝업을 열 수 없어 STEP9 가 영원히 봉쇄된다(실브라우저 재현). 튜토리얼이 자동입장을
+       가르치는 단계도 없다 — 완료 전엔 수동 입장만 허용한다. */
+    if(!S.seenTutorial){ S.arenaAuto=false; openModal('arena'); return; }
     if(S.arenaAuto && S.ticket>0){ S.ticket--; refreshHUD(); arenaFight(); }
     else { if(S.arenaAuto) toast('입장권 소진 · 자동 연전 종료'); openModal('arena'); } }, 3000);
 }

@@ -852,6 +852,27 @@ step('영웅 합성 레벨 승계 — 하위 등급 100%', ()=>{
   const cpR=ev('heroPower')(ev('heroEntry')(R.hero_id)), cpN=ev('heroPower')(ev('heroEntry')(N.hero_id));
   if(cpR<=cpN) throw new Error(`합성 후 전투력이 하락/불변 (${cpR} ≤ ${cpN}) — 등급배율이 안 살아야 정상`);
 });
+/* ★ v5.231: 튜토리얼 STEP7(합성) 봉쇄 회귀 — N등급은 합성 불가(v5.86)라 합성 대상은
+   R(조각 80)뿐인데, 초기 조각 킷(freshState.shards)과 소환 1회의 분산으로 80을 못 채우면
+   신규 유저의 튜토리얼이 7/9에서 영원히 막힌다(2026-09-13 실브라우저 재현 — 얼음 20 시대).
+   불변식: 시작 영웅(보유) 위에 미보유 R이 있고 초기 킷만으로 그 R의 합성 요구를 충족해야 한다. */
+step('튜토리얼 합성 보장 — 초기 조각 킵으로 R 합성 대상 존재', ()=>{
+  const S=ev('S'), fs=ev('freshState')();
+  const keepShards=JSON.parse(JSON.stringify(S.shards));
+  const keepHeroes=JSON.parse(JSON.stringify(S.heroes));
+  // freshState 의 시작 상태(영웅 소유)를 그대로 재현: heroes 는 온보딩 전 빈 상태 + 스타터는
+  // boot() 가 깔아준다 — 여기선 킷 조각만 갈아끼워 판정한다(합성 판정은 소유 상태에도 의존하므로
+  // 최소 세팅: 빙결 N 보유 + 비케 미보유).
+  const frostN=ev('rosterOf')('frost')[0], frostR=ev('rosterOf')('frost')[1];
+  S.shards=JSON.parse(JSON.stringify(fs.shards));
+  S.heroes[frostN.hero_id]={own:true, level:1, exp:0};
+  delete S.heroes[frostR.hero_id];
+  const ready=ev('heroFuseReady')(frostR.hero_id);
+  const need=ev('heroFuseNeed')(frostR.hero_id);
+  const avail=ev('heroShardAvail')(frostR.hero_id);
+  S.shards=keepShards; S.heroes=keepHeroes;
+  if(!ready) throw new Error(`초기 킵(얼음 ${fs.shards.frost})만으론 R 합성 불가(필요 ${need}) — 튜토리얼 STEP7 봉쇄 회귀`);
+});
 /* ★ v5.177: 세트 구성품 획득 가능성 불변식 — SET_PIECES 의 모든 구성품이 제작 풀
    (FORGE_SLOTS)에 존재해야 한다. 하나라도 빠지면 '영원히 모을 수 없는 세트'가 조용히
    생긴다(2026-09-12 감사: 현재 54/54 — 이 검사로 못 박는다). 세트나 제작 풀을 고칠 때
