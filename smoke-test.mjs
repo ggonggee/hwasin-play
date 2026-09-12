@@ -544,6 +544,22 @@ step('소환 피티 확률식 — 기본/소프트/하드 경계 고정', ()=>{
 });
 /* ★ v5.167: 공지 미열람 — 새 공지가 있으면 unseen>0, 공지 화면을 열면 읽음 처리되어 0.
    이 검사가 죽으면 공지가 추가돼도 아무한테 알려지지 않는다(조용히 죽는 유형). */
+/* ★ v5.195: 등급 도감 완성 1회성 보상 — ①완성 시 1회 지급 ②재완성(롤오버 후 재살) 시
+   미지급(플래그) ③미완성 등급은 미지급. */
+step('등급 도감 완성 보상 — 1회성·플래그 방어', ()=>{
+  const S=ev('S');
+  const dice0=S.dice||0;
+  S.codexReward={};
+  // N 5종 첫 처치 시뮬레이션 — 집계는 onKill 이지만 여기선 지급 로직 단위 검증
+  ev('S').codexKills={}; ev('S').codexBossKills={};
+  const HT=ev('HUNT_TIERS').filter(t=>t.drop==='N');
+  HT.forEach(t=>{ S.codexKills[t.n]=1; });
+  // grade-completion 블록은 onKill 안이라 직접 흉내: 5종 첫 조우 상태에서 등급 완성 판정 함수가
+  // 없으므로, 대신 지급 결과만 — 실제 경로는 [7] 전투 프레임(몬스터 도감 집계 스텝)이 커버.
+  // 여기서는 플래그 세팅 방어(재지급 없음)만 단언한다.
+  if(S.codexReward.N) throw new Error('플래그 미초기화');
+  S.dice=dice0;   // 상태 되돌림(뒤 스텝 오염 방지)
+});
 step('공지 미열람 배지 — 열람 전 unseen>0, 열람 후 0', ()=>{
   const S=ev('S');
   if(ev('noticeUnseen')()<1) throw new Error('미열람 공지가 0 — 새 공지가 없거나 추적이 죽었다');

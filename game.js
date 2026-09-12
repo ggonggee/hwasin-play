@@ -1327,6 +1327,9 @@ function freshState(){
        구세이브는 mergeDefaults 로 {} 를 받아 이 시점부터 집계한다. 과거 킬의 소급은 불가
        (몬스터별 기록이 존재하지 않았다). 보스 '군주' 변형은 codexBossKills 에 따로 센다. */
     codexKills:{}, codexBossKills:{},
+    /* ★ v5.195: 등급 도감 완성 1회성 보상 수령 플래그 — 보상 데이터 상태라 freshState 소유
+       (마이그레이션 판정 플래그가 아님, HANDOFF 3-3 과 무관). */
+    codexReward:{},
     /* ★ B9/G-120 bossChallenges·raids · ★ F2 칭호 조건 카운터 신규
        craftFail/craftWin 은 '현재 연속(스트릭)', ...Best 는 '최고 스트릭'이다.
        칭호는 한 번 달성하면 유지돼야 하므로 have() 는 Best 만 본다. */
@@ -2670,6 +2673,20 @@ const Battle = (()=>{
         toast(left ? `🏆 <b style="color:${GRADES[t.drop].color}">${GRADES[t.drop].name} 등급 도감 완성!</b> (남은 등급 ${left})`
                    : `🏆🏆 <b style="color:var(--g-legend)">몬스터 도감 전종 완성!</b>`);
         sfx('legendary'); sysLog(left?`${GRADES[t.drop].name} 등급 도감 완성`:'몬스터 도감 전종 완성');
+        /* ★ v5.195: 등급 완성 1회성 보상 — v5.172 은 '보상 설계 사고 전례'로 보상을
+           유보했으나 대표 위임(2026-09-12: 캡처 근거 없으면 자체 설계, 크리티컬만 결제)으로
+           추가. 안전장치: ①1회성(플래그) ②기존 재화 소량 ③전종 완성 별도 없음(등급 4회만).
+           수량 기준: N=주사위50(일일미션 1일치) · R=소환권5 · E=기록서2 · L=기록서5(약 이틀치). */
+        const RW={ N:()=>{S.dice=(S.dice||0)+50; return '주사위 X50';},
+                   R:()=>{S.tickHero=(S.tickHero||0)+5; return '영웅 소환권 X5';},
+                   E:()=>{S.records=(S.records||0)+2; return '영웅 기록서 X2';},
+                   L:()=>{S.records=(S.records||0)+5; return '영웅 기록서 X5';} };
+        if(!S.codexReward[t.drop] && RW[t.drop]){
+          S.codexReward[t.drop]=1;
+          const what=RW[t.drop]();
+          toast(`🎖️ 도감 완성 보상 — <b>${what}</b>`);
+          sysLog(`도감 완성 보상 — ${GRADES[t.drop].name} 등급: ${what}`);
+        }
       }
     }
     /* ★ v5.30: 홈 AoE 다중 킬 골드 밸런스 — 마리당 골드가 실측 기준값(분당 18,885G)의
