@@ -1263,7 +1263,7 @@ function freshState(){
     hammerN:20, hammers:2,   // hammerN=일반 망치(드랍/일일퀘/상점) · hammers=전설 망치(일반 15 → 1 제작)
     wards:10,                // ★ B3/G-39: 하락 방지권 — 강화 실패 시 +단계 하락을 막는다
     invTab:'무기',           // ★ B3/G-43: 인벤토리 장비 탭 (무기 / 벨트)
-    settings:{ sound:true, graphic:'상' },  // ★ B9/G-133 그래픽 품질(상/중/하)
+    settings:{ sound:true, vol:1, graphic:'상' },  // ★ B9/G-133 그래픽 품질(상/중/하) · ★ v5.200 마스터 볼륨(0~1, 기본 1)
     title:'newbie',          // ★ B9/G-119: N등급 기본 칭호를 착용한 채로 시작(해제 불가)
     attendLastDate:'',       // ★ B9/G-123: 출석 마지막 수령 날짜(1일 1회 검증)
     classTrait:'', costumeOn:'', raidOn:false, guildCoin:120,
@@ -1586,6 +1586,9 @@ let _actx=null;
 function initAudio(){ if(_actx) return; try{ _actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} }
 function sfx(type){
   if(!_actx || !(S&&S.settings&&S.settings.sound)) return;
+  /* ★ v5.200: 마스터 볼륨(S.settings.vol 0~1, 기본 1=종전 음량) — 설정에서 조절.
+     개별 효과음 파라미터(P 표)는 그대로 두고 출력 게인에만 곱한다. */
+  const vol=(S.settings&&typeof S.settings.vol==='number') ? Math.max(0,Math.min(1,S.settings.vol)) : 1;
   try{
     const t=_actx.currentTime, o=_actx.createOscillator(), g=_actx.createGain(); o.connect(g); g.connect(_actx.destination);
     const P={ hit:[220,0.06,'square',0.05], crit:[440,0.09,'square',0.08], craft:[520,0.16,'triangle',0.12], fail:[150,0.2,'sawtooth',0.1],
@@ -1594,7 +1597,7 @@ function sfx(type){
     const p=P[type]||P.tap; o.type=p[2]; o.frequency.setValueAtTime(p[0],t);
     if(type==='craft'||type==='legendary'||type==='awaken'||type==='win') o.frequency.exponentialRampToValueAtTime(p[0]*2,t+p[1]);
     if(type==='fail') o.frequency.exponentialRampToValueAtTime(p[0]*0.5,t+p[1]);
-    g.gain.setValueAtTime(p[3],t); g.gain.exponentialRampToValueAtTime(0.0001,t+p[1]);
+    g.gain.setValueAtTime(p[3]*vol,t); g.gain.exponentialRampToValueAtTime(0.0001,t+p[1]);
     o.start(t); o.stop(t+p[1]+0.03);
   }catch(e){}
 }
@@ -6579,6 +6582,16 @@ const MODALS = {
     // 사운드
     const sr=el('div','pack'); sr.innerHTML=`<div class="pic">🔊</div><div class="info"><div class="t">사운드</div><div class="d">타격·제작·소환 효과음</div></div>`;
     const sb=el('button','btn sm'+(S.settings.sound?' gold':''),S.settings.sound?'켜짐':'꺼짐'); sb.onclick=()=>{ S.settings.sound=!S.settings.sound; if(S.settings.sound){ initAudio(); sfx('tap'); } openModal('settings'); }; sr.appendChild(sb); b.appendChild(sr);
+    /* ★ v5.200: 음량 조절 — 효과음은 합성음(Web Audio)이라 볼륨이 하나뿐이다.
+       슬라이더 <input range> 로 0~100% — S.settings.vol(0~1). 소리 끔과 별개로
+       '켜되 작게'가 필요하다(효과음 자체는 켜고 싶은데 타격음이 큰 경우). */
+    const vr=el('div','pack'); vr.innerHTML=`<div class="pic">🔉</div><div class="info"><div class="t">음량</div><div class="d">효과음 크기 ${Math.round(((S.settings.vol??1)*100))}%</div></div>`;
+    const vs=el('input'); vs.type='range'; vs.min='0'; vs.max='100'; vs.step='5';
+    vs.value=String(Math.round(((S.settings.vol??1)*100)));
+    vs.style.cssText='width:110px;accent-color:#f0cd82;';
+    vs.oninput=()=>{ S.settings.vol=Math.max(0,Math.min(1,Number(vs.value)/100)); sfx('tap'); };
+    vs.onchange=()=>{ openModal('settings'); };   // 라벨 % 갱신
+    vr.appendChild(vs); b.appendChild(vr);
     // ① 그래픽 품질 (상/중/하)
     const gr=el('div','pack'); gr.innerHTML=`<div class="pic">🖼️</div><div class="info"><div class="t">그래픽 품질</div><div class="d">현재 · ${S.settings.graphic||'상'}</div></div>`;
     const gw=el('div','optbtns');
