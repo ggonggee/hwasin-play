@@ -583,6 +583,26 @@ step('몬스터 종 수 = 20 (등급당 5종) + 마릿수 기본 30', ()=>{
    킬당 1.7% 랜덤 드랍으로만 나와, 대장간에서 그 재료를 눌러도 갈 곳이 없었다.
    보조 드랍(mat2)으로 메웠고, 몬스터·재료 수를 다시 바꿔도 이 구멍이 재발하지 않게 여기서 막는다.
    자세한 배경은 HANDOFF.md 3-7. */
+/* ★ v5.175: 장비 정렬 회귀 — v5.152/v5.166 의 기준(등급 L→N → 강화 → 최신)을 정본 함수
+   sortEquipList 로 잠근다. 무정렬로 되돌아가면 오래된 일반 장비 뒤로 새 상위 등급이 안 보인다.
+   DOM 스텁은 innerHTML 을 파싱하지 않아 화면 순서 검증이 불가하므로 정렬식을 직접 검증한다. */
+step('장비 정렬 정본 sortEquipList — 등급→강화→최신 + 원본 불변', ()=>{
+  const S=ev('S'), sort=ev('sortEquipList');
+  const dummy=[
+    { grade:'N', slot:'잿불 단검', enh:0 },
+    { grade:'L', slot:'결정 대검', enh:0 },
+    { grade:'N', slot:'흑철 대검', enh:3 },
+    { grade:'E', slot:'심연 대검', enh:0 },
+  ];
+  S.equips=dummy.slice();                       // indexOf 타이브레이크의 기준
+  const sorted=sort(dummy);
+  const names=sorted.map(e=>e.slot);
+  const expect=['결정 대검','심연 대검','흑철 대검','잿불 단검'];
+  if(JSON.stringify(names)!==JSON.stringify(expect))
+    throw new Error(`정렬 회귀: [${names}] ≠ [${expect}]`);
+  if(JSON.stringify(dummy.map(e=>e.slot))!==JSON.stringify(['잿불 단검','결정 대검','흑철 대검','심연 대검']))
+    throw new Error('입력 배열 원본이 정렬로 바뀌었다 — slice() 사본이어야 한다');
+});
 step('재료 24종 전부에 고정 드랍 몬스터가 있는지 (mat+mat2 ⊇ MATS)', ()=>{
   const HT=ev('HUNT_TIERS'), MATS=ev('MATS');
   const dropped=new Set();

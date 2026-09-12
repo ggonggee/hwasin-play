@@ -4344,6 +4344,16 @@ function openMatMonsterPopup(matKey, ret){
   $('#modal-root').classList.add('on'); currentModal='matMonster';
 }
 
+/* ★ v5.175: 장비 목록 정렬식의 정본 — 인벤토리(v5.152)와 착용창 트레이(v5.166)가 같은
+   기준을 쓰게 한 곳에 둔다: 등급(L→N) → 강화 레벨 → 최신 획득(S.equips 뒤순번 우선).
+   slice() 사본을 정렬해 원본 순서 불변(세트 집계 등 순서 의존 로직 무영향).
+   함수로 뺀 또 하나의 이유: 스모크의 DOM 스텁은 innerHTML 을 파싱하지 않아 화면 순서를
+   검증할 수 없다 — 정렬식 자체를 잠그는 것으로 회귀를 막는다. */
+function sortEquipList(list){
+  const gi=e=>GORDER.indexOf(e.grade);
+  return list.slice().sort((a,b)=> gi(b)-gi(a) || (b.enh||0)-(a.enh||0) || S.equips.indexOf(b)-S.equips.indexOf(a));
+}
+
 const MODALS = {
 
   /* ---------- [B1] 온보딩 ---------- */
@@ -4875,8 +4885,7 @@ const MODALS = {
        오래된 일반 장비가 15개 쌓인 뒤로 새 상위 등급이 여기에도 안 나타났다.
        같은 기준(등급→강화→최신)으로 정렬해 상위 15개를 보여준다. slice() 사본 정렬이라
        S.equips 원본 순서 불변. 전체 목록은 인벤토리가 담당(v5.152). */
-    const _gi=e=>GORDER.indexOf(e.grade);
-    const trayList=S.equips.slice().sort((a,b)=> _gi(b)-_gi(a) || (b.enh||0)-(a.enh||0) || S.equips.indexOf(b)-S.equips.indexOf(a));
+    const trayList=sortEquipList(S.equips);   /* ★ v5.175: 정본 사용(등급→강화→최신) — 인벤토리와 공유 */
     trayList.slice(0,15).forEach(e=>{ const c=el('div','cell gframe grade-'+e.grade); c.style.setProperty('--gc',GRADES[e.grade].color);
       c.innerHTML=`<div class="ei" style="font-size:22px">${equipImg(e.slot,2)}</div><div class="cn">${e.slot}</div>${e.enh?`<div class="lvl">+${e.enh}</div>`:''}`; c.onclick=()=>itemDetail(e, cur.hero_id); tray.appendChild(c); });
     b.appendChild(tray);
@@ -5433,10 +5442,9 @@ const MODALS = {
       /* ★ v5.152: 정렬 + 표시 확장. 종전엔 획득 순서 그대로 앞 16칸만 보여줬다 —
          오래된 일반 장비가 16개 쌓인 시점부터 새로 만든 상위 등급이 목록에 안 나타나
          '제작했는데 어디 갔지?'가 됐다(모달 본문 .mbody 가 스크롤되므로 개수 제약도 불필요).
-         정렬 기준: 등급(L→N) → 강화 레벨 → 최신 획득. 같은 등급이라도 방금 만든 게 위에 온다. */
-      const gi=e=>GORDER.indexOf(e.grade);
-      arr.sort((a,b)=> gi(b)-gi(a) || (b.enh||0)-(a.enh||0) || S.equips.indexOf(b)-S.equips.indexOf(a));
-      const CAP=60, shown=arr.slice(0,CAP);
+         정렬 기준: 등급(L→N) → 강화 레벨 → 최신 획득. 같은 등급이라도 방금 만든 게 위에 온다.
+         ★ v5.175: 정렬식은 sortEquipList 정본 사용(착용창 트레이와 공유). */
+      const CAP=60, shown=sortEquipList(arr).slice(0,CAP);
       shown.forEach(e=>{ const c=el('div','cell gframe grade-'+e.grade); c.style.position='relative'; c.style.setProperty('--gc',GRADES[e.grade].color);
         c.innerHTML=`<div class="gtag">${GRADES[e.grade].name}</div><div class="ei">${equipImg(e.slot,2)}</div><div class="cn">${e.slot}</div>${e.enh?`<div class="lvl">+${e.enh}</div>`:''}`;
         /* ★ v5.112: 종전 `cur && cur.hero_id` — 이 스코프에 cur 이 없어 클릭 즉시
