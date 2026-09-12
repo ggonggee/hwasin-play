@@ -1688,6 +1688,9 @@ function heroPortrait(heroId, size){
 const Battle = (()=>{
   let cv, ctx, W=0, H=0, dpr=1;
   let heroes=[], mobs=[], fx=[], drops=[], wave=1, spawnT=0, last=0, running=false, shake=0, lastBossWave=0;
+  /* ★ v5.165: 킬 콤보(전투 연출) — 1.5초 안에 연달아 처치하면 콤보가 이어진다. 표시 전용
+     모듈 변수라 시뮬레이션 결과·RNG 와 무관(결정론 D1~D5 무영향). 5콤보부터 표시. */
+  let combo=0, comboT=0, comboPop=0;
   /* ★ M1(결정론 리팩터, 20260822 명문 상세기획 §3.2 / G1심사 §4-2): 전투 전용 시드 PRNG.
      PD 1순위안은 "rnd()/ri()/pick() 의 난수원 자체를 스왑"(호출부 무수정)이었으나, 그 방안은
      "전투 중 다른 소비자가 같은 난수원을 뽑아 쓰면 즉시 깨진다"는 전제가 있고, PD는 그 전제가
@@ -2544,6 +2547,10 @@ const Battle = (()=>{
       if(spawnT<=0 && mobs.length<cap){ spawnMob(); spawnT = bRnd(0.4,1.0); }   /* ★ M1: 시드 RNG */
     }
     if(shake>0) shake-=dt;
+    /* ★ v5.165: 콤보 감쇠 — 1.5초 무킬 시 리셋, 팝 스케일 복귀. 일시정지 분기(위)는
+       전투 로직을 건너뛰므로 여기(활성 분기)에만 둔다. */
+    if(comboT>0){ comboT-=dt; if(comboT<=0) combo=0; }
+    if(comboPop>0) comboPop-=dt;
     drops.forEach(d=>{ d.t+=dt*1.1; const e=clamp(d.t,0,1); const ease=e<0.5? e : e; d.x=d.sx+(d.tx-d.sx)*Math.pow(e,1.6); d.y=d.sy+(d.ty-d.sy)*Math.pow(e,1.6); });
     drops = drops.filter(d=> d.t<1);
   }
@@ -2590,6 +2597,7 @@ const Battle = (()=>{
      바꾸는 시뮬레이션 상태이므로(이 함수 안에서도!) cosmetic 지대 밖에 그대로 둔다 — 다만
      그 블록엔 RNG가 전혀 없어(고정 수식) 결정론에는 영향 없다. */
   function onKill(m,mx,my,boss){
+    combo++; comboT=1.5; if(comboPop<=0) comboPop=0.22;   // ★ v5.165: 콤보 — 1.5초 내 연속 처치
     if(mode==='dungeon'&&dg){ dg.killed++; S.stats.kills++; dailyCount('kill'); sfx(boss?'legendary':'coin'); cosmetic(()=>addGold(ri(200,600))); return; } // 던전 보상은 결과창에서 일괄
     const t=tierDef();
     S.stats.kills++; dailyCount('kill'); sfx(boss?'legendary':'coin');
@@ -2826,6 +2834,22 @@ const Battle = (()=>{
       ctx.fillText('WAVE '+wave, 10, 16);
       ctx.fillStyle=td.c; ctx.font="10px 'Malgun Gothic'"; ctx.textAlign='right';
       ctx.fillText('사냥: '+td.n+' ('+GRADES[td.drop].name+' 재료)', W-8, 16);
+    }
+    /* ★ v5.165: 킬 콤보 표시 — 광역 스킬로 몹이 몰리며 쓸려나가는 순간(1.5초 내 연달아 처치)을
+       눈에 띄게 만든다. 5콤보부터 표시, 콤보당 글자가 커지고 10/20에서 색이 오른다.
+       팝 스케일은 마지막 킬 직후 0.22초간 1.35→1. 회수 직전 0.5초 페이드아웃. */
+    if(combo>=5){
+      const pop = comboPop>0 ? 1+(comboPop/0.22)*0.35 : 1;
+      const size = Math.min(26, 15+combo*0.35);
+      ctx.save();
+      ctx.translate(W/2, Math.max(46, H*0.11)); ctx.scale(pop,pop);
+      ctx.globalAlpha = clamp(comboT/0.5, 0, 1)*0.95;
+      ctx.fillStyle = combo>=20?'#c05ad0':combo>=10?'#ffd36a':'#f0a24a';
+      ctx.font=`bold ${size.toFixed(0)}px 'Malgun Gothic'`; ctx.textAlign='center';
+      ctx.strokeStyle='rgba(0,0,0,.6)'; ctx.lineWidth=3;
+      ctx.strokeText(`${combo} 연속 처치!`, 0, 0);
+      ctx.fillText(`${combo} 연속 처치!`, 0, 0);
+      ctx.restore(); ctx.globalAlpha=1;
     }
     // 전멸 오버레이
     if(wiped>0){
