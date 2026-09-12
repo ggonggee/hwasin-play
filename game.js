@@ -1638,7 +1638,16 @@ function heroFuseReady(hid){ const r=HERO_BY_ID[hid]; if(!r||heroOwned(hid)) ret
   return heroFusePrereq(hid) && heroShardAvail(hid) >= heroFuseNeed(hid); }
 function heroFuse(hid){ const r=HERO_BY_ID[hid]; if(!r||!heroFuseReady(hid)) return false;
   if(!heroShardSpend(hid, heroFuseNeed(hid))) return false;
-  const st=heroSlot(hid); st.own=true; st.level=st.level||1;
+  const st=heroSlot(hid); st.own=true;
+  /* ★ v5.183→v5.184: 레벨 승계 100% — 70%로 시작했으나 시뮬 재측정에서 '벤치 기아'가 드러났다:
+     홈 전투는 리더 1명만 나가(v5.107) XP를 리더가 독점하므로, 합성된 상위 영웅은 승계 레벨에서
+     영원히 멈춘다(리더가 되려면 레벨이 필요한데 레벨은 리더만 오른다 — 닭·달걀).
+     100% 승계로 합성 즉시 전투력이 순수 상승(같은 레벨 × 등급배율) — '합성의 순간'이 항상
+     보상이 된다. 밸런스 시뮬(npm run sim)로 곡선 비교했다. ⚠비전미확인 해소 — 자체 설계. */
+  const lowers=rosterOf(r.class_id).filter(x=>x.hero_id!==hid
+    && GORDER.indexOf(x.grade)<GORDER.indexOf(r.grade) && heroOwned(x.hero_id));
+  const prevLv=lowers.length ? ((S.heroes[lowers[lowers.length-1].hero_id]||{}).level||1) : 1;
+  st.level=Math.max(st.level||1, prevLv); st.exp=0;
   S.stats.fuses=(S.stats.fuses||0)+1;                    // ★ v5.112: 튜토 STEP7 실측 (소환 자동해금과 구분)
   Battle.refreshParty(); return true; }
 // 온보딩 클래스 특성 확정 시 해당 직업의 N등급 영웅(HERO_001~005)을 확정 지급
@@ -2700,7 +2709,12 @@ const Battle = (()=>{
     /* ★ v5.29.1: 경험치 버프(expUntil) + 칭호 경험치 효과 모두 반영.
        종전엔 titleExpMul()만 써서 상점 '경험치+100%' 버프가 안 먹었음. */
     const expMul = titleExpMul() * ((S.buffs && S.buffs.expUntil > Date.now()) ? 2 : 1);
-    const baseExp = boss ? 5 : 1;
+    /* ★ v5.183: 처치 경험치가 사냥터 등급에 비례(N1 · R2 · E4 · L8, 보스는 5배).
+       종전엔 킬당 1 고정이라 필요량(레벨×250) 대비 성장이 이차적으로 느려졌고(시뮬 200h
+       Lv49 정체 실측), 상위 사냥터로 옮겨도 레벨링이 빨라지지 않아 '더 강한 몬스터를
+       잡을 이유'가 재료·골드뿐이었다. N등급 수치는 종전과 동일(1) — 초기 밸런스 불변. */
+    const tierXP = [1,2,4,8][GORDER.indexOf(t.drop)] || 1;
+    const baseExp = boss ? 5*tierXP : tierXP;
     try { heroes.forEach(h=>{
       if(!h.hid) return;
       const st = S.heroes[h.hid]; if(!st) return;

@@ -613,6 +613,21 @@ step('제작시간 배율 — 버프 on 0.5배 · off 1배 (칭호 기준 상대
   if(Math.abs(mul()-0.5*tmul())>1e-12) throw new Error('버프 배율이 0.5×칭호가 아니다: '+mul());
   S.buffs.craftUntil=0;
 });
+/* ★ v5.183→v5.184: 영웅 합성 레벨 승계 100% — 합성 즉시 전투력 순수 상승이어야 한다.
+   70%였다면 벤치 기아(홈 전투 리더 독점 XP)로 상위 영웅이 영원히 못 따라온다(시뮬 실측). */
+step('영웅 합성 레벨 승계 — 하위 등급 100%', ()=>{
+  const S=ev('S');
+  // 화염 N(도르카) 보유·Lv50 세팅 → R(라비스) 조각 80 → 합성 → Lv50
+  const N=ev('rosterOf')('flame')[0], R=ev('rosterOf')('flame')[1];
+  S.heroes[N.hero_id]={own:true, level:50, exp:0};
+  S.heroes[R.hero_id]={own:false, level:1, exp:0};
+  S.shards.flame=80;
+  if(!ev('heroFuse')(R.hero_id)) throw new Error('합성 실패 — 조건 세팅 확인');
+  const lv=S.heroes[R.hero_id].level;
+  if(lv!==50) throw new Error(`승계 레벨 ${lv} ≠ 50 (100% 승계)`);
+  const cpR=ev('heroPower')(ev('heroEntry')(R.hero_id)), cpN=ev('heroPower')(ev('heroEntry')(N.hero_id));
+  if(cpR<=cpN) throw new Error(`합성 후 전투력이 하락/불변 (${cpR} ≤ ${cpN}) — 등급배율이 안 살아야 정상`);
+});
 /* ★ v5.177: 세트 구성품 획득 가능성 불변식 — SET_PIECES 의 모든 구성품이 제작 풀
    (FORGE_SLOTS)에 존재해야 한다. 하나라도 빠지면 '영원히 모을 수 없는 세트'가 조용히
    생긴다(2026-09-12 감사: 현재 54/54 — 이 검사로 못 박는다). 세트나 제작 풀을 고칠 때

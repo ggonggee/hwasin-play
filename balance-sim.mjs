@@ -93,11 +93,44 @@ function battleWindow(simSec){
   pump(steps/20*0.9999);   // pumpFrame(총dt) — 내부에서 FIXED_DT 로 분할
 }
 function myCP(){ return ev('totalCP')(); }
-function bestTierIdx(){
+/* 사냥 대상 선택 v2 — '필요한 재료를 떨구는 안전한 몬스터'를 찾는다(이 게임의 코어 루프).
+   종전엔 항상 최상위 안전 티어만 잡아 그 몬스터의 고정 재료만 얻어, 다른 부위 제작이
+   재료 부족으로 영영 막혔다(200h에도 N장비 잔존의 원인 — 진단 실측).
+   정책: 다음 제작 목표(bestCraftable 의 실패 원인)에 필요한 재료를 고정 드랍(mat/mat2)하는
+   가장 높은 등급의 안전한 몬스터. 목표가 없으면 최상위 안전 티어. */
+function pickHuntIdx(){
   const HT=ev('HUNT_TIERS'), cp=myCP();
-  let idx=0;
-  HT.forEach((t,i)=>{ if(cp>=t.cp) idx=i; });
+  const safe=i=>cp>=HT[i].cp;
+  // 다음 목표: 아직 못 만드는 것 중 최고 등급 — 부족한 재료 산출
+  const want=nextWantedMaterials();
+  if(want && want.length){
+    for(let i=HT.length-1;i>=0;i--){
+      if(!safe(i)) continue;
+      const t=HT[i];
+      if(want.includes(t.mat)||(t.mat2&&want.includes(t.mat2))) return i;
+    }
+  }
+  let idx=0; HT.forEach((t,i)=>{ if(safe(i)) idx=i; });
   return idx;
+}
+/* 아직 제작 불가(재료 부족)인 최고 등급 아이템의 부족 재료 목록 */
+function nextWantedMaterials(){
+  const FS=ev('FORGE_SLOTS'), S=ev('S'), schema=ev('slotSchema'), leader=leaderId();
+  const worn=new Set(S.equips.filter(e=>e.equipped&&(!e.heroId||e.heroId===leader)).map(e=>schema(e.slot).part));
+  const cands=[];
+  FS.forEach(s=>{ if(!s.items) return; ['L','E','R','N'].forEach(g=>{
+    (s.items[g]||[]).forEach(it=>{
+      if(it.n.indexOf('물약')>=0) return;
+      if(S.gold<ev('craftParams')(g,s.k,it.n).gold) return;
+      const lack=(it.recipe||[]).filter(r=>(S.mats[r.k]||0)<r.need);
+      if(lack.length) cands.push({grade:g, part:schema(it.n).part, lack});
+    });
+  });});
+  const order={L:3,E:2,R:1,N:0};
+  cands.sort((a,b)=> order[b.grade]-order[a.grade]);
+  const fresh=cands.filter(c=>!worn.has(c.part));
+  const pick=(fresh[0]||cands[0]);
+  return pick?pick.lack.map(l=>l.k):null;
 }
 function leaderId(){
   // party()[0] — 편성 없으면 전투력 최상. 홈 전투는 이 영웅 1명이 나간다.
@@ -137,9 +170,14 @@ function bestCraftable(){
       const cp=ev('craftParams')(g,s.k,it.n);
       if(!ev('recipeOk')(it.recipe) || S.gold<cp.gold) return;
       if(S.equips.filter(x=>x.slot===it.n).length>=99) return;      // v5.171 상한
+      if(it.n.indexOf('물약')>=0) return;                            // 소모성 — 장착 정책에서 제외(실사용자와 동일)
       pool.push({grade:g, cat:s.k, item:it, part:schema(it.n).part});
     });
   });});
+  /* v2.1: 등급 내림차순 정렬 — 종전엔 카테고리 순서(무기 먼저)라 N무기가 R방어구보다 먼저
+     뽑혀 200h에도 N장비를 장착하고 있었다(진단 실측). 등급 우선이 합리적 플레이어다. */
+  const order={L:3,E:2,R:1,N:0};
+  pool.sort((a,b)=> order[b.grade]-order[a.grade]);
   const fresh=pool.filter(p=>!worn.has(p.part));
   const list=fresh.length?fresh:pool;
   return list[0]||null;
@@ -204,7 +242,7 @@ let lastCP=myCP(), lastEventT=0, windows=0;
 const gradeReached={};
 while(simSec < MAX_HOURS*3600 && windows<400){
   // ① 사냥터 선택(합리적 플레이)
-  const idx=bestTierIdx();
+  const idx=pickHuntIdx();
   ev('S').huntTier=idx; ev('Battle').setHunt();
   const tier=ev('HUNT_TIERS')[idx];
 
