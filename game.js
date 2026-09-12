@@ -5612,7 +5612,7 @@ const MODALS = {
       [1,2,3].forEach(st=>{
         const qty=Math.max(1,Math.round(DD_RQ[ti]/3*st));
         const rg=['N','R','E'][st-1];
-        const row=el('div','pack'); row.innerHTML=`<div class="pic">${mic}</div><div class="info"><div class="t">${mn} ${st}단계</div><div class="d">${md} · ${DD_ELM[ti]} 원소 재료(${GRADES[rg].name}) X${qty}</div></div>`;
+        const row=el('div','pack'); row.innerHTML=`<div class="pic">${mic}</div><div class="info"><div class="t">${mn} ${st}단계</div><div class="d">${md} · ${DD_ELM[ti]} 원소 재료(${GRADES[rg].name}) X${qty} <span class="mut">(등급 내 무작위)</span></div></div>`;
         const btn=el('button','btn sm'+(S.ticket>=1?' gold':''),'입장');
         btn.onclick=()=>{ if(busyFight())return;
           if(dailyLeft('daily',5)<=0){toast('오늘 입장 소진');return;}
@@ -7215,7 +7215,14 @@ function resolveCraft(forceSuccess){
     }
   }
   S.craft=null;
-  if(ok){ S.equips.push({ grade, slot, enh:0, equipped:false }); sysLog(`${gradeBadge(grade)} ${slot} 제작 성공`); Battle.refreshParty(); guideCheck('craft',{grade,cat,slot}); }
+  if(ok){ S.equips.push({ grade, slot, enh:0, equipped:false }); sysLog(`${gradeBadge(grade)} ${slot} 제작 성공`);
+    /* ★ v5.190: 레전더리 제작 성공 특별 연출 — 40% 확률을 뚫은 이 게임의 가장 큰 제작 순간이
+       일반 성공과 같은 소리·표시였다. 금색 토스트 + legendary 음 + 시스템 로그 강조.
+       E(80%)는 일반 연출 유지 — 희소성이 연출의 크기를 정한다. */
+    if(grade==='L'){ sfx('legendary');
+      toast(`✨ <b style="color:var(--g-legend)">레전더리 ${slot} 제작 성공!</b>`);
+      sysLog(`<b style="color:var(--g-legend)">레전더리 ${slot} 탄생 — 40% 확률을 뚫었습니다</b>`); }
+    Battle.refreshParty(); guideCheck('craft',{grade,cat,slot}); }
   else { recipe.forEach(r=>matGain(r.k, Math.max(1,Math.floor(r.need*0.9)))); }
   refreshHUD();
   // 제작 결과 팝업 (G-30: 성공 시 '제작 성공' 타이틀 + 상단 '확인' 헤더바 + 부위 아이콘 + 플레이버)
