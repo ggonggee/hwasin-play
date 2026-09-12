@@ -6727,7 +6727,21 @@ const MODALS = {
               코어 루프의 참고 자료로 쓰이게. */
         const kc=S.codexKills||{}, bc=S.codexBossKills||{};
         const disc=HUNT_TIERS.filter(t=>((kc[t.n]||0)+(bc[t.n]||0))>0).length;
+        /* ★ v5.205: 등급별 조우 진행 + 완성 보상 표시 — v5.195 보상이 자동 지급이라
+           '어느 등급을 5종 다 잡았는지·아직 보상이 남은 등급'이 여기에 없었다.
+           진행 중 등급은 n/5, 완성 등급은 ✓(보상 수령 표기). */
+        const GORDER5=['N','R','E','L'];
+        const gr=row=>HUNT_TIERS.filter(t=>t.drop===row && ((kc[t.n]||0)+(bc[t.n]||0))>0).length;
         body.appendChild(el('div','hint',`조우 <b style="color:var(--ok)">${disc}</b>/${HUNT_TIERS.length}종 · 홈 사냥에서 처치하면 기록이 채워집니다 <span class="mut">(총 처치 ${fmt(S.stats.kills||0)})</span>`));
+        const prow=el('div'); prow.style.cssText='display:flex;gap:5px;margin:2px 0 8px;justify-content:center;';
+        GORDER5.forEach(row=>{
+          const c=gr(row), done=c>=5, paid=S.codexReward&&S.codexReward[row];
+          const chip=el('div','mat-chip'+(done?'':' lack'));
+          chip.innerHTML=`<div class="mi" style="font-size:11px;color:${GRADES[row].color}">${GRADES[row].name}</div><div class="have${done?'':' lack'}">${done?(paid?'✓ 보상':'✓'):`${c}/5`}</div>`;
+          chip.title=done?(paid?'완성 보상 수령 완료':'완성 보상은 첫 조우 시 자동 지급됩니다'):`${GRADES[row].name} 등급 몬스터 5종 조우 시 보상`;
+          prow.appendChild(chip);
+        });
+        body.appendChild(prow);
         const g=el('div','grid c4');
         HUNT_TIERS.forEach(t=>{
           const k=kc[t.n]||0, bk=bc[t.n]||0, found=(k+bk)>0;
