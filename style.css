@@ -149,6 +149,17 @@ body{
 #stage-wrap::before{ content:''; position:absolute; inset:0; z-index:0; pointer-events:none;
   background:rgba(8,6,4,.42); }
 #battle{ position:absolute; inset:0; width:100%; height:100%; display:block; z-index:1; }
+/* ★ v5.154: 사냥터 등급 색보정 — 캔버스(z1) 위·HUD(#stage-overlay z4 · timepod z5) 아래(z2)에서
+   배경과 스프라이트 전체에 낮은 투명도의 등급색을 입힌다(컬러 그레이딩). 등급이 오를수록
+   농도가 진해진다: N 이끼 평원 → R 서리 → E 잔불 → L 공허.
+   홈 사냥일 때만 game.js(Battle.applyStageTint)가 data-grade 를 세운다 — 던전·투기장은
+   콘텐츠 정체성이 있으니 원색 유지. 사냥터 전환 시 0.8s 페이드.
+   pointer-events:none 이므로 클릭은 canvas 로 그대로 통과된다. */
+#stage-wrap::after{ content:''; position:absolute; inset:0; z-index:2; pointer-events:none; opacity:0; transition:opacity .8s ease; }
+#stage-wrap[data-grade="N"]::after{ opacity:1; background:rgba(140,160,110,.10); }
+#stage-wrap[data-grade="R"]::after{ opacity:1; background:rgba(90,150,220,.14); }
+#stage-wrap[data-grade="E"]::after{ opacity:1; background:rgba(230,110,50,.16); }
+#stage-wrap[data-grade="L"]::after{ opacity:1; background:rgba(160,90,210,.20); }
 #stage-overlay{ position:absolute; inset:0; pointer-events:none; z-index:4; }
 
 /* 파티 기여도% 오버레이 */

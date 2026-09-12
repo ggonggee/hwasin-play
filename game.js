@@ -3113,10 +3113,23 @@ const Battle = (()=>{
     const frameDt = Math.min(0.25, (ts-last)/1000 || 0); last=ts;   // 탭 전환 등 긴 정지는 250ms로 클램프해 폭주 방지
     pumpFrame(frameDt);
     try{ draw(); }catch(e){ if(typeof console!=='undefined') console.error('draw:',e); }
+    try{ applyStageTint(); }catch(e){}                               // ★ v5.154: 사냥터 등급 색보정 (변화 시에만 DOM 쓰기)
     contribT-=frameDt; if(contribT<=0){ contribT=0.4; try{renderContribPanel();}catch(e){} }
     requestAnimationFrame(loop);
   }
-  function start(){ if(running) return; running=true; preloadHeroSheets(); preloadSkillFx(); last=performance.now(); acc=0; resize(); requestAnimationFrame(loop); }
+  /* ★ v5.154: #stage-wrap::after 의 등급 틴트 — 홈 사냥 몬스터의 등급(tierDef().drop)을
+     data-grade 로 반영한다(style.css 주석 참조). 던전·투기장(mode==='dungeon')에서는
+     속성을 지워 원색으로 돌아간다. loop() 가 매 프레임 부르지만 값이 바뀔 때만 쓴다.
+     순수 DOM 표시라 시뮬레이션 상태/RNG 와 무관 — 결정론(D1~D5)에 영향 없다. */
+  let _tintG=null;
+  function applyStageTint(){
+    const w=$('#stage-wrap'); if(!w) return;
+    const g=(mode==='dungeon') ? '' : tierDef().drop;
+    if(g===_tintG) return;
+    _tintG=g;
+    if(g) w.setAttribute('data-grade', g); else w.removeAttribute('data-grade');
+  }
+  function start(){ if(running) return; running=true; preloadHeroSheets(); preloadSkillFx(); last=performance.now(); acc=0; resize(); applyStageTint(); requestAnimationFrame(loop); }
   function refreshParty(){ layoutHeroes(); }
   function contributions(){ const tot=heroes.reduce((a,h)=>a+h.dmgDone,0)||1; return heroes.map(h=>({job:h.job,pct:Math.round(h.dmgDone/tot*100)})); }
   window.addEventListener('resize', ()=>{ resize(); });
