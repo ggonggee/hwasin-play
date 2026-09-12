@@ -1720,7 +1720,8 @@ function gfxQ(){ try{ return (S&&S.settings&&S.settings.graphic)||'상'; }catch(
 function gfxSpark(){ return gfxQ()==='하'?0:gfxQ()==='중'?0.5:1; }
 
 const Battle = (()=>{
-  let cv, ctx, W=0, H=0, dpr=1;  let heroes=[], mobs=[], fx=[], drops=[], wave=1, spawnT=0, last=0, running=false, shake=0, lastBossWave=0;
+  let cv, ctx, W=0, H=0, dpr=1;
+  let _fx0=null;   /* ★ v5.174: 화염 glow 그라디언트 캐시 — resize 시 아래에서 무효화 */  let heroes=[], mobs=[], fx=[], drops=[], wave=1, spawnT=0, last=0, running=false, shake=0, lastBossWave=0;
   /* ★ v5.165: 킬 콤보(전투 연출) — 1.5초 안에 연달아 처치하면 콤보가 이어진다. 표시 전용
      모듈 변수라 시뮬레이션 결과·RNG 와 무관(결정론 D1~D5 무영향). 5콤보부터 표시. */
   let combo=0, comboT=0, comboPop=0;
@@ -2053,6 +2054,7 @@ const Battle = (()=>{
     dpr = Math.min((window.devicePixelRatio||1) * ui, gfxQ()==='하'?1:gfxQ()==='중'?1.5:3);
     cv.width = Math.max(1, Math.round(W*dpr)); cv.height = Math.max(1, Math.round(H*dpr));
     ctx = cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+    _fx0=null;   /* ★ v5.174: 크기가 바뀌면 glow 그라디언트 좌표도 다시 만든다 */
     layoutHeroes();
   }
   let partyCP=1, wiped=0, mode='hunt', dg=null; // mode: 'hunt'(홈 파밍) | 'dungeon'(던전 입장 전투)
@@ -2732,10 +2734,14 @@ const Battle = (()=>{
     ctx.save(); ctx.translate(sx,sy);
     // ★ v5.23: 캔버스 배경 채우기 제거 — #stage-wrap 의 CSS 배경(bg_battle.jpg)이 보이게.
     //   어둡게 하려면 CSS 에서 배경 위에 overlay 를 주면 된다.
-    // ★ v5.33: drawFloor() 제거 — 전투 배경(bg_battle.jpg)만 표시.
-    const fx0 = ctx.createRadialGradient(W*0.08,H*0.14,4, W*0.08,H*0.14,90);
-    fx0.addColorStop(0,'rgba(255,130,50,.5)'); fx0.addColorStop(1,'rgba(255,130,50,0)');
-    ctx.fillStyle=fx0; ctx.beginPath(); ctx.arc(W*0.08,H*0.14,90,0,7); ctx.fill();
+    // ★ v5.33: drawFloor() 제거 — 전투 배경(bg_battle.jpg)만 표시. (v5.174 에 함수 잔해도 삭제)
+    /* ★ v5.174: 좌상단 화염 빛(ember glow) 그라디언트 캐시 — 고정 위치(W·H 의 비율 좌표)라
+       매 프레임 createRadialGradient 로 새로 만들 필요가 없다. resize() 에서 _fx0=null 무효화. */
+    if(!_fx0){
+      _fx0 = ctx.createRadialGradient(W*0.08,H*0.14,4, W*0.08,H*0.14,90);
+      _fx0.addColorStop(0,'rgba(255,130,50,.5)'); _fx0.addColorStop(1,'rgba(255,130,50,0)');
+    }
+    ctx.fillStyle=_fx0; ctx.beginPath(); ctx.arc(W*0.08,H*0.14,90,0,7); ctx.fill();
     drops.forEach(d=>{ ctx.globalAlpha=clamp(1-d.t*0.6,0,1); ctx.font='16px serif'; ctx.textAlign='center'; ctx.fillText(d.kind==='gold'?'🪙':'📦', d.x, d.y); ctx.globalAlpha=1; });
     mobs.forEach(drawMob);
     heroes.forEach(drawHero);
@@ -2896,11 +2902,9 @@ const Battle = (()=>{
     }
     ctx.restore();
   }
-  function drawFloor(){
-    ctx.strokeStyle='rgba(70,58,40,.35)'; ctx.lineWidth=1;
-    for(let i=0;i<=8;i++){ const y=H*0.5 + (i/8)*H*0.5; ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
-    for(let i=-6;i<=12;i++){ const x0=W*0.5 + (i/12)*W*0.5; ctx.beginPath(); ctx.moveTo(W*0.5+(i/12)*W*0.12, H*0.5); ctx.lineTo(x0*1.1, H); ctx.stroke(); }
-  }
+  /* ★ v5.174: drawFloor() 삭제 — v5.33 에서 호출이 사라졌는데(배경 JPG로 대체) 함수만
+     남아 있었다. 2026-09-12 확인(호출부 grep 0건). 성급히 '최적화'하려다 죽은 코드를
+     붙들고 있었던 것 — 죽은 코드의 올바른 처리는 캐시가 아니라 제거다. */
   /* ★ v5.76→v5.79: 스프라이트시트 기반 drawHero — 8방향 지원 + 발 피봇 정렬.
      시트에서 (col×128, row×128) 영역을 잘라 캔버스에 그림.
      ★ v5.79: dx/dy는 더 이상 '셀 좌상단'이 아니라 '발 피봇 위치(영웅 좌표)'.
