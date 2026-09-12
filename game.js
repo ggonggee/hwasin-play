@@ -1456,10 +1456,16 @@ function migrateNames(){
     }
   }
 }
-// 오프라인 방치 수익 (분당 1,000G, 최대 8시간)
+/* ★ v5.196: 오프라인 수익 정본 — 인게임 방치 기본 골드(18,885/분, G-92 기준)의 50%.
+   종전 분당 1,000G(=인게임의 5.3%)는 근거 주석 없는 초기 데모 값이었다 — 8시간
+   무단정(48만)이 한 판 골드던전(50만~)보다 적어 '다시 접속할 이유'가 없었다.
+   50%로 올려도 8h 상한 453만으로 일일 소득(시뮬 기준 1천만+)의 보조 비중 —
+   컴백 훅은 세워지고 경제를 흔들지 않는다. 버프(마을·코스튬·칭호)는 인게임
+   실전투에만 적용: 오프라인은 기본률 고정(보수적). */
+const OFFLINE_GPM = Math.round(18885*0.5);   // 분당
 function computeOffline(){
   const now=Date.now();
-  if(S.lastSeen){ const elapsed=(now-S.lastSeen)/1000, cap=8*3600; if(elapsed>60){ S.offlinePending=(S.offlinePending||0)+Math.floor(1000/60*Math.min(elapsed,cap)); } }
+  if(S.lastSeen){ const elapsed=(now-S.lastSeen)/1000, cap=8*3600; if(elapsed>60){ S.offlinePending=(S.offlinePending||0)+Math.floor(OFFLINE_GPM/60*Math.min(elapsed,cap)); } }
   S.lastSeen=now;
 }
 // 깊은 병합: 중첩 객체 신규 하위키까지 기본값 채움 (세이브 마이그레이션 NaN 방지)
@@ -5988,7 +5994,7 @@ const MODALS = {
     cells.forEach(([ic,nm,v])=>{ const c=el('div','cell gframe'); c.innerHTML=`<div class="ei" style="font-size:19px">${eImg(ic,2)}</div><div class="cn">${nm}<br><b>${fmt(v||0)}</b></div>`; g.appendChild(c); });
     b.appendChild(g);
     // ⑤ 2분할 카드 — 1분당 획득 골드 / 오프라인 골드 (누적 시간 mm:ss)
-    const offSec=Math.min(8*3600, Math.floor((S.offlinePending||0)/1000*60));
+    const offSec=Math.min(8*3600, Math.floor((S.offlinePending||0)/OFFLINE_GPM*60));   /* ★ v5.196: 정본 비율로 환산 */
     const two=el('div'); two.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin:10px 0';
     two.innerHTML=`<div class="gframe" style="padding:10px;text-align:center"><div class="small mut">1분당 획득 골드</div><div style="font-size:15px;font-weight:800;color:var(--gold)">${fmt(rate)} G</div></div>
       <div class="gframe" style="padding:10px;text-align:center"><div class="small mut">오프라인 골드 ${mmss(offSec)}</div><div style="font-size:15px;font-weight:800;color:var(--gold)">${fmt(S.offlinePending||0)} G</div></div>`;
@@ -7820,7 +7826,7 @@ let _tabHideTs=0;
 function _visibilitySettle(hideTs, nowTs){
   if(!S || !hideTs) return 0;
   const elapsed=(nowTs-hideTs)/1000, cap=8*3600;
-  const add = elapsed>60 ? Math.floor(1000/60*Math.min(elapsed,cap)) : 0;
+  const add = elapsed>60 ? Math.floor(OFFLINE_GPM/60*Math.min(elapsed,cap)) : 0;   /* ★ v5.196: 정본 상수 사용 */
   if(add>0){
     S.offlinePending=(S.offlinePending||0)+add;
     toast(`복귀 정산 — 오프라인 골드 ${fmt(add)} G 대기 (좌상단 시계 → 정산에서 수령)`);

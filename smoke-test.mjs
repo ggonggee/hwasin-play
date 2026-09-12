@@ -589,13 +589,14 @@ step('재료 보유 상한 — 2000/900 초과분 미획득 + 비파괴 클램�
   S.mats[nm.k]=2600; gain(nm.k,5);          // 구세이브 비파괴 — 넘친 값이 깎이면 안 된다
   if(S.mats[nm.k]!==2600) throw new Error(`넘친 보유량이 깎였다: 2600 → ${S.mats[nm.k]}`);
 });
-/* ★ v5.173: 백그라운드 탭 복귀 정산 — 숨김 구간이 오프라인과 같은 배율로 적립되는지.
-   1시간 = 60,000G(분당 1,000), 30초 미만은 미적립. 백그라운드 방치가 증발하던 회귀 방지. */
-step('백그라운드 탭 복귀 정산 — 1시간 숨김 60,000G · 30초 미만 0', ()=>{
-  const S=ev('S'), settle=ev('_visibilitySettle');
+/* ★ v5.173→v5.196: 백그라운드 탭 복귀 정산 — 정본 OFFLINE_GPM(인게임 기본 18,885의 50%)
+   로 적립. 1시간 = OFFLINE_GPM×60, 30초 미만은 미적립. 백그라운드 방치가 증발하던 회귀 방지. */
+step('백그라운드 탭 복귀 정산 — 정본 비율 적립 · 30초 미만 0', ()=>{
+  const S=ev('S'), settle=ev('_visibilitySettle'), GPM=ev('OFFLINE_GPM');
+  const want=Math.floor(GPM*60);
   const before=S.offlinePending||0;
-  if(settle(Date.now()-3600e3, Date.now())!==60000) throw new Error('1시간 정산액이 60,000G가 아니다');
-  if((S.offlinePending||0)!==before+60000) throw new Error('offlinePending 에 적립되지 않았다');
+  if(settle(Date.now()-3600e3, Date.now())!==want) throw new Error(`1시간 정산액 ${settle(Date.now()-3600e3,Date.now())} ≠ ${want}`);
+  if((S.offlinePending||0)!==before+want) throw new Error('offlinePending 에 적립되지 않았다');
   if(settle(Date.now()-30e3, Date.now())!==0) throw new Error('30초 미만 숨김에 적립됐다');
 });
 /* ★ v5.9: 몬스터 종 수 검증 — 등급당 5종, 총 20종(설계 기준). 마릿수 선택기 기본값 30.
