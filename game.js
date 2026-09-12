@@ -3435,6 +3435,24 @@ function refreshHUD(){
   /* ★ v5.81: 착용 중인 칭호(TITLES 시스템)를 명패에 표시 — 체감 개선 */
   const _badge = $('#pTitleBadge');
   if(_badge){ const _t = TITLES.find(t=>t.id===S.title); _badge.textContent = _t ? _t.n : ''; }
+  /* ★ v5.207: 활성 프리미엄 배지 — 골드/경험치/제작 버프가 켜져 있어도 홈 화면에
+     표시가 없었다(버프 화면을 열어야 확인). 유료 버프는 '내가 지금 무엇을 받고
+     있는가'가 상시 보여야 가치가 체감된다. 명패 아래 미니 배지 — 남은 일수 tooltip.
+     약탈 활성화(레이드 피해+50%)도 함께. */
+  const _pb = $('#premiumBadge');
+  if(_pb){
+    const now=Date.now(), on=[];
+    if(S.buffs.goldUntil>now) on.push('💎G');
+    if(S.buffs.expUntil>now) on.push('📘E');
+    if(S.buffs.craftUntil>now) on.push('🔨C');
+    if(S.raidOn) on.push('⚡');
+    _pb.textContent=on.join(' ');
+    _pb.style.display=on.length?'':'none';
+    const left=t=>Math.max(1,Math.ceil((t-now)/86400000));
+    _pb.title=on.length
+      ? on.map(x=>x==='💎G'?`골드+100% (${left(S.buffs.goldUntil)}일)`:x==='📘E'?`경험치+100% (${left(S.buffs.expUntil)}일)`:x==='🔨C'?`제작시간-50% (${left(S.buffs.craftUntil)}일)`:'약탈 활성(레이드 피해+50%)').join(' · ')
+      : '';
+  }
   const ct=$('#craftTimer');
   if(S.craft){ const left=Math.max(0,Math.ceil((S.craft.endAt-Date.now())/1000)); ct.textContent = left>0? mmss(left) : '완성!'; }
   else ct.textContent='00:00';
