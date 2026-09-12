@@ -4824,9 +4824,16 @@ const MODALS = {
     b.appendChild(el('div','small mut',`보유 장비 ${S.equips.length}종 (탭하여 강화)`));
     const tray=el('div','grid c5'); tray.style.marginTop='6px';
     if(!S.equips.length) tray.appendChild(el('div','hint','아직 장비가 없습니다. 대장간(⚒️)에서 제작하세요.'));
-    S.equips.slice(0,15).forEach(e=>{ const c=el('div','cell gframe grade-'+e.grade); c.style.setProperty('--gc',GRADES[e.grade].color);
+    /* ★ v5.166: 트레이 정렬 — v5.152(인벤토리)와 같은 결함이었다. 획득 순 앞 15칸만 보여
+       오래된 일반 장비가 15개 쌓인 뒤로 새 상위 등급이 여기에도 안 나타났다.
+       같은 기준(등급→강화→최신)으로 정렬해 상위 15개를 보여준다. slice() 사본 정렬이라
+       S.equips 원본 순서 불변. 전체 목록은 인벤토리가 담당(v5.152). */
+    const _gi=e=>GORDER.indexOf(e.grade);
+    const trayList=S.equips.slice().sort((a,b)=> _gi(b)-_gi(a) || (b.enh||0)-(a.enh||0) || S.equips.indexOf(b)-S.equips.indexOf(a));
+    trayList.slice(0,15).forEach(e=>{ const c=el('div','cell gframe grade-'+e.grade); c.style.setProperty('--gc',GRADES[e.grade].color);
       c.innerHTML=`<div class="ei" style="font-size:22px">${equipImg(e.slot,2)}</div><div class="cn">${e.slot}</div>${e.enh?`<div class="lvl">+${e.enh}</div>`:''}`; c.onclick=()=>itemDetail(e, cur.hero_id); tray.appendChild(c); });
     b.appendChild(tray);
+    if(S.equips.length>15) b.appendChild(el('div','hint',`총 ${fmt(S.equips.length)}개 중 상위 15개 표시 — 전체 목록은 인벤토리`));
   }},
 
   /* ---------- [N1] 장비 옵션 재설정 (주사위 리롤) ----------
