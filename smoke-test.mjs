@@ -623,7 +623,12 @@ step('세트 구성품 전량이 제작 가능 — 획득 불가 세트 부재',
   FS.forEach(s=>{ if(s.items) Object.values(s.items).forEach(arr=>arr.forEach(it=>names.add(it.n))); });
   const orphans=[];
   for(const set in SP) SP[set].forEach(n=>{ if(!names.has(n)) orphans.push(set+' → '+n); });
-  if(orphans.length) throw new Error(`제작할 수 없는 세트 구성품 ${orphans.length}건: `+orphans.join(' / '));
+  /* ★ v5.178: 길잡이 목표 아이템도 제작 가능해야 한다 — [바로가기]가 openModal('forge', slot)
+     으로 미리 선택을 걸기 때문(forgeLocate 실패 시 조용히 기본값이 열릴 뿐이다).
+     단 상점 전용 장비(예: '용암 소드', 회색코인 상품)는 고의적 비제작템이므로 제외 대상이 아니다 —
+     이 검사는 GUIDE_CHAIN 만 본다. */
+  ev('GUIDE_CHAIN').forEach(g=>{ if(!names.has(g.slot)) orphans.push('길잡이 '+g.slot); });
+  if(orphans.length) throw new Error(`제작할 수 없는 구성품 ${orphans.length}건: `+orphans.join(' / '));
 });
 step('재료 24종 전부에 고정 드랍 몬스터가 있는지 (mat+mat2 ⊇ MATS)', ()=>{
   const HT=ev('HUNT_TIERS'), MATS=ev('MATS');
