@@ -1658,6 +1658,10 @@ function grantClassStarter(traitId){
   return true;
 }
 function ownedHeroes(){ return HERO_ROSTER.filter(r=>heroOwned(r.hero_id)).map(r=>heroEntry(r.hero_id)); }
+/* ★ v5.189: 벤치 레벨 마일스톤 로그 — 순수 표시(상태·경제 무영향). 함수로 나눈 건 스모크 직접 검증용. */
+function benchMilestoneLog(name, lv){
+  sysLog(`로스터 성장 — ${name} Lv.${lv}`);
+}
 // 코스튬 소유 판정(id 기반, 구세이브는 개수 기반 호환)
 function costumeOwned(id,i){ return costumeHas(id) || ((S&&S.costumes)||0)>i; }
 /* ★ F2: 칭호 전투력 보정 폐지 — 칭호 29종의 효과 축은 골드/경험치/제작시간/제작확률/채굴뿐이며
@@ -2752,6 +2756,10 @@ const Battle = (()=>{
         st.exp=(st.exp||0)+benchExp;
         while(st.exp >= (st.level||1)*250 && (st.level||1)<999){
           st.exp-=(st.level||1)*250; st.level=(st.level||1)+1;
+          /* ★ v5.189: 벤치 마일스톤 로그 — 10레벨마다 한 줄만. v5.186 으로 로스터 전체가
+             자라는데 레벨업이 조용해서(v5.186 설계) '내 영웅들이 자라고 있다'가 체감 안 났다.
+             토스트·효과음 없음(전투 흐름 방해 금지) — 시스템 채팅 로그만. */
+          if(st.level%10===0) benchMilestoneLog(e.name, st.level);
         }
       });
     } catch(ee) { if(typeof console!=='undefined') console.error('bench EXP error:', ee.message); }
