@@ -4938,8 +4938,9 @@ const MODALS = {
         if(e.own){ toast('이미 보유한 영웅입니다.'); return; }
         if(!heroFusePrereq(r.hero_id)){ toast(`${e.job.name} 하위 등급 영웅을 먼저 보유해야 합니다.`); return; }
         if(sh<need){ toast(`조각이 부족합니다. (${fmt(sh)}/${fmt(need)})`); return; }
-        if(heroFuse(r.hero_id)){ sfx('craft'); toast(`${r.name} 합성 성공!`);
-          sysLog(`${gradeBadge(r.grade)} ${r.name} 합성 성공`); guideCheck('fuse'); openModal('hero'); refreshHUD(); } };
+        if(heroFuse(r.hero_id)){ sfx('legendary'); toast(`⚔️ <b style="color:var(--g-legend)">${r.name} 합성 성공!</b> Lv${((S.heroes[r.hero_id]||{}).level)||1} 승계`);
+          sysLog(`${gradeBadge(r.grade)} ${r.name} 합성 성공 — Lv${((S.heroes[r.hero_id]||{}).level)||1} 승계(v5.184)`);
+          guideCheck('fuse'); openModal('hero'); refreshHUD(); } };
       card.appendChild(fu);
       // 하단 액션 — 원형 [장비] + [소환]/[소환중]
       const act=el('div','hc-act');
