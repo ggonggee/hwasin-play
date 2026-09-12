@@ -1505,6 +1505,26 @@ function save(){ if(_saveSealed) return;
 function today(){ try{ return new Date().toDateString(); }catch(e){ return 'demo'; } }
 /* ★ F2: 날짜 롤오버를 한 곳으로 모으고, 실제로 날짜가 바뀐 경우에만 접속 일차(S.day)를 올린다.
    (칭호 조건이 '접속 일수'에서 다른 조건으로 교체되면서 S.day 를 갱신하는 주체가 사라졌었다) */
+/* ★ v5.201: 연속 접속 보상 — 재접속 이유를 하루 단위로 만든다. 7일 주기 사이클:
+   day%7 = 1(주사위30) 2(소환권1) 3(강화석20) 4(재료권2) 5(주사위60) 6(소환권2) 0(기록서1).
+   지급량 기준: 일일미션 총량(주사위 60/일)의 절반 이하 — 미션을 대체하지 않고 더한다.
+   '연속' 판정은 하지 않는다(끊겨도 일차 기준 지급) — 이 게임의 일차(S.day)는 접속한
+   날짜 수라 끊김 개념이 없고, 벌점형 리텐션은 데모 단계에서 부적합하다(자체 설계).
+   최초 접속일(first)은 지급하지 않는다 — 보상은 '다시 왔을 때'의 훅이다. */
+/* ★ v5.201: 코드 값 규약 — 양수=주사위, 음수=기타(아래 매핑). 초안에 3일차를 20(양수)으로
+   적어 '강화석 20'이 '주사위 20'으로 지급되는 결함을 스모크가 배포 전에 잡았다 —
+   매핑 표는 기호 규약을 지켜야 한다. 강화석=-4. */
+const LOGIN_REWARDS=[30,-1,-4,-2,60,-3,-1];   // index=(day-1)%7
+function loginRewardGive(day){
+  const v=LOGIN_REWARDS[(day-1)%7];
+  if(v===undefined) return null;
+  if(v>0){ S.dice=(S.dice||0)+v; return `주사위 X${v}`; }
+  if(v===-1){ S.tickHero=(S.tickHero||0)+1; return '영웅 소환권 X1'; }
+  if(v===-2){ S.tickMat=(S.tickMat||0)+2; return '재료 소환권 X2'; }
+  if(v===-3){ S.records=(S.records||0)+1; return '영웅 기록서 X1'; }
+  if(v===-4){ S.stones=(S.stones||0)+20; return '강화석 X20'; }
+  return null;
+}
 function rollDaily(){
   const t=today(); if(S.daily.date===t) return;
   const first = !S.daily.date;
@@ -1512,7 +1532,14 @@ function rollDaily(){
   S.daily.date=t; S.daily.counts={};
   /* ★ N2: 안내문 'ⓘ 매일 입장권 5개가 자동충전 됩니다.' — 날짜가 실제로 바뀐 경우에만 배치 지급한다.
      (데모의 40초당 +1 실시간 리젠은 시연 편의를 위한 가속 장치로 그대로 둔다 — 상한 30 공유) */
-  if(!first) S.ticket=Math.min(30,(S.ticket|0)+ARENA_DAILY_TICKET);
+  if(!first){
+    S.ticket=Math.min(30,(S.ticket|0)+ARENA_DAILY_TICKET);
+    /* ★ v5.201: 연속 접속 보상 — rollDaily 안에서 지급(하루 1회 자동). 토스트는 이 시점이
+       부팅 전일 수 있어 부팅 후 표시로 미룬다(bootLog 배열 → DOMContentLoaded 뒤 flush). */
+    const rw=loginRewardGive(S.day);
+    if(rw){ (S._pendingLoginToast=S._pendingLoginToast||[]).push(rw);
+      sysLog(`${S.day}일차 접속 보상 — ${rw}`); }
+  }
 }
 function dailyLeft(key, max){ rollDaily(); return max-(S.daily.counts[key]||0); }
 function dailyUse(key){ rollDaily(); S.daily.counts[key]=(S.daily.counts[key]||0)+1; }
@@ -8060,6 +8087,12 @@ window.addEventListener('unhandledrejection', (e)=>{ reportFatal('promise', e.re
 window.addEventListener('DOMContentLoaded',()=>{
   load(); wire(); refreshHUD();
   scheduleUIScale();
+  /* ★ v5.201: 접속 보상 토스트 플러시 — rollDaily 가 load() 안에서 돌아 이 시점에야
+     #toast 상자가 살아 있다. 보상은 이미 지급됨(sysLog도 load 중 기록). */
+  if(Array.isArray(S._pendingLoginToast)){
+    S._pendingLoginToast.forEach((rw,i)=>{ setTimeout(()=>toast(`🎁 ${S.day}일차 접속 보상 — <b>${rw}</b>`), 600+i*400); });
+    S._pendingLoginToast=null;
+  }
   setTimeout(()=>{ if(!$('#home').classList.contains('hidden')) Battle.resize(); }, 100);
 });
 window.addEventListener('resize', scheduleUIScale);

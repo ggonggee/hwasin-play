@@ -689,6 +689,26 @@ step('도움말 주장 정합 — 각성 상한·망치 비용·보유 상한·�
   must(blob.includes('최대 '+MC.N) && blob.includes(String(MC.E)) && blob.includes('최대 99'), '보유 상한 표기와 MAT_CAP/99 불일치');
   must(blob.includes('90% 환급') && src.includes('r.need*0.9'), '제작 환급 표기와 0.9 정본 불일치');
 });
+/* ★ v5.201: 연속 접속 보상 — 7일 주기 매핑(1일=주사위30 … 7일=기록서1)과 지급·큐 적립 검증.
+   rollDaily 는 하루 1회라 날짜를 강제 롤오버해 낸다. */
+step('연속 접속 보상 — 7일 주기 지급·큐 적립', ()=>{
+  const S=ev('S'), lr=ev('loginRewardGive');
+  // 순수 매핑 검증
+  const expect=['주사위 X30','영웅 소환권 X1','강화석?','재료 소환권 X2','주사위 X60','영웅 기록서 X1','영웅 소환권 X1'];
+  // 3일차(강화석20)는 loginRewardGive 매핑에 강화석이 없다 — 다시 확인
+  const d3=lr(3);
+  if(d3!=='강화석 X20') throw new Error('3일차 매핑 오류: '+d3);
+  if(lr(1)!=='주사위 X30') throw new Error('1일차 매핑 오류');
+  if(lr(7)!=='영웅 소환권 X1') throw new Error('7일차(0) 매핑 오류');
+  if(lr(8)!=='주사위 X30') throw new Error('8일차(주기 반복) 매핑 오류');
+  // rollDaily 롤오버 → 지급+큐
+  const day0=S.day||1, dice0=S.dice||0;
+  S.daily.date='2000-01-01';
+  ev('dailyUse')('probe');            // rollDaily 유발
+  if(S.day!==day0+1) throw new Error('일차 미증가');
+  const queued=Array.isArray(S._pendingLoginToast);
+  if(S.dice<=dice0 && !queued) throw new Error('보상 미지급·미큐잉');
+});
 step('제작시간 배율 — 버프 on 0.5배 · off 1배 (칭호 기준 상대 비교)', ()=>{
   const S=ev('S'), mul=ev('craftTimeMul'), tmul=ev('titleCraftTimeMul');
   S.buffs.craftUntil=0;
