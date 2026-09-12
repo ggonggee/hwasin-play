@@ -506,6 +506,18 @@ step('수령 가능 배지 — 판정 함수 전이 + 점 토글 동작', ()=>{
   setDot(n,false);
   if(dots().length!==0) throw new Error('_setDot(off) 가 점을 못 뗐다');
 });
+/* ★ v5.164: 소환 피티 확률식 정본 — 판정(summonRun)과 표시(소환 화면)가 같은 함수를 쓴다.
+   식이 어느 한쪽에서 따로 놀면 '화면엔 1%라며!' 사고가 된다. 경계값 전수 고정. */
+step('소환 피티 확률식 — 기본/소프트/하드 경계 고정', ()=>{
+  const f=ev('summonPityProb');
+  const eps=1e-12;
+  const cases=[[0,0.01],[39,0.01],[40,0.01],[41,0.03],[50,0.21],[69,0.59],[70,1],[120,1]];
+  for(const [n,want] of cases){
+    const got=f(n);
+    if(Math.abs(got-want)>eps) throw new Error(`피티 ${n}회 확률 ${got} ≠ ${want}`);
+  }
+  if(!ev('S')) throw new Error('S 없음');
+});
 /* ★ v5.9: 몬스터 종 수 검증 — 등급당 5종, 총 20종(설계 기준). 마릿수 선택기 기본값 30.
    종전 120종(등급당 30종)은 "30마리" 마릿수 선택기를 도감 종 수로 오독한 것이었다. */
 step('몬스터 종 수 = 20 (등급당 5종) + 마릿수 기본 30', ()=>{

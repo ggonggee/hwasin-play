@@ -4886,6 +4886,16 @@ const MODALS = {
      ['💎','루비',S.ruby],['🔥','조각',shardTot],['🪙','회색',S.gray],['🎲','주사위',S.dice]]
       .forEach(([ic,nm,v])=>{ const r=el('div','sres'); r.innerHTML=`<span class="si">${eImg(ic,1.5)}</span><span>${nm}</span><b>${fmt(v)}</b>`; res.appendChild(r); });
     b.appendChild(res);
+    /* ★ v5.164: 피티 진행도 공개 — 종전엔 하단 힌트 문구('소프트 40회 · 하드 70회')만 있어
+       지금 몇 회째인지·다음 확률이 얼마인지가 안 보였다. 보정이 눈에 보이면 '다음 소환'의
+       기대감이 생긴다(가차 보정의 재미는 회수까지의 카운트다운에 있다).
+       확률은 판정과 같은 정본(summonPityProb)에서 읽는다 — 표시↔판정 불일치 원천 차단. */
+    const pf=S.summonFail||0, pp=summonPityProb(pf), pLeft=Math.max(0,70-pf);
+    b.appendChild(el('div','kv',`<span>고급 조각 확률 보정</span><b style="color:${pf>=40?'var(--g-legend)':'inherit'}">${(pp*100).toFixed(1)}%</b>`));
+    const pbar=el('div','pbar'); pbar.appendChild(el('i'));
+    pbar.firstChild.style.width=clamp(pf/70*100,0,100)+'%';
+    b.appendChild(pbar);
+    b.appendChild(el('div','small mut',`연속 ${fmt(pf)}회 · 하드 피티까지 ${pLeft}회${pf>=40?' — 보정 구간(+2%p/회)':''}`));
     const grid=el('div','grid c2 summon-grid'); grid.style.marginTop='8px';
     // 석판 타일 — 확인 오버레이(G-58) 경유 후에만 실제 소환
     const mkTile=(ic,title,sub,costTxt,qty,can,run,gr,id)=>{
@@ -7029,11 +7039,17 @@ function craftAutoCheck(){
 /* ------- 소환 ------- */
 /* ★ B4/G-50: 조각은 여전히 '직업' 단위로 누적되고, 20개를 넘으면 해당 직업의
    N등급 영웅(HERO_001~005)이 자동 해금된다. 상위 등급은 [영웅] 카드의 [합성]으로만 해금. */
+/* ★ v5.164: 피티 확률식의 정본 — 판정(summonRun)과 표시(소환 화면 진행 바)가 같은 값을
+   보게 한 곳에 둔다. 종전엔 식이 summonRun 안에만 있어 화면에 현재 확률을 보여줄 수 없었다.
+   연속 미획득 f회: 기본 1% · 40회부터 +2%p/회(소프트) · 70회 확정(하드). */
+function summonPityProb(f){
+  return f>=70 ? 1 : f>=40 ? 0.01+(f-40)*0.02 : 0.01;
+}
 function summonRun(count, fixJob){
   S.stats.summons++; const gained={}; let legend=false;
   for(let i=0;i<count;i++){ const j = fixJob ? fixJob : pick(JOBS).id;
     S.summonFail=(S.summonFail||0)+1;
-    let p=0.01; if(S.summonFail>=70) p=1; else if(S.summonFail>=40) p=0.01+(S.summonFail-40)*0.02; // 소프트 40 / 하드 70
+    const p=summonPityProb(S.summonFail);   // 소프트 40 / 하드 70 (★ v5.164 정본 공유)
     const r=Math.random(); let amt=1;
     if(r<p){ legend=true; amt=3; S.summonFail=0; } else if(r<0.12){ amt=2; }
     S.shards[j]=(S.shards[j]||0)+amt; gained[j]=(gained[j]||0)+amt; }
