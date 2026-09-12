@@ -6877,6 +6877,15 @@ const MODALS = {
     // ② 계정
     const ar=el('div','pack'); ar.innerHTML=`<div class="pic">👤</div><div class="info"><div class="t">계정</div><div class="d">${S.name} · ${S.server}</div></div>`;
     const ab=el('button','btn sm','로그아웃'); ab.onclick=()=>toast('로그아웃은 데모에서 지원하지 않습니다'); ar.appendChild(ab); b.appendChild(ar);
+    /* ★ v5.223: 마지막 저장 시각 — 자동 저장(5초)이 살아 있다는 걸 눈에 보여준다.
+       '내 진행도가 저장되고 있나?'는 방치 게임의 기본 불안 — 설정 화면에서 한 줄로 해소.
+       세이브 실패 시 save() 의 토스트와 별개로, 이 표시도 갱신 안 되므로 이중 확인 가능. */
+    const svT=ev3=>S.lastSeen||0;
+    const svRow=el('div','pack');
+    const ago=Math.max(0, Math.floor((Date.now()-(S.lastSeen||0))/1000));
+    svRow.innerHTML=`<div class="pic">💾</div><div class="info"><div class="t">자동 저장</div>
+      <div class="d">5초마다 저장 · 마지막 ${ago<60?ago+'초 전':ago<3600?Math.floor(ago/60)+'분 전':Math.floor(ago/3600)+'시간 전'}</div></div>`;
+    b.appendChild(svRow);
     // ③ 고객센터
     const cr=el('div','pack'); cr.innerHTML=`<div class="pic">🎧</div><div class="info"><div class="t">고객센터</div><div class="d">자주 묻는 질문 · 1:1 문의</div></div>`;
     const cb=el('button','btn sm','FAQ·문의'); cb.onclick=()=>toast('고객센터 준비 중입니다'); cr.appendChild(cb); b.appendChild(cr);
