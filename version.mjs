@@ -57,6 +57,17 @@ function writeSync(){
 
 function bump(next){
   if(!/^\d+\.\d+$/.test(next)) throw new Error(`버전은 "5.130" 형태로 준다 (받은 값: ${next})`);
+  /* ★ v5.159: 다운그레이드 방지. 2026-09-12 실사고 — 대화형 세션과 자율주행 자동화가 같은
+     저장소를 번갈아 작업하며, 대화형 쪽이 자동화가 올려둔 5.157 을 모르고 `bump 5.154` 를
+     돌려 라이브보다 낮은 버전이 만들어질 뻤했다([J] 는 package.json↔index.html 일치만 보고
+     단조 증가는 안 본다). 여러 에이전트가 동시에 작업하는 환경에서 "내가 아는 최신"은 믿을
+     수 없다 — 정본 파일 자체가 판정한다. 되돌림이 정말 필요하면 --force 를 명시적으로 쓴다. */
+  const cur = readVersion();
+  const m = /^(\d+)\.(\d+)$/.exec(next);
+  const isNewer = (+m[1] > cur.major) || (+m[1] === cur.major && +m[2] > cur.minor);
+  if(!isNewer && process.argv[3] !== '--force')
+    throw new Error(`버전 다운그레이드/동일 금지 — 현재 v${cur.display}, 요청 v${next}. `
+      + `최신 커밋의 버전보다 큰 수를 준다(git log 참조). 되돌림이 필요하면 --force.`);
   const p = D+'package.json';
   const pkg = JSON.parse(fs.readFileSync(p,'utf8'));
   pkg.version = next + '.0';
