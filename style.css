@@ -177,16 +177,23 @@ body{
 #side-float .fb:active{ filter:brightness(1.3); }
 
 /* 우측 메뉴 패널 */
-/* ★ v5.13: 453 기준. 패널 프레임 + ItemFrame. G-16: 4/3/3/3 고정 행. */
-#sidemenu{ position:absolute; top:6px; right:6px; width:210px; z-index:8; padding:8px 5px;
+/* ★ v5.13: 453 기준. 패널 프레임 + ItemFrame. G-16: 4/3/3/3 고정 행.
+   ★ v5.235: ☰ 드로어(이 패널)와 콘텐츠 레일은 한 덩어리로 함께 열리는데(v4.9),
+   패널이 369px(행 93/75/75/93)라 레일 첫 행(top 353)의 우측 아이콘(요일·보스·
+   골드·레이드)을 x 237~447에서 덮어 보이지도 눌리지도 않았다(2026-09-13 실측
+   getBoundingClientRect, hit-test 'covered by 7일출석' 재현). 범인 2개 —
+   .gi의 line-height(28px 폰트×1.5=42px > 아이콘 34px), 4글자 라벨 2줄 wrap.
+   아이콘 34px(1380행 규칙 그대로) + 라벨 11px nowrap + 여백 축소로 패널 bottom 343 < 레일 353. */
+#sidemenu{ position:absolute; top:6px; right:6px; width:210px; z-index:8; padding:5px 5px;
   border:1px solid var(--frame); border-radius:9px; background:linear-gradient(180deg,rgba(20,15,10,.96),rgba(12,9,6,.92));
-  box-shadow:0 10px 26px rgba(0,0,0,.65); display:flex; flex-direction:column; gap:5px; }
+  box-shadow:0 10px 26px rgba(0,0,0,.65); display:flex; flex-direction:column; gap:3px; }
 #sidemenu .smrow{ display:grid; grid-template-columns:repeat(4,1fr); gap:2px; }
 #sidemenu .smsp{ visibility:hidden; }
-.smi{ display:flex; flex-direction:column; align-items:center; gap:2px; padding:6px 2px; cursor:pointer;
+.smi{ display:flex; flex-direction:column; align-items:center; gap:2px; padding:3px 2px; cursor:pointer;
   border:1px solid var(--frame); border-radius:6px; background:linear-gradient(180deg,#241a12,#140f0a); }
 .smi:active{ filter:brightness(1.3); }
-.smi .gi{ font-size:var(--fs-xl); filter:drop-shadow(0 1px 2px #000); } .smi span{ font-size:var(--fs-xs); color:#cdbf9f; }
+.smi .gi{ font-size:var(--fs-xl); display:flex; justify-content:center; filter:drop-shadow(0 1px 2px #000); }
+.smi span{ font-size:11px; color:#cdbf9f; white-space:nowrap; }
 
 /* 콘텐츠 아이콘 레일 */
 /* ★ v5.13: 453 기준. 패널 프레임 + ItemFrame.
