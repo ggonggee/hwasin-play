@@ -189,8 +189,12 @@ body{
 .smi .gi{ font-size:var(--fs-xl); filter:drop-shadow(0 1px 2px #000); } .smi span{ font-size:var(--fs-xs); color:#cdbf9f; }
 
 /* 콘텐츠 아이콘 레일 */
-/* ★ v5.13: 453 기준. 패널 프레임 + ItemFrame. */
-#content-rail{ position:absolute; left:6px; right:6px; bottom:6px; z-index:5; padding:6px 4px;
+/* ★ v5.13: 453 기준. 패널 프레임 + ItemFrame.
+   ★ v5.233: z-index 5→7 — 종전 #chat(z6, 하단 220px 고정)이 레일(z5) 위에 있어
+   메뉴의 던전·길드 항목이 채팅 박스에 가려 클릭이 안 먹었다(2026-09-13 실브라우저
+   재현: r7·r4행 전 항목 hit-test 실패). 7이면 채팅(6) 위·하단 네비바(7) 동급·
+   사이드메뉴(8)·모달(20) 아래라 층서가 자연스럽다. */
+#content-rail{ position:absolute; left:6px; right:6px; bottom:6px; z-index:7; padding:6px 4px;
   border:1px solid var(--frame); border-radius:9px; background:linear-gradient(180deg,rgba(20,15,10,.92),rgba(12,9,6,.88)); }
 #content-rail .row{ display:flex; justify-content:space-between; gap:2px; }
 #content-rail .row+.row{ margin-top:4px; }
