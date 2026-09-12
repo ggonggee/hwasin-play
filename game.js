@@ -7428,6 +7428,12 @@ function resolveCraft(forceSuccess){
   }
   S.craft=null;
   if(ok){ S.equips.push({ grade, slot, enh:0, equipped:false }); sysLog(`${gradeBadge(grade)} ${slot} 제작 성공`);
+    /* ★ v5.211: 곡괭이 획득 플래그 — 칭호 '견습 광부증/숙련 광부'의 조건이 '오래된/찬란한 곡괭이
+       획득'인데 플래그(S.picks)는 유료 패키지 give()에서만 세팅됐다. 제작으로 곡괭이를 만들면
+       아이템은 있지만 칭호 조건이 영영 안 풀렸다(2026-09-13 감사, 정합 9호).
+       곡괭이는 특수 부위 장비라 '제작→보유'가 F2P 유일 경로다. */
+    if(slot==='오래된 곡괭이') S.picks.old=true;
+    if(slot==='찬란한 곡괭이') S.picks.shine=true;
     /* ★ v5.190: 레전더리 제작 성공 특별 연출 — 40% 확률을 뚫은 이 게임의 가장 큰 제작 순간이
        일반 성공과 같은 소리·표시였다. 금색 토스트 + legendary 음 + 시스템 로그 강조.
        E(80%)는 일반 연출 유지 — 희소성이 연출의 크기를 정한다. */

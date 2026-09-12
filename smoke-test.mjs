@@ -722,6 +722,21 @@ step('고서 보유 버프 — 종류당 +3% · 미보유 1배', ()=>{
   if(tm()!==1.03) throw new Error('중복 고서가 2종으로 셈해짐: '+tm());
   S.equips=keep;
 });
+/* ★ v5.211: 곡괭이 제작→칭호 조건 — 종전엔 유료 패키지만 플래그를 세팅해 제작 경로가
+   칭호를 영영 못 풀었다. resolveCraft 성공 시 플래그 세팅을 잠근다. */
+step('곡괭이 제작 → 칭호 조건 플래그', ()=>{
+  const S=ev('S');
+  S.picks={old:false, shine:false};
+  // resolveCraft 는 S.craft 필요 — 곡괭이 R 등급이지만 강제 성공 판정으로 직접 경로 태우기
+  S.craft={ grade:'R', slot:'오래된 곡괭이', cat:'특수', ic:'⛏️', endAt:0, p0:1, sec:1, gold:0, recipe:[] };
+  ev('craftAutoCheck')();          // endAt=0 → 즉시 resolveCraft(강제 성공 아님 — p0=1 이라 성공)
+  if(!S.picks.old) throw new Error('곡괭이 제작 성공 후에도 picks.old=false');
+  S.craft={ grade:'L', slot:'찬란한 곡괭이', cat:'특수', ic:'⛏️', endAt:0, p0:1, sec:1, gold:0, recipe:[] };
+  ev('craftAutoCheck')();
+  if(!S.picks.shine) throw new Error('찬란한 곡괭이 제작 후에도 picks.shine=false');
+  // 칭호 조건 연결 확인 — titleHave(have) 함수
+  if(!ev('TITLES').find(t=>t.id==='minecert').have()) throw new Error('견습 광부증 칭호 조건 미충족');
+});
 step('제작시간 배율 — 버프 on 0.5배 · off 1배 (칭호 기준 상대 비교)', ()=>{
   const S=ev('S'), mul=ev('craftTimeMul'), tmul=ev('titleCraftTimeMul');
   S.buffs.craftUntil=0;
