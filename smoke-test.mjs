@@ -672,6 +672,23 @@ step('일괄 분해 집계 — 등급·미장착 필터 정확성', ()=>{
   const gotR=bulk('R');
   if(gotR.count!==1 || gotR.gold!==sv(r)) throw new Error('R 집계 오류');
 });
+/* ★ v5.199: 도움말 주장 ↔ 코드 정본 정합 게이트 — v5.168/197/198 의 수동 정합 스윕을
+   자동화. 도움말 문구가 정본 상수(DEEP_CAP·PROTECT_COST·MAT_CAP·CRAFT 환급)와 어긋나면
+   여기서 잡는다 — '그 숫자를 말하는 모든 곳'을 사람이 기억할 수 없다. */
+step('도움말 주장 정합 — 각성 상한·망치 비용·보유 상한·환급률', ()=>{
+  const src = fs.readFileSync(D+'game.js','utf8');
+  const topics=["'영웅':","'몬스터':","'제작':","'인벤토리':","'직업':","'길드':"];
+  const lines=src.split(String.fromCharCode(10));
+  const blob=lines.filter(l=>topics.some(t=>l.includes(t))).join(String.fromCharCode(10));
+  const must=(cond,what)=>{ if(!cond) throw new Error('도움말 정합 실패: '+what); };
+  const cap=(src.match(/DEEP_CAP=(\d+)/)||[])[1];
+  must(blob.includes('최대 '+cap+'단계'), '각성 상한 표기와 DEEP_CAP='+cap+' 불일치');
+  const pc=ev('PROTECT_COST');
+  must(blob.includes('일반 망치 '+pc.N.n+'개') && blob.includes('희귀 망치 '+pc.R.n+'개'), '망치 비용 표기와 PROTECT_COST 불일치');
+  const MC=ev('MAT_CAP');
+  must(blob.includes('최대 '+MC.N) && blob.includes(String(MC.E)) && blob.includes('최대 99'), '보유 상한 표기와 MAT_CAP/99 불일치');
+  must(blob.includes('90% 환급') && src.includes('r.need*0.9'), '제작 환급 표기와 0.9 정본 불일치');
+});
 step('제작시간 배율 — 버프 on 0.5배 · off 1배 (칭호 기준 상대 비교)', ()=>{
   const S=ev('S'), mul=ev('craftTimeMul'), tmul=ev('titleCraftTimeMul');
   S.buffs.craftUntil=0;
