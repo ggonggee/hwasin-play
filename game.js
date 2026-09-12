@@ -7508,6 +7508,17 @@ function openEnhance(e){
   b.appendChild(el('div','stat-line',`<span>성공 확률</span><span class="v" style="color:#5ecb6a">${Math.round(p*100)}%</span>`));
   b.appendChild(el('div','stat-line',`<span>강화 비용</span><span class="v" style="color:#f0cd82">골드 ${fmt(cost)} · 강화석 ${stoneCost}</span>`));
   b.appendChild(el('div','warn','⚠ 벼림이 실패하면 단계가 내려가고, +11부터는 장비 자체가 부서질 수 있습니다'));
+  /* ★ v5.222: 위험 구간 경계 표시 + 기대 비용 — '+11부터 위험'이 문구뿐이었다.
+     현재 단계가 어느 구간인지, 파괴 확률이 얼마인지, 보호 없이 도전 시 기대 손실이
+     얼마인지를 한 줄로 보여준다. 정보가 위험 관리 결정을 가능하게 한다. */
+  const destrP = e.enh>=11 ? 50*(1-p) : 0;   // 파괴 확률 = 실패확률×50%
+  const zone = e.enh<5 ? '안전 (성공 95%)' : e.enh<10 ? '주의 (성공 82%)' : e.enh<15 ? '위험 (성공 63% · 파괴 '+(50*(1-p)).toFixed(1)+'%)' : '고위험 (성공 44% · 파괴 '+(50*(1-p)).toFixed(1)+'%)';
+  const zColor = e.enh<10 ? 'var(--ok)' : e.enh<15 ? '#f0a24a' : 'var(--bad)';
+  b.appendChild(el('div','stat-line',`<span>현재 구간</span><span class="v" style="color:${zColor}">${zone}</span>`));
+  if(destrP>0){
+    const expLoss=Math.round(cost*2 + (CRAFT[e.grade]||CRAFT.N).gold*0.9);   // 대략: 재시도 비용 + 장비 가치 90%
+    b.appendChild(el('div','stat-line',`<span>보호 없이 도전 시</span><span class="v" style="color:var(--bad)">파괴 ${destrP.toFixed(1)}% · 예상 손실 ${fmt(expLoss)}G 상당</span>`));
+  }
   // 보호 토글 2종 — 강화 레벨 무관 상시 노출
   let useHammer=false, useWard=false;
   const hr=el('div','pack'); hr.innerHTML=`<div class="pic">${eImg("🔨",2)}</div><div class="info"><div class="t">파괴 보호</div><div class="d">실패 파괴 시 ${prot.label} ${prot.n}개 소모로 방지 · 보유 ${fmt(protHave())}</div></div>`;
