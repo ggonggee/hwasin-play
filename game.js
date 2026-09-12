@@ -562,6 +562,59 @@ function slotSchema(name){
   for(const s of SLOT_STAT_SCHEMA){ if(s.match.some(m=>n.indexOf(m)>=0)) return s; }
   return SLOT_STAT_FALLBACK;
 }
+/* ★ v5.228: 착용 슬롯 SSOT — 정본은 페이퍼돌 10슬롯(투구/목걸이/상의/하의/신발/벨트/무기/방패/반지/정수).
+   문제의 발단: v5.81이 장착 교체 판정을 slotSchema(스탯 '표시'용 그룹)의 part 로 통일하면서
+   투구·상의·하의·견갑이 전부 '방어구' 한 부위로 묶였다. 그 결과 —
+   ① 방어구는 한 영웅이 한 벌만 착용 가능(페이퍼돌은 3슬롯을 표시하는데 실제론 1개)
+   ② 투구+상의+하의를 포함한 세트(잔불·월하·응시·주술·강철맹세)는 6세트 도달이 구조적으로 불가
+     — 600h 밸런스 시뮬에서 setm ×1.000 고정(세트 없는 곡선이 확정 곡선이었음)으로 실측.
+   정본 근거: ① 판독 문서 "페이퍼돌: 좌열 투구/목걸이/상의/하의/신발/벨트, 우열 무기/방패/반지/정수(10슬롯)"
+   ② v5.108 이관 스모크가 투구+상의+하의+신발+방패+지팡이 6부위 동시 착용=주술 6세트를 검사한다.
+   매핑은 부위 의미 기준: 면갑→투구, 흉갑·망토→상의, 각반·정강이받이→하의, 견갑·어깨받이→목걸이,
+   완갑·손목보호대→반지, 고서·물약·곡괭이 등 특수류→정수. 이 매핑이면 9세트 전부 6세트 도달 가능
+   (작열 8세트만 예외 — 단검·대검·도끼 3종이 같은 무기 슬롯이라 최대 6세트).
+   미매칭 이름은 '#이름' 고유 슬롯 취급 — 서로 다른 미매칭 장비끼리 파괴하지 않는다(v5.81 이전 안전 동작).
+   ★ slotSchema(스탯 표시)와 slotKeyOf(착용 부위)는 용도가 다르다 — 섞어 쓰지 마라. */
+const SLOT_KEYS = [
+  ['무기',   ['단검','대검','도끼','지팡이','장궁','강궁','쌍검','전곤','사슬낫','창','낫','완드','소드','검']],
+  ['방패',   ['방패']],
+  ['투구',   ['투구','면갑']],
+  ['상의',   ['상의','흉갑','망토']],
+  ['하의',   ['하의','각반','정강이받이']],
+  ['신발',   ['신발']],
+  ['벨트',   ['벨트']],
+  ['목걸이', ['목걸이','귀걸이','귀고리','견갑','어깨받이']],
+  ['반지',   ['반지','인장','팔찌','완갑','손목보호대']],
+  ['정수',   ['정수','고서','물약','곡괭이','나침반','부적']],
+];
+function slotKeyOf(name){
+  const n=name||'';
+  for(const [k,ms] of SLOT_KEYS){ if(ms.some(m=>n.indexOf(m)>=0)) return k; }
+  return '#'+n;
+}
+/* ★ v5.228: 장착 본체 — itemDetail 의 onYes 에서 추출(전역 노출. craftStart v5.151 전례).
+   스모크가 실제 장착 경로를 직접 검증한다(종전엔 UI 클로저라 검증 불가였고, 그 사이
+   부위 판정 회귀가 5주간 숨어 있었다).
+   ★ v5.71→v5.81: 착용 시 같은 부위 기존 장비는 파괴(삭제). 부위 통일의 원래 목적은
+   '흑철 대검'↔'용암 소드'처럼 같은 무기 부위인데 이름이 달라 파괴되지 않던 것.
+   ★ v5.228: 부위 판정은 slotKeyOf(페이퍼돌 10슬롯 정본)로 — slotSchema(스탯 표시용)의
+   part 는 투구·상의·하의를 '방어구' 하나로 묶어서, 이걸 쓰면 방어구를 한 벌만 입을 수
+   있고 세트 6세트가 구조적으로 불가능해진다(600h 시뮬 setm ×1.000 실측). 섞어 쓰지 마라.
+   반환값: 파괴한 기존 장비 수. */
+function equipItem(e, heroId){
+  const newPart = slotKeyOf(e.slot);
+  const before = S.equips.length;
+  S.equips = S.equips.filter(x=>{
+    if(x===e) return true;  /* 새로 착용할 장비는 유지 */
+    if(x.equipped && (!x.heroId || x.heroId===heroId) && slotKeyOf(x.slot)===newPart){
+      return false;  /* 같은 영웅 같은 부위 착용 중 → 파괴 */
+    }
+    return true;
+  });
+  e.equipped=true;
+  e.heroId=heroId;
+  return before - S.equips.length;
+}
 function statLine(key, enh, gmult){
   const d=STAT_DEF[key]; if(!d) return null;
   const v=(d.base + (enh||0)*d.per) * gmult;
@@ -5158,20 +5211,22 @@ const MODALS = {
     hsw.append(pv,hnm,nx); b.appendChild(hsw);
 
     /* ★ v5.69: findEq — equipped:true이고 이 영웅에게 귀속된 장비만 표시.
-       종전엔 equipped/heroId 체크 없이 첫 매칭 장비를 표시 → 모든 장비가 착용된 것처럼 보임. */
-    const findEq=names=>S.equips.find(e=>e.equipped && (!e.heroId || e.heroId===cur.hero_id) && names.some(n=>e.slot.indexOf(n)>=0));
-    const mkSlot=(label,names)=>{ const eq=findEq(names); const s=el('div','eq-slot'+(eq?' grade-'+eq.grade:' empty'));
+       종전엔 equipped/heroId 체크 없이 첫 매칭 장비를 표시 → 모든 장비가 착용된 것처럼 보임.
+       ★ v5.228: 슬롯 판정을 이름 부분매칭 → slotKeyOf 로 통일. 종전엔 '심연 면갑'·'심연 흉갑'·
+       '심연 쌍검'처럼 10슬롯 이름표에 없는 장비가 착용해도 페이퍼돌 어디에도 표시되지 않았다. */
+    const findEq=key=>S.equips.find(e=>e.equipped && (!e.heroId || e.heroId===cur.hero_id) && slotKeyOf(e.slot)===key);
+    const mkSlot=(label,key)=>{ const eq=findEq(key); const s=el('div','eq-slot'+(eq?' grade-'+eq.grade:' empty'));
       if(eq){ s.style.setProperty('--gc',GRADES[eq.grade].color); s.innerHTML=`${equipImg(eq.slot,2)}<div class="sl">+${eq.enh}</div>`; s.onclick=()=>itemDetail(eq, cur.hero_id); }
       else { s.innerHTML=label; s.onclick=()=>toast(`${label} 부위가 비어 있습니다`); }
       return s; };
     const doll=el('div','paperdoll'); const colL=el('div','eq-col'); const colR=el('div','eq-col');
-    [['투구',['투구']],['목걸이',['목걸이']],['상의',['상의']],['하의',['하의']],['신발',['신발']]].forEach(([l,n])=>colL.appendChild(mkSlot(l,n)));
-    [['무기',['단검','대검','도끼','지팡이','장궁','강궁','검','창','낫','완드','소드']],['방패',['방패']],['반지',['반지']],['정수',['정수']]].forEach(([l,n])=>colR.appendChild(mkSlot(l,n)));
+    ['투구','목걸이','상의','하의','신발'].forEach(k=>colL.appendChild(mkSlot(k,k)));
+    ['무기','방패','반지','정수'].forEach(k=>colR.appendChild(mkSlot(k,k)));
     const center=el('div','eq-center');
     const hero=el('div','eq-hero'); hero.innerHTML=jobIcon(heroJob.id); center.appendChild(hero);
     const nm=el('div','small'); nm.style.color=GRADES[heroGrade].color; nm.style.fontWeight='700'; nm.textContent=`${GRADES[heroGrade].name} ${cur.name}`; center.appendChild(nm);
     // 10번째 슬롯 — 벨트(중앙 하단)
-    const beltWrap=el('div','eq-beltrow'); beltWrap.appendChild(mkSlot('벨트',['벨트'])); center.appendChild(beltWrap);
+    const beltWrap=el('div','eq-beltrow'); beltWrap.appendChild(mkSlot('벨트','벨트')); center.appendChild(beltWrap);
     const fn=el('div','eq-fn5');
     /* ★ v5.112: 종전엔 무조건 S.equips[0] — 착용 중인 장비가 아니라 보유 목록 첫 칸을 열었다.
        이 단계는 '장착한 장비를 강화'다. 착용분 우선, 없으면 첫 장비로 폴백. */
@@ -7468,11 +7523,6 @@ function itemDetail(e, heroId){ _itemDetailHeroId=heroId||null;
     }
     showConfirmDialog({ title:'장착', warn:'*새 장비를 걸치면 같은 부위의 낡은 장비는 사라집니다.*', msg:'장착 하시겠습니까?', yes:'장착', no:'취소',
       onYes:()=>{
-        /* ★ v5.71→v5.81: 착용 시 같은 부위 기존 장비는 파괴(삭제)한다.
-           ★ v5.81: 부위 매칭을 slotSchema(부위 추출) 기준으로 통일.
-           종전엔 x.slot===e.slot 정확매칭이라 '흑철 대검'↔'용암 소드'가
-           같은 무기 부위인데도 파괴되지 않았음. findEq의 부분매칭과 통일. */
-        const newPart = slotSchema(e.slot).part;
         /* ★ v5.148: 세트 효과 달성/해제 감지 — 착용 전후로 각 세트의 활성 임계 단계(달성한
            최고 k)를 비교한다. 새로 넘어선 세트는 축하 토스트+sfx, 깨진 세트는 장착 토스트에
            부기로 알린다. 세트 파밍의 '완성 순간'이 조용히 지나가면 수집 동기가 반감되고,
@@ -7480,18 +7530,9 @@ function itemDetail(e, heroId){ _itemDetailHeroId=heroId||null;
            실제 체감이 어긋난다. 장착 경로는 이 onYes 한 곳뿐이라 여기서만 감시한다. */
         const setTier = st=>{ const c=setPieceCount(st.n); let best=0; st.tiers.forEach(t=>{ if(c>=t.k) best=Math.max(best,t.k); }); return best; };
         const pre = SETS.map(s=>({ s, k:setTier(s) }));
-        const before = S.equips.length;
-        S.equips = S.equips.filter(x=>{
-          if(x===e) return true;  /* 새로 착용할 장비는 유지 */
-          if(x.equipped && (!x.heroId || x.heroId===_itemDetailHeroId) && slotSchema(x.slot).part===newPart){
-            return false;  /* 같은 영웅 같은 부위 착용 중 → 파괴 */
-          }
-          return true;
-        });
-        e.equipped=true;
-        e.heroId=_itemDetailHeroId;
+        const destroyed = equipItem(e, _itemDetailHeroId);
         const broke = pre.filter(x=>setTier(x.s)<x.k).map(x=>x.s.n);
-        toast(`${G.name} ${e.slot} 장착` + (S.equips.length<before ? ' · 기존 장비 파괴' : '')
+        toast(`${G.name} ${e.slot} 장착` + (destroyed>0 ? ' · 기존 장비 파괴' : '')
           + (broke.length?` · <b style="color:var(--bad)">${broke.join('·')} 세트 해제</b>`:''));
         sfx('tap');
         pre.forEach(x=>{ const now=setTier(x.s);

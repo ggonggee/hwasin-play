@@ -772,6 +772,48 @@ step('방패 주기 회복 — 17초마다 20%p · 미착용 무효', ()=>{
   S.equips=keep;
   B.refreshParty&&B.refreshParty();
 });
+/* ★ v5.228: 착용 슬롯 10부위 회귀 — 페이퍼돌 정본(투구/목걸이/상의/하의/신발/벨트/무기/방패/반지/정수).
+   v5.81이 장착 교체 판정에 slotSchema(스탯 표시용)의 part 를 쓰면서 투구·상의·하의가
+   '방어구' 한 부위로 묶였다 — 방어구는 한 벌만 착용 가능해졌고, 투구+상의+하의를 포함한
+   세트(잔불·월하·응시·주술·강철맹세)는 6세트가 구조적으로 불가능했다(600h 시뮬 setm ×1.000).
+   이 테스트는 ① slotKeyOf 매핑 ② 실제 장착 경로(equipItem) ③ 세트 도달 가능성 invariant 를 지킨다. */
+step('착용 슬롯 10부위 — 투구·상의·하의 동시 착용 + 무기 교체 파괴 + 세트 6도달', ()=>{
+  const S=ev('S'), B=ev('Battle');
+  const keep=JSON.parse(JSON.stringify(S.equips));
+  const hid=ev('party')()[0].hero_id;
+  const skey=ev('slotKeyOf');
+  // ① 매핑 정밀 검사 — 이름이 비슷해도 슬롯이 갈라진다
+  const map={'심연 투구':'투구','심연 면갑':'투구','심연 상의':'상의','심연 흉갑':'상의','청강 망토':'상의',
+             '심연 하의':'하의','심연 각반':'하의','심연 정강이받이':'하의','청강 견갑':'목걸이','심연 어깨받이':'목걸이',
+             '심연 반지':'반지','심연 완갑':'반지','심연 손목보호대':'반지','심연 인장':'반지','심연 쌍검':'무기',
+             '태초의 고서':'정수','소환 부적':'정수'};
+  for(const [n,k] of Object.entries(map)) if(skey(n)!==k) throw new Error(`slotKeyOf('${n}')='${skey(n)}' ≠ '${k}'`);
+  if(skey('심연 투구')===skey('심연 상의')) throw new Error('투구·상의가 같은 슬롯으로 묶임 — v5.81 회귀');
+  // ② 실제 장착 경로 — 방어구 4부위 동시 착용이 살아있는가
+  const mk=(slot,eq)=>({grade:'N',slot,enh:0,equipped:!!eq,heroId:eq?hid:undefined});
+  S.equips=[mk('투구',1),mk('상의',1),mk('신발',1),mk('하의'),mk('방패'),mk('잿불 단검')];
+  const d1=ev('equipItem')(S.equips[3],hid);   // 하의 — 기존 방어구 3부위는 파괴되지 않아야 한다
+  if(d1!==0) throw new Error('하의 장착이 방어구 '+d1+'부위를 파괴 — 슬롯 판정 회귀(v5.81 결함 부활)');
+  ev('equipItem')(S.equips[4],hid);            // 방패
+  ev('equipItem')(S.equips[5],hid);            // 잿불 단검 → 잔불 6세트 완성
+  const c=ev('setPieceCount')('잔불');
+  if(c!==6) throw new Error('잔불 6세트 도달 실패: '+c+'/6 — 세트 시스템과 슬롯 시스템 어긋남');
+  const setm=ev('setDamageMul')();
+  if(Math.abs(setm-1.3)>0.001) throw new Error('잔불 6세트 배율 '+setm+' ≠ 1.3 (dmg30)');
+  // ③ 무기 교체 파괴는 유지 — v5.81 통일의 원래 목적
+  const w2=mk('흑철 대검'); S.equips.push(w2);
+  const d2=ev('equipItem')(w2,hid);
+  if(d2!==1 || S.equips.some(x=>x.slot==='잿불 단검')) throw new Error('무기 슬롯 교체 파괴 안 됨 — 이름 다른 무기 공존');
+  // ④ 세트 도달 가능성 invariant — 6세트 threshold 를 가진 세트는 6개 이상의 서로 다른 슬롯에 걸쳐야 한다
+  const SP=ev('SET_PIECES'), SETS=ev('SETS');
+  SETS.forEach(st=>{
+    const has6=st.tiers.some(t=>t.k===6); if(!has6) return;
+    const keys=new Set((SP[st.n]||[]).map(n=>skey(n)));
+    if(keys.size<6) throw new Error(`${st.n} 세트가 슬롯 ${keys.size}종에만 걸침 — 6세트 도달 불가 구조`);
+  });
+  S.equips=keep;
+  B.refreshParty&&B.refreshParty();
+});
 /* ★ v5.218: 합성 확률·비용 정합 — rateOf는 실측값(G-31)이라 바뀌면 안 된다.
    · N→R 50% · R→E 0.8% · E→L 0.08% · 비용: 확률 30개/확정 500개.
    이 값이 어긋나면 확률 합성의 기대값 경제가 통째로 흔들린다. */

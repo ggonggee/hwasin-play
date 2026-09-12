@@ -122,18 +122,20 @@ function leaderId(){
   return ev('party')()[0].hero_id;
 }
 function upgradeCandidates(){
-  const FS=ev('FORGE_SLOTS'), S=ev('S'), schema=ev('slotSchema'), leader=leaderId();
+  const FS=ev('FORGE_SLOTS'), S=ev('S'), skey=ev('slotKeyOf'), leader=leaderId();
   const order={L:3,E:2,R:1,N:0};
   const wornGrade={};
+  /* ★ v5.228: 부위 판정을 slotKeyOf(페이퍼돌 10슬롯 정본)로 — 종전 slotSchema().part 는
+     투구·상의·하의를 '방어구' 하나로 묶어 후보 산출 자체가 틀어져 있었다. */
   S.equips.forEach(e=>{ if(e.equipped&&(!e.heroId||e.heroId===leader)){
-    const pt=schema(e.slot).part; wornGrade[pt]=Math.max(wornGrade[pt]||-1, order[e.grade]); }});
+    const pt=skey(e.slot); wornGrade[pt]=Math.max(wornGrade[pt]||-1, order[e.grade]); }});
   const out=[];
   FS.forEach(s2=>{ if(!s2.items) return;
     for(const g of ['L','E','R','N']){
       (s2.items[g]||[]).forEach(it=>{
         if(it.n.indexOf('물약')>=0) return;
         if(S.equips.filter(x=>x.slot===it.n).length>=99) return;
-        const pt=schema(it.n).part;
+        const pt=skey(it.n);
         if((wornGrade[pt]??-1)>=order[g]) return;               // 이미 같거야 높은 등급 착용
         out.push({grade:g, cat:s2.k, item:it, part:pt,
                   cost:ev('craftParams')(g,s2.k,it.n).gold,
@@ -143,10 +145,25 @@ function upgradeCandidates(){
   return out;
 }
 /* 저축형 구매: 재료가 되는 후보 중 '살 수 있는 최고 등급'을 산다. 없으면 null(저축). */
+/* ★ v5.228 세트 지향 tie-break: 같은 부위·같은 등급 후보가 여러 세트에 걸쳐 있으면
+   (예: L 투구 = 결정 투구[주술] vs 성좌 투구[강철맹세]) 리더가 이미 입은 그 세트 조각 수가
+   많은 쪽을 고른다. 실제 플레이어도 '어차피 바꿀 부위면 세트 맞춰서' 고른다.
+   그리디(가격순)는 600h 내내 세트가 3조각에 머물러 setm ×1.000 — 실측으로 확인했다.
+   세트 완성 = 6set ×1.3~1.86 는 곡선 전체를 바꾸는 큰 축이므로 정책에 반영해야 실제와 같다. */
+function setAffinity(itemName){
+  const SP=ev('SET_PIECES'), S=ev('S'), leader=leaderId();
+  let best=0;
+  Object.entries(SP).forEach(([set,parts])=>{
+    if(parts.indexOf(itemName)<0) return;
+    const worn=S.equips.filter(e=>e.equipped&&(!e.heroId||e.heroId===leader)&&parts.indexOf(e.slot)>=0).length;
+    best=Math.max(best,worn);
+  });
+  return best;
+}
 function bestCraftable(){
   const S=ev('S'), order={L:3,E:2,R:1,N:0};
   const can=upgradeCandidates().filter(u=>u.recOK&&S.gold>=u.cost)
-    .sort((a,b)=> order[b.grade]-order[a.grade] || a.cost-b.cost);
+    .sort((a,b)=> order[b.grade]-order[a.grade] || setAffinity(b.item.n)-setAffinity(a.item.n) || a.cost-b.cost);
   return can[0]||null;
 }
 /* 파밍 방향 v3.2: 목표는 등급 높은 순, 단 '지금 안전하게 잡을 수 있는 등급'의 재료만.
@@ -167,7 +184,7 @@ function nextWantedMaterials(){
   }
   let maxSafe=-1;
   HT.forEach(t=>{ if(cp>=t.cp) maxSafe=Math.max(maxSafe, order[t.drop]); });
-  const ups=upgradeCandidates().sort((a,b)=> order[b.grade]-order[a.grade] || a.cost-b.cost);
+  const ups=upgradeCandidates().sort((a,b)=> order[b.grade]-order[a.grade] || setAffinity(b.item.n)-setAffinity(a.item.n) || a.cost-b.cost);
   for(const u of ups){
     const lack=(u.item.recipe||[]).filter(r=>(ev('S').mats[r.k]||0)<r.need);
     if(!lack.length) continue;
@@ -189,12 +206,13 @@ function craftNow(grade, catKey, item){
 }
 /* 장착 — itemDetail 의 onYes 와 같은 규칙: 같은 영웅 같은 부위 기존 장비 파괴 */
 function equip(item, heroId){
-  const slotSchema=ev('slotSchema');
-  const part=slotSchema(item.slot).part;
+  /* ★ v5.228: 게임 본체(itemDetail onYes)와 동일하게 slotKeyOf 부위 기준 교체. */
+  const skey=ev('slotKeyOf');
+  const part=skey(item.slot);
   const S=ev('S');
   S.equips=S.equips.filter(x=>{
     if(x===item) return true;
-    if(x.equipped && (!x.heroId||x.heroId===heroId) && slotSchema(x.slot).part===part) return false;
+    if(x.equipped && (!x.heroId||x.heroId===heroId) && skey(x.slot)===part) return false;
     return true;
   });
   item.equipped=true; item.heroId=heroId;
@@ -348,6 +366,7 @@ events.push({t:0, cp:myCP(), what:'시작 — '+ev('party')()[0].name});
 
 log(`\n[밸런스 시뮬] 시드 42 · 최대 ${MAX_HOURS}시뮬시간 · 창 ${WINDOW/60}분\n`);
 let lastCP=myCP(), lastEventT=0, windows=0;
+let lastSetm=1;                    // ★ v5.228 세트 계측 — 창 사이 배율 변화 감지용
 const gradeReached={};
 while(simSec < MAX_HOURS*3600 && windows<1600){
   // ① 사냥터 선택(합리적 플레이)
@@ -414,6 +433,18 @@ while(simSec < MAX_HOURS*3600 && windows<1600){
     if(leadNow>=t.cp && gradeReached[t.drop]===undefined) gradeReached[t.drop]=(simSec/3600).toFixed(1);
   });
 
+  /* ★ 세트 효과 계측 (v5.228): heroPower 의 setm(=setDamageMul)이 정본 공식에 이미 들어
+     있지만 시뮬이 그리디 제작(부위별 최고 등급)이라 세트가 '자연 형성'되는지 실측한 적이
+     없었다. 배율이 변할 때마다 이벤트로 남긴다 — 세트 통합 곡선의 근거 데이터. */
+  {
+    const setm=ev('setDamageMul')();
+    if(Math.abs(setm-lastSetm)>1e-9){
+      const act=ev('activeSets')().filter(x=>x.c>=3).map(x=>`${x.n} ${x.c}`).join(', ')||'없음';
+      events.push({t:+(simSec/3600).toFixed(2), cp, what:`세트 ×${setm.toFixed(3)} (${act})`});
+      lastSetm=setm;
+    }
+  }
+
   /* ★ 정체 판정기 수정 — 종전엔 위 push 가 lastCP 를 갱신한 뒤 비교해 cp===lastCP 가
      거의 항상 참이었고, 성장 중에도 타이머가 매창 쌓여 48h 무성장 오판으로 강제 종료했다.
      (이 버그가 세션 내내 실곡선을 가렸다 — 131~139h 구간 CP 상승 중 종료된 실측으로 발견.)
@@ -445,6 +476,10 @@ log(`\n총 시뮬: ${(simSec/3600).toFixed(1)}h · 창 ${windows}회 · 최종 C
     Object.entries(S.shards).map(([k,v])=>`${k}:${Math.floor(v)}`).join(' '));
   const worn=S.equips.filter(e=>e.equipped&&(!e.heroId||e.heroId===ld.hero_id));
   log(`[진단] 리더 장착 ${worn.length}부위 ·`, worn.map(e=>`${e.grade}${e.slot}${e.enh?'+'+e.enh:''}`).join(', ')||'없음');
+  /* ★ v5.228: 세트 최종 상태 — 그리디 제작 정책에서 세트가 실제로 완성됐는지.
+     부위별 최고 등급만 입는 정책은 등급 전환기에 세트를 깨뜨린다(혼합 착용). */
+  log(`[진단] 세트 배율 ×${ev('setDamageMul')().toFixed(3)} · 활성(3+)`,
+    ev('activeSets')().filter(x=>x.c>=3).map(x=>`${x.n} ${x.c}세트`).join(', ')||'없음');
   log(`[진단] 강화석 보유: ${Math.floor(S.stones||0)} · 리더 평균 강화: ${(worn.reduce((a,e)=>a+(e.enh||0),0)/(worn.length||1)).toFixed(1)}`);
   log(`[진단] 보유 영웅별 CP:`, ev('ownedHeroes')().map(h=>`${h.name.slice(0,5)}(${h.grade})=${ev('heroPower')(h)}`).join(' · '));
   log('[진단] 골드 보유:', Math.floor(S.gold));
