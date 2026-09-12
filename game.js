@@ -4876,6 +4876,14 @@ const MODALS = {
       b.appendChild(el('div','warn',`*심화 각성 — 영웅 기록서 ${recCost}권이 소모됩니다* (보유 ${recs}권)`));
       b.appendChild(el('div','center mut small',`단계당 +1.5% · 13~${DEEP_CAP}단계는 기록서로 진행합니다`));
       if(recs<recCost) b.appendChild(el('div','center small mut','기록서는 회색코인 상점 · 시련의 탑 상자 교환에서 얻습니다'));
+      /* ★ v5.194: 남은 심화 총 요구량 안내 — 21~30 확장(v5.193)으로 심화가 장기 여정이 됐는데
+         '끝까지 얼마나 드는지'가 안 보였다. 실측: 13~30 전체 108권, 현재 단계부터 남은 양 계산.
+         공급(탑 소탕 상자 8개=1권, 소탕 상자는 wave/4/일) 기준 중반부 ~2권/일 → 수 주~수개월 여정. */
+      if(lv>=BASE_CAP){
+        let remain=0;
+        for(let k=lv+1;k<=DEEP_CAP;k++) remain += 1+Math.floor((k-1-BASE_CAP)/2);
+        b.appendChild(el('div','center small mut',`여기서 ${DEEP_CAP}단계까지 총 <b style="color:var(--g-legend)">기록서 ${remain}권</b> · 보유 ${recs}권`));
+      }
     } else {
       b.appendChild(el('div','warn',`*각성당 조각 ${shardCost}개가 소모됩니다* (보유 조각 ${totalShards})`));
       b.appendChild(el('div','center mut small',`단계당 +1.5% · ${BASE_CAP}단계부터는 심화 각성(기록서)으로 이어집니다`));
