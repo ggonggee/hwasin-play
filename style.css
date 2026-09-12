@@ -67,26 +67,12 @@ body{
 .screen{ position:absolute; inset:0; }
 .hidden{ display:none !important; }
 
-/* ===== 장식 프레임 유틸 (금속/석재 액자) ===== */
-.metal{
-  background:linear-gradient(180deg,var(--stone-2),var(--stone-0));
-  border:1px solid var(--frame); border-radius:8px;
-  box-shadow:inset 0 1px 0 rgba(210,170,90,.18), inset 0 -2px 6px rgba(0,0,0,.5);
-}
-.ornate{ position:relative; }
-.ornate::before,.ornate::after{ content:''; position:absolute; top:-1px; width:14px; height:14px; pointer-events:none;
-  background:radial-gradient(circle at 50% 50%, var(--frame-lit), transparent 60%); opacity:.5; }
-.ornate::before{ left:-1px; } .ornate::after{ right:-1px; }
+/* ★ v5.192: .metal/.ornate 장식 프레임 유틸 제거 — 소비자 0건(2026-09-12 전수 스캔). */
 
 /* ===== 타이틀 ===== */
 #title{ background:radial-gradient(120% 80% at 50% 34%, rgba(255,120,40,.10), transparent 62%), linear-gradient(180deg, rgba(26,15,8,.08), rgba(10,7,5,.12) 72%), url('assets/bg_main.jpg') center/cover no-repeat;
   display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; }
-#title .embers{ position:absolute; inset:0; overflow:hidden; pointer-events:none; }
-#title .emblem{ width:156px; height:156px; border-radius:50%; z-index:1;
-  background:radial-gradient(circle at 50% 38%, #ffb055, #b23a10 52%, #2a0f06 100%);
-  box-shadow:0 0 60px rgba(255,120,40,.6), inset 0 -14px 34px rgba(0,0,0,.6);
-  display:flex; align-items:center; justify-content:center; font-size:78px; animation:emberPulse 2.6s ease-in-out infinite; }
-@keyframes emberPulse{ 50%{ box-shadow:0 0 90px rgba(255,150,60,.9), inset 0 -14px 34px rgba(0,0,0,.6);} }
+/* ★ v5.192: 타이틀 .embers/.emblem 제거 — 타이틀 개편 후 미사용(전수 스캔). emberPulse 키프레임도 이 전용이라 함께. */
 #title h1{ font-size:70px; letter-spacing:.1em; margin-top:14px; font-weight:800; z-index:1;
   background:linear-gradient(180deg,#f4e6c0,#d9b56a 42%,#8f6520); -webkit-background-clip:text; background-clip:text; color:transparent;
   text-shadow:0 3px 12px rgba(0,0,0,.7); }
@@ -360,7 +346,7 @@ body{
 .eq-center{ display:flex; flex-direction:column; align-items:center; gap:6px; }
 .eq-hero{ width:100%; aspect-ratio:1; border-radius:10px; border:1px solid var(--frame); position:relative; overflow:hidden;
   background:radial-gradient(circle at 50% 40%, #2a2016, #0e0a07); display:flex; align-items:center; justify-content:center; font-size:64px; }
-.eq-fnbtns{ display:flex; gap:6px; }
+/* ★ v5.192: .eq-fnbtns 제거 — 실사용은 .eq-fn5 (미사용 스캔) */
 .round-btn{ width:44px; height:44px; border-radius:50%; cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0;
   background:radial-gradient(circle at 50% 34%,#3a2c1b,#160f09); border:1px solid var(--frame); box-shadow:inset 0 -3px 8px rgba(0,0,0,.5); }
 .round-btn .gi{ font-size:var(--fs-lg); } .round-btn span{ font-size:var(--fs-xs); color:#cdbf9f; }
@@ -479,7 +465,7 @@ body{
    대장간 사전 선택(forgeLocate, 어떤 경로로 열어도 목표 선택)이 이미 보장한다. */
 #guide-banner{ position:absolute; left:6px; right:6px; top:6px; z-index:7; display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:8px;
   background:linear-gradient(180deg,rgba(40,28,14,.95),rgba(24,16,9,.9)); border:1px solid var(--frame); box-shadow:0 3px 10px rgba(0,0,0,.5); }
-#guide-banner .gb-ic,#guide-banner .gb-goal{ font-size:var(--fs-xl); } #guide-banner .gb-txt{ flex:1; font-size:var(--fs-base); color:var(--txt-hi); }
+#guide-banner .gb-goal{ font-size:var(--fs-xl); }   /* ★ v5.192: .gb-ic 제거(미사용) */ #guide-banner .gb-txt{ flex:1; font-size:var(--fs-base); color:var(--txt-hi); }
 #guide-banner .gb-goal{ width:26px; height:26px; display:flex; align-items:center; justify-content:center; border-radius:6px;
   border:1px solid var(--frame); background:rgba(0,0,0,.35); }
 #guide-banner .gb-rw{ display:flex; align-items:center; gap:2px; padding:1px 5px; border-radius:6px; border:1px solid var(--frame-dk); background:rgba(0,0,0,.3); }
@@ -502,15 +488,9 @@ body{
 @keyframes fingerBob{ 0%,100%{ transform:translateY(0) scale(1); } 50%{ transform:translateY(8px) scale(1.1); } }
 
 /* 던전 전투 오버레이 */
-.combat-scene{ padding:6px 2px; }
-.combat-boss{ text-align:center; }
-.combat-boss .cb-ico{ font-size:56px; animation:bossShake .5s ease-in-out infinite; }
-@keyframes bossShake{ 25%{ transform:translateX(-3px);} 75%{ transform:translateX(3px);} }
-.combat-boss .cb-name{ font-size:var(--fs-md); font-weight:800; margin:4px 0; }
-.hpbar{ height:14px; border-radius:7px; border:1px solid #5a1f18; background:#2a0d0b; overflow:hidden; position:relative; }
-.hpbar>i{ display:block; height:100%; background:linear-gradient(90deg,#d84a3f,#f07a5f); transition:width .12s linear; }
-.hpbar .hptxt{ position:absolute; inset:0; text-align:center; font-size:var(--fs-sm); color:#fff; line-height:14px; text-shadow:0 1px 2px #000; }
-.combat-timer{ text-align:center; font-size:var(--fs-sm); color:var(--warn); margin-top:4px; }
+/* ★ v5.192: 구(舊) 전투 씬 CSS(.combat-scene/.combat-boss/.cb-ico) 제거 — 캔버스 전투 전환 후 미사용. */
+/* ★ v5.192: @keyframes bossShake 제거 — 유일 소비자 .cb-ico 와 함께 사망(미사용 스캔). */
+/* ★ v5.192: .cb-name/.hpbar(3종)/.combat-timer 제거 — 캔버스 HP바로 대체된 구 DOM 전투 잔재. */
 
 /* 토스트 */
 #toast{ position:absolute; left:50%; bottom:96px; transform:translateX(-50%); z-index:40; display:flex; flex-direction:column; gap:5px; align-items:center; pointer-events:none; }
@@ -623,10 +603,7 @@ body{
 .inv-tab.on{ border-color:var(--g-legend); color:var(--txt-hi); box-shadow:inset 0 0 8px rgba(242,178,58,.3); }
 
 /* 코스튬 도감 (G-48) */
-.cos-grid{ gap:6px; max-height:270px; overflow-y:auto; }
-.cos-cell{ aspect-ratio:auto; padding:8px 4px; }
-.cos-cell.locked{ opacity:.45; }
-.cos-cell.worn{ border-color:var(--ok); }
+/* ★ v5.192: .cos-grid/.cos-cell(3종) 제거 — 현 코스튬 화면은 .cos-list/.cos-pane (미사용 스캔). */
 .cos-title{ text-align:center; font-size:var(--fs-xl); font-weight:800; color:var(--g-legend); margin:2px 0 6px; }
 .cos-fxlabel{ text-align:center; font-size:var(--fs-sm); letter-spacing:3px; color:var(--txt-dim); }
 .cos-fx{ text-align:center; font-size:var(--fs-base); color:#e2d6bd; margin:2px 0 8px; }
