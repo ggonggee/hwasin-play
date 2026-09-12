@@ -99,7 +99,8 @@ function myCP(){ return ev('totalCP')(); }
    정책: 다음 제작 목표(bestCraftable 의 실패 원인)에 필요한 재료를 고정 드랍(mat/mat2)하는
    가장 높은 등급의 안전한 몬스터. 목표가 없으면 최상위 안전 티어. */
 function pickHuntIdx(){
-  const HT=ev('HUNT_TIERS'), cp=myCP();
+  const HT=ev('HUNT_TIERS');
+  const cp=ev('heroPower')(ev('party')()[0]);   // 홈 전투는 리더 1명 — 총전투력 판정은 전멸 트랩(실측)
   const safe=i=>cp>=HT[i].cp;
   // 다음 목표: 아직 못 만드는 것 중 최고 등급 — 부족한 재료 산출
   const want=nextWantedMaterials();
@@ -154,6 +155,16 @@ function bestCraftable(){
 function nextWantedMaterials(){
   const order={L:3,E:2,R:1,N:0};
   const HT=ev('HUNT_TIERS'), cp=myCP(), MAT_BY_KEY=ev('MAT_BY_KEY');
+  // 가이드 체인 목표의 부족 재료가 최우선 — 체인 보상(소환권 24장)은 로스터의 뿌리.
+  {
+    const S=ev('S');
+    if(S.guideStep<ev('GUIDE_CHAIN').length){
+      const g=ev('GUIDE_CHAIN')[S.guideStep], loc=ev('forgeLocate')(g.slot);
+      if(loc){ const s2=ev('FORGE_SLOTS')[loc.slotIdx], it=(s2.items&&s2.items[loc.grade]||[])[loc.itemIdx];
+        if(it){ const lack=(it.recipe||[]).filter(r=>(S.mats[r.k]||0)<r.need);
+          if(lack.length) return lack.map(l=>l.k); } }
+    }
+  }
   let maxSafe=-1;
   HT.forEach(t=>{ if(cp>=t.cp) maxSafe=Math.max(maxSafe, order[t.drop]); });
   const ups=upgradeCandidates().sort((a,b)=> order[b.grade]-order[a.grade] || a.cost-b.cost);
@@ -254,9 +265,10 @@ function summonStep(){
   for(const r of ROSTER){
     const e=ev('heroEntry')(r.hero_id);
     if(e.own) continue;
-    if(!ev('heroFusePrereq')(r.hero_id)) continue;
+    if(!ev('heroFusePrereq')(r.hero_id)){ (globalThis.__fuseLog=globalThis.__fuseLog||[]).push('prereq:'+r.name); continue; }
     const need=ev('heroFuseNeed')(r.hero_id), have=ev('heroShardAvail')(r.hero_id);
-    if(have>=need && ev('heroFuse')(r.hero_id)){ fused=r.name; break; }
+    if(have>=need){ if(ev('heroFuse')(r.hero_id)){ fused=r.name; break; }
+      (globalThis.__fuseLog=globalThis.__fuseLog||[]).push(`fuse실패 ${r.name} ${have}/${need}`); }
   }
   if(fused) ev('Battle').refreshParty();
   return fused;
@@ -297,6 +309,19 @@ while(simSec < MAX_HOURS*3600 && windows<1600){
   if(fusedName) did+=`영웅 합성[${fusedName}] `;
   if(synthGot>0) did+=`상급재료+${synthGot} `;
   let c=bestCraftable();
+  /* 가이드 체인 우선 — 9단계 제작 체인의 보상(소환권 24장 포함)은 실제 온보딩 레일.
+     등급 우선 정책만으론 체인을 건너뛰어 보상을 놓치고 영웅 로스터가 마비된다(실측). */
+  const S=ev('S');
+  if(S.guideStep<ev('GUIDE_CHAIN').length){
+    const g=ev('GUIDE_CHAIN')[S.guideStep];
+    const loc=ev('forgeLocate')(g.slot);
+    if(loc){ const s2=ev('FORGE_SLOTS')[loc.slotIdx], it=(s2.items&&s2.items[loc.grade]||[])[loc.itemIdx];
+      if(it){ craftTally['가이드']=(craftTally['가이드']||0)+1; craftNow(loc.grade, s2.k, it);
+        const made=ev('S').equips[ev('S').equips.length-1];
+        if(made && made.slot===g.slot) equip(made, leaderId());
+        c=bestCraftable();
+      } }
+  }
   let crafts=0;
   while(c && crafts<5){                       // 창당 최대 5제작 (과도 폭주 방지)
     craftTally[c.grade]=(craftTally[c.grade]||0)+1;
@@ -360,4 +385,17 @@ log(`\n총 시뮬: ${(simSec/3600).toFixed(1)}h · 창 ${windows}회 · 최종 C
   log(`[진단] 제작 시도(등급):`, Object.entries(craftTally).map(([g,n])=>`${g}:${n}`).join(' ')||'0');
   log(`[진단] S.equips 등급 히스토그램:`, Object.entries(hist).map(([g,n])=>`${g}:${n}`).join(' ')||'빈');
 }
+{
+  const S=ev('S');
+  const gs=S.guideStep, CH=ev('GUIDE_CHAIN');
+  let extra='';
+  if(gs<CH.length){ const g=CH[gs], loc=ev('forgeLocate')(g.slot);
+    if(loc){ const s2=ev('FORGE_SLOTS')[loc.slotIdx], it=(s2.items&&s2.items[loc.grade]||[])[loc.itemIdx];
+      const lack=it?(it.recipe||[]).filter(r=>(S.mats[r.k]||0)<r.need).map(r=>r.k+' '+(S.mats[r.k]||0)+'/'+r.need):['아이템없음'];
+      extra=` | 목표 ${g.slot}(${g.cat}) recipeOk=${it?ev('recipeOk')(it.recipe):'-'} 부족=[${lack.join(', ')}] gold=${Math.floor(S.gold)}`;
+    } else extra=' | 목표 '+g.slot+' forgeLocate 실패';
+  }
+  log('[진단] guideStep', gs+'/'+CH.length, '| prog', S.guideProg, extra);
+}
+if(globalThis.__fuseLog){ const c={}; globalThis.__fuseLog.forEach(x=>c[x]=(c[x]||0)+1); log('[fuse로그]', JSON.stringify(c)); }
 log('결론은 곡선을 보고 판단 — 공백이 길면 해당 구간의 재료/골드 곡선을 조정한다.');

@@ -6304,7 +6304,12 @@ const MODALS = {
     // ★ 사냥 대상 선택 — 선택한 몬스터가 홈 필드에 계속 출현한다.
     //   재료는 몬스터별 고정. 다음 등급 재료는 더 강한 몬스터가 떨군다.
     //   부대가 약한데 강한 몬스터를 고르면 맞아 죽는다(전멸 → 자동 후퇴).
-    const myCP=totalCP();
+    /* ★ v5.185: 위험 판정을 '홈 출격 영웅(리더 1명)' 기준으로 — 종전엔 총전투력(전 영웅 합)으로
+       안내했는데 홈 전투는 리더 혼자 나간다(v5.107). 총전투력 3000인 안내를 믿고 2400 몹을
+       골라도 리더(1679)는 전멸한다 — 시뮬(balance-sim) 실측으로 발견한 안내↔판정 트랩.
+       총전투력은 참고 정보로 함께 표기한다(던전은 3인 파티 기준이므로). */
+    const leadCP=heroPower(party()[0]||ownedHeroes()[0]);
+    const totalCPv=totalCP();
     /* ★ v4.7: 등급 탭은 인덱스 구간 하드코딩이 아니라 drop 등급으로 거른다(등급당 30종). */
     const GT=[['N','일반'],['R','희귀'],['E','영웅'],['L','레전더리']];
     const byG = g => HUNT_TIERS.map((t,i)=>({t,i})).filter(x=>x.t.drop===g);
@@ -6331,11 +6336,11 @@ const MODALS = {
     mcR.onclick=()=>mcSet((S.mobCount||30)-1);
     mc.append(mcL,mcVal,mcR); b.appendChild(mc);
     if(gi===3){ const bd=el('div','mon-diff','난이도 X1'); b.appendChild(bd); }   // 레전더리 탭 배지
-    b.appendChild(el('div','hint',`선택한 몬스터가 <b>홈 필드에 계속 출현</b>합니다. 내 전투력 <b style="color:#f0d59a">${fmt(myCP)}</b> — 권장보다 약하면 부대가 전멸합니다.`));
+    b.appendChild(el('div','hint',`선택한 몬스터가 <b>홈 필드에 계속 출현</b>합니다. 홈 출격 <b style="color:#f0d59a">${(party()[0]||ownedHeroes()[0]).name}</b> 전투력 <b style="color:#f0d59a">${fmt(leadCP)}</b> — 권장보다 약하면 전멸합니다. <span class="mut">(총 전투력 ${fmt(totalCPv)} · 홈은 영웅 1명, 던전은 3인 파티)</span>`));
     const g0=GT[gi][0];
     for(const {t,i} of byG(g0)){
       const cur = (S.huntTier||0)===i;
-      const danger = myCP < t.cp;
+      const danger = leadCP < t.cp;   /* ★ v5.185: 홈 전투 주체는 리더 1명 — 리더 기준 위험 판정 */
       const jb = JOBS.find(j=>j.id===t.job) || JOBS[0];
       /* ★ v4.3 (대표 결정 A — 정보로 유도): 지금 사냥 중인 곳보다 '위'인 카드에는
          왜 올라가야 하는지를 붙인다 — 여기서만 나오는 재료 / 골드 배율 / 해금되는 제작 등급. */
