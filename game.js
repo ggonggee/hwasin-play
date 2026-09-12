@@ -4608,6 +4608,18 @@ function openMatMonsterPopup(matKey, ret){
     const btn=el('button','btn sm'+(isHunting?'':' gold'), isHunting?'사냥중':'사냥');
     if(isHunting) btn.disabled=true;
     btn.onclick=()=>{
+      /* ★ v5.225: 전멸 위험 카드 확인창 — '권장보다 약하면 전멸' 아이콘만 있고 클릭은
+         곧바로 사냥을 시작했다. 실수로 누르면 전멸 → 자동 후퇴(4초) → 웨이브 리셋까지
+         손해가 한 번에 온다. 위험한 선택에만 확인창을 넣는다(안전한 선택은 그대로 즉시). */
+      if(danger){
+        styledConfirm(`${t.n} 사냥을 시작하시겠습니까?`, ()=>{
+          S.huntTier=i; Battle.setHunt(); sfx('tap');
+          toast(`${t.n} 사냥 시작 — 출격 영웅 전투력이 권장(${fmt(t.cp)})보다 낮습니다`);
+          sysLog(`몬스터 사냥 → <span style="color:${t.c}">${t.n}</span> (위험 경고 후 선택)`);
+          closeModal(); openModal(ret||'forge');
+        }, { title:'⚠ 전멸 위험', sub:`권장 ${fmt(t.cp)} · 내 출격 영웅 ${fmt(leadCP)} — 전멸 시 최하급으로 후퇴`, yes:'사냥' });
+        return;
+      }
       S.huntTier=i; Battle.setHunt(); sfx('tap');
       toast(`${t.n} 사냥 시작`);
       sysLog(`몬스터 사냥 → <span style="color:${t.c}">${t.n}</span>`);
