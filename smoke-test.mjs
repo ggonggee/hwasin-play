@@ -1099,6 +1099,36 @@ step('각성의 결정 — 50 완료 후 무한 축 실행·awMul 관문', ()=>{
   if(errs.length) throw new Error(errs.join(' | '));
 });
 
+/* ★ v5.247 회귀: 결정 가호(골드 버프) — 상품·goldBuffMul 관문·addGold 반영·연장 집계.
+   골드 획득 배율은 addGold 단일 관문(F2)이라 이 관문 반영이 정본 정합의 전부다. */
+step('결정 가호 — 골드 버프 관문·연장', ()=>{
+  const S=ev('S');
+  const GS=ev('GOLDSHOP');
+  const errs=[];
+  const item=GS.find(it=>it.cur==='gold' && /결정 가호/.test(it.t));
+  if(!item) throw new Error('결정 가호 상품 없음(v5.247)');
+  if(item.cost!==5000000) errs.push('가격 '+item.cost+'(기대 500만)');
+  const keep={buffs:S.buffs?JSON.parse(JSON.stringify(S.buffs)):null, gold:S.gold};
+  S.buffs=S.buffs||{};
+  S.buffs.goldUntil=Date.now()-1000;
+  item.give();
+  if(S.buffs.goldUntil<=Date.now()) errs.push('give 후 goldUntil이 미래 아님');
+  const base=Date.now()+7200000;
+  S.buffs.goldUntil=base;
+  item.give();
+  if(Math.abs(S.buffs.goldUntil-(base+3600000))>2000) errs.push('연장 집계 오류: '+(S.buffs.goldUntil-base));
+  S.buffs.goldUntil=Date.now()+3600000;
+  const g0=S.gold; ev('addGold')(1000,true);
+  const g1=S.gold-g0;
+  S.gold=g0; ev('addGold')(1000);
+  const g2=S.gold-g0;
+  if(Math.abs(g1-1000)>0.5) errs.push('raw 지급이 1000이 아님: '+g1);
+  if(g2<1400) errs.push('버프 ON인데 addGold 반영 없음: '+g2);
+  if(keep.buffs) S.buffs=JSON.parse(JSON.stringify(keep.buffs)); else delete S.buffs.goldUntil;
+  S.gold=keep.gold;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
+
 /* ★ v5.236 회귀: 극한의 벼림 +21~25 — 성공 30% 표기 · 실패 시 단계 유지(파괴·하락 없음,
    재화만 소모) · +25 상한. 실패 분기 강제는 vm 안 Math.random 후킹(D5 패턴)으로. */
 step('극한의 벼림 +21~25 — 실패해도 유지, +25 상한', ()=>{

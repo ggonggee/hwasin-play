@@ -408,6 +408,19 @@ function enhanceStep(){
   }
   return ups;
 }
+/* ★ v5.247: 결정 가호 정책 — 여유 골드(소환서 16M+망치 40M+기록서 첫권 30M+버프 5M
+   = 91M 위)가 있고 버프가 꺼져 있으면 1시간 골드 +50% 버프 구매. 효과는 addGold 관문에
+   자동 반영된다(전투·일일 수입 전부). 액션 밀드+골드 싱크 측정이 목적. */
+const buffTally={n:0,gold:0};
+function buffStep(){
+  const S=ev('S');
+  const now=simSec*1000;
+  if(S.buffs && S.buffs.goldUntil>now) return '';
+  if(S.gold < 61000000) return '';   // v5.247 조건 완화: 소환서 16M+망치 40M 예산 위(기록서는 버프 이득으로 충당)
+  S.gold-=5000000; buffTally.n++; buffTally.gold+=5000000;
+  S.buffs=S.buffs||{}; S.buffs.goldUntil=now+3600000;
+  return '결정가호';
+}
 /* 각성 정책 — 조각(직업 공용)이 여유일 때(전 영웅 보유 후 남는 조각) 기본 12단계까지.
    ★ v5.230: 심화 각성(13~30) 통합 — 기록서는 탑 상자 교환(dailyStep)으로 수급하고
    비용은 정본 공식 1+floor((lv-12)/2) (13~14:1권 · 15~16:2권 … 30단계까지 총 90권).
@@ -544,12 +557,13 @@ while(simSec < MAX_HOURS*3600 && windows<12800){   // v5.242: 창 상한 12800(=
 
   // ③ 일일 콘텐츠·소환서 구매 → 합성·소환 (의도 루프)
   const dailyActs=dailyStep();   // ★ v5.245: 일일 루프(탑·던전)도 액션 이벤트로
+  const buffActs=buffStep();         // ★ v5.247: 결정 가호(골드 버프) 구매
   const awakenUps=awakenStep();
   const fusedName=summonStep();
   const synthGot=synthStep();
 
   // ④ 제작·장착 (가능한 만큼)
-  let did=(dailyActs||'')?dailyActs+' ':'';   // ★ v5.245: 일일 콘텐츠 액션 포함
+  let did=((dailyActs||'')?dailyActs+' ':'') + ((buffActs||'')?buffActs+' ':'');   // ★ v5.245 일일 콘텐츠 + v5.247 결정 가호
   if(fusedName) did+=`영웅 합성[${fusedName}] `;
   if(synthGot>0) did+=`상급재료+${synthGot} `;
   let c=bestCraftable();
@@ -638,7 +652,7 @@ log('\n[등급 도달] ', Object.entries(gradeReached).map(([g,h])=>`${g}:${h}h`
   const bins=[[0,50],[50,200],[200,600],[600,Infinity]];
   const per=()=> bins.map(([a,b])=>{ const n=funTimes.filter(t=>t>=a&&t<b).length;
       const h=Math.max(0,Math.min(b,totalH)-a); return h>0? a+'~'+(b===Infinity?'+':b)+'h '+n+'회('+(n/h).toFixed(2)+'/h='+(n/h*24).toFixed(1)+'/일)':null; }).filter(Boolean).join(' · ');
-  log('[재미 지표] 액션 이벤트 '+funTimes.length+'회 · 평균 '+(funTimes.length/Math.max(1,totalH)).toFixed(2)+'회/h(='+((funTimes.length/Math.max(1,totalH))*24).toFixed(1)+'/일) · 최장 공백 '+(funGapMax/3600).toFixed(1)+'h(@'+funGapAt+'h) — /h는 24h 연속 가정, 체감은 /일(접속 세션당 몰아하기) 기준으로 볼 것');
+log('[재미 지표] 액션 이벤트 '+funTimes.length+'회 · 평균 '+(funTimes.length/Math.max(1,totalH)).toFixed(2)+'회/h(='+((funTimes.length/Math.max(1,totalH))*24).toFixed(1)+'/일) · 최장 공백 '+(funGapMax/3600).toFixed(1)+'h(@'+funGapAt+'h) — /h는 24h 연속 가정, 체감은 /일(접속 세션당 몰아하기) 기준으로 볼 것');
   log('[재미 지표] 구간 밀도 — '+per());
 }const GORDER=['N','R','E','L'];
 let walls=[];
@@ -667,7 +681,7 @@ log(`\n총 시뮬: ${(simSec/3600).toFixed(1)}h · 창 ${windows}회 · 최종 C
      부위당 기대 비용은 hammerGold/파괴 재제작까지 합쳐 실측된다(종전 몬테카를로 479M 갱신). */
   log(`[진단] 위험강화: 시도 ${riskTally.tries} · 성공 ${riskTally.success} · 하락 ${riskTally.drop} · 보호 ${riskTally.saved} · 파괴 ${riskTally.destroyed} · +25도달 ${riskTally.max20}부위 · 망치구매 골드 ${(riskTally.hammerGold/1e6).toFixed(0)}M + 강화석 ${riskTally.hammerStone}개`);
   log(`[진단] 보유 영웅별 CP:`, ev('ownedHeroes')().map(h=>`${h.name.slice(0,5)}(${h.grade})=${ev('heroPower')(h)}`).join(' · '));
-  log('[진단] 골드 보유:', Math.floor(S.gold));
+  log('[진단] 결정 가호: '+buffTally.n+'회('+(buffTally.gold/1e6).toFixed(0)+'M) · 골드 보유 '+Math.floor(S.gold));
   // E 아이템 첫 후보 왜 안 되는지 — recipeOk/gold 각각 출력
   const FS2=ev('FORGE_SLOTS');
   FS2.forEach(s2=>{ if(!s2.items||!s2.items.E) return;

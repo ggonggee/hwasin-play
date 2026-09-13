@@ -794,6 +794,10 @@ const GOLDSHOP = [
      탑 소탕(무료 ~1.5권/일)을 대체하지 않는 '부자의 지름길' 포지션. 무과금 경제
      (회색코인 900·탑 상자)는 그대로 유효. */
   { t:'영웅 기록서 X1',      ic:'📕', cur:'gold', cost:30000000, give:()=>{ S.records=(S.records||0)+1; } },
+  /* ★ v5.247: 결정 가호 — 골드 버프 라인(자체 설계, 근거는 goldBuffMul 주석). 만료 전
+     재구매는 시간을 '연장'한다(덮어쓰지 않게 max(now, 기존)+1h). */
+  { t:'결정 가호 1시간 (+50% 골드)', ic:'💠', cur:'gold', cost:5000000,
+    give:()=>{ const now=Date.now(); S.buffs=S.buffs||{}; S.buffs.goldUntil=Math.max(now,S.buffs.goldUntil||0)+3600000; } },
   { t:'투기장 입장권 X1',  ic:'🎫', cur:'gold', cost:5000000,  give:()=>{ S.ticket=Math.min(30,S.ticket+1); } },
   { t:'골드 10,000,000',   ic:'🪙', cur:'ruby', cost:300,  give:()=>{ addGold(10000000); } },
   { t:'골드 200,000,000 + 전설 망치 20', ic:'🪙', cur:'ruby', cost:2800, give:()=>{ addGold(200000000); S.hammers=(S.hammers||0)+20; } },
@@ -3612,9 +3616,16 @@ function arenaGoldBuffPct(){
   for(const b of ARENA_GBUFF_BANDS){ if(r>=b.lo && r<=b.hi) return b.pct; }
   return 0;
 }
+/* ★ v5.247: '결정 가호' 골드 버프(자체 설계) — 6400h 시뮬에서 마지막 매찰로 남은 것은
+   최장 액션 공백 19.5h와 골드 적체(12.9억)였다. 후반 소액션+골드 싱크를 겸하는 상품:
+   골드 500만 → 1시간 골드 획득 +50%(시뮬 유입 ~190만/h 기준 +95만/h — 구매 순간
+   순싱크 약 405만, 이후 매시간 다시 누를 유인). 결제 통화가 골드라 골드상점에 둔다
+   (버프탭은 전부 루비제 — 통화별 탭 일관). 효과는 F2와 같은 단일 관문(addGold)에서. */
+function goldBuffMul(){ return (S.buffs && S.buffs.goldUntil > Date.now()) ? 1.5 : 1; }
 function addGold(n, raw){
   // ★ F2: 칭호의 '몬스터 골드 획득량 +X%' 는 골드 획득 단일 관문인 여기서 한 번만 곱한다.
-  if(!raw) n = n * (1 + arenaGoldBuffPct()/100) * titleGoldMul();
+  // ★ v5.247: 결정 가호(골드 +50%·1시간)도 같은 관문 — raw(고정 보상)에는 적용하지 않는다.
+  if(!raw) n = n * (1 + arenaGoldBuffPct()/100) * titleGoldMul() * goldBuffMul();
   S.gold = Math.min(GOLD_CAP, S.gold + n);
 }
 // ★ B7/G-100: '제작 시간 -50%' 구독 버프 배율 (상점 버프탭에서 구매, 30일)
