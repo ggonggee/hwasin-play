@@ -1432,6 +1432,31 @@ step('오프라인 정산 배지 — 점 등/소등', ()=>{
   if(errs.length) throw new Error(errs.join(' | '));
 });
 
+/* ★ v5.271 회귀: 칭호 개선 배지 — 현재 착용보다 골드 효과가 큰 미장착 보유 칭호가
+   있으면 titleUpgradeable true. 효과 없음/이미 최적/미보유 false. */
+step('칭호 개선 배지 — titleUpgradeable 판정', ()=>{
+  const S=ev('S');
+  const keep=S.title;
+  const T=ev('TITLES');
+  const errs=[];
+  // 효과 있는(gold>0) 칭호 아무거나 착용 — 보유 조건은 titleOwn으로 강제
+  const withGold=T.filter(t=>t.e&&t.e.gold>0);
+  if(!withGold.length) throw new Error('골드 효과 칭호가 정의에 없음(전제 확인)');
+  const t1=withGold[0], t2=withGold[withGold.length-1];
+  const hi=(t1.e.gold>=t2.e.gold)?t1:t2, lo=(hi===t1)?t2:t1;
+  S.titleOwn=S.titleOwn||{};
+  S.titleOwn[hi.id]=true; S.titleOwn[lo.id]=true;
+  // 낮은 효과 착용 → 높은 효과 미장착 → true
+  S.title=lo.id;
+  if(!ev('titleUpgradeable')()) errs.push('우위 미장착인데 false');
+  // 최적(높은 것) 착용 → false
+  S.title=hi.id;
+  if(ev('titleUpgradeable')()) errs.push('최적 착용인데 true');
+  // 원복
+  S.title=keep; delete S.titleOwn[hi.id]; delete S.titleOwn[lo.id];
+  if(errs.length) throw new Error(errs.join(' | '));
+});
+
 /* ★ v5.236 회귀: 극한의 벼림 +21~25 — 성공 30% 표기 · 실패 시 단계 유지(파괴·하락 없음,
    재화만 소모) · +25 상한. 실패 분기 강제는 vm 안 Math.random 후킹(D5 패턴)으로. */
 step('극한의 벼림 +21~25 — 실패해도 유지, +25 상한', ()=>{

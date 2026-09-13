@@ -1229,6 +1229,17 @@ function titleOwned(t){
   if(S && S.titleOwn && S.titleOwn[t.id]) return true;
   try{ return !!(t.have && t.have()); }catch(e){ return false; }
 }
+/* ★ v5.271: 미장착 우위 칭호 판정 — 효과 있는 칭호(골드·경험치·제작확률·제작시간)를
+   보유만 하고 안 쓰면 지속적 손해다. '현재 착용보다 골드 획득 효과가 큰 미장착 칭호'가
+   있으면 titles 탭에 배지(효과 없는 칭호는 배지 대상에서 제외 — 노이즈 방지). */
+function titleUpgradeable(){
+  if(!S || !TITLES) return false;
+  const cur=(TITLES.find(t=>t.id===S.title)||{});
+  const curGold=(cur.e&&cur.e.gold)||0;
+  return TITLES.some(t=>{ if(t.id===S.title) return false;
+    const g=(t.e&&t.e.gold)||0;
+    return g>curGold && titleOwned(t); });
+}
 /* ★ F2: 착용 칭호 효과 — TITLES[].e 가 유일한 정본이고, 게임 로직은 아래 헬퍼만 읽는다.
    (칭호는 1개만 착용 가능하므로 합산 없이 착용분만 적용한다) */
 function titleEff(k){
@@ -1707,6 +1718,10 @@ function refreshClaimBadges(){
   _setDot(document.querySelector('[data-modal="notice"]'), n);   // ★ v5.167: 공지 미열람
   _setDot(document.getElementById('timepod'), od);                 // ★ v5.269: 오프라인 정산(id 부여 — 클래스 쿼리가 스텁에서 노드별 새 인스턴스를 만드는 문제 회피)
   _setDot(document.getElementById('btnMenuToggle'), q||a||n||od);
+  /* ★ v5.271: 칭호 개선 가능 — [data-modal="titles"] 항목(드로어 내 칭호). ☰ 합산. */
+  const tu=titleUpgradeable();
+  _setDot(document.querySelector('[data-modal="titles"]'), tu);
+  if(tu) _setDot(document.getElementById('btnMenuToggle'), true);
 }
 
 /* ----------------------------- 유틸 ----------------------------- */
