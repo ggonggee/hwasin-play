@@ -66,26 +66,49 @@ const documentStub={
 };
 const registry=new Map();
 for(const m of fs.readFileSync(D+'index.html','utf8').matchAll(/\bid="([^"]+)"/g)) registry.set(m[1], new Node2('div'));
+/* ★ v5.242: 시뮬 시계 — vm에 진짜 Date를 주입하면 게임의 Date.now()/new Date()가
+   실행 시각을 보고 재현성이 깨졌다(같은 시드 400h 두 번 실행 CP 279,351 vs 294,327).
+   Date 인터페이스를 상속해 now()/생성자만 시뮬 시간(SIM_NOW, 창마다 simSec×1000)을
+   보게 한다 — getDay() 등 파생 메서드는 생성 시각 기준으로 자동 정합. */
+let SIM_NOW=0;
+const FakeDate=class extends Date{
+  constructor(...a){ if(a.length) super(...a); else super(SIM_NOW); }
+  static now(){ return SIM_NOW; }
+};
 const windowStub={
   document:documentStub, localStorage:localStorageStub,
   addEventListener(t,f){(documentStub._ev=documentStub._ev||{})[t]=f;}, removeEventListener(){},
   requestAnimationFrame(){return 0;}, cancelAnimationFrame(){},
   setTimeout(){return 0;}, clearTimeout(){}, setInterval(){return 0;}, clearInterval(){},
-  performance:{now:()=>Date.now()},
+  performance:{now:()=>SIM_NOW},
   Image:class{ set src(v){} },
   navigator:{userAgent:'sim'},
   matchMedia(){return {matches:false,addEventListener(){}};},
   console,
-  Date, Math, JSON,
+  Date:FakeDate,
+  /* ★ v5.242: Math는 진짜 객체 대신 복사본(프로토타입 공유) — 아래 부트 후 Math.random을
+     시드 PRNG로 교체할 때 Node 전역 Math가 오염되지 않게 shadowing한다. */
+  Math:Object.create(Math), JSON,
 };
 windowStub.window=windowStub; windowStub.globalThis=windowStub; windowStub.self=windowStub;
 const ctx=vm.createContext(windowStub);
 vm.runInContext(js+'\n;globalThis.__ev=(src)=>eval(src);\n', ctx, {filename:'game.js'});
 const ev=s=>ctx.__ev(s);
 documentStub._ev.DOMContentLoaded();          // 부트 (빈 저장소 → 신규 세이브)
+/* ★ v5.242: vm 전역 Math.random도 시드 고정 — Battle.setSeed는 전투 RNG(_battleRng)만
+   고정하고, 게임이 직접 굴리는 Math.random(onKill 보상 드랍·제작 성공 p0·합성)은 진짜
+   난수였다. 전투는 setSeed(42), 전역은 아래 xorshift(시드 42) — 서로 다른 스트림이지만
+   둘 다 결정적이면 전체 시뮬도 결정적이다. 스모크(D1~D5)와는 별도 컨텍스트라 무관. */
+ev("globalThis.__g=42>>>0; Math.random=function(){ let r=globalThis.__g; r^=(r<<13)>>>0; r^=(r>>>17); r^=(r<<5)>>>0; r>>>=0; globalThis.__g=r; return r/4294967296; };");
 
 /* ---- 시뮬 유틸 ---- */
 const log=(...a)=>console.log(...a);
+/* ★ v5.242: 시뮬 로직용 시드 PRNG — 전투는 Battle.setSeed(42)로 결정적인데 시뮬 정책
+   코드(위험강화·안전강화·합성 확률)가 vm 밖 진짜 Math.random을 굴려 실행마다 궤적이
+   갈라졌다(재현성 실측: 400h CP 303,193 vs 296,486). xorshift32로 시뮬도 시드 고정.
+   전투 스트림(setSeed)과는 별개 시퀀스 — 두 스트림 모두 결정적이면 전체도 결정적이다. */
+let _s=42>>>0;
+function srand(){ _s^=(_s<<13)>>>0; _s^=(_s>>>17); _s^=(_s<<5)>>>0; _s>>>=0; return _s/4294967296; }
 function battleWindow(simSec){
   // 실전투 창: 고정 스텝(1/20s)으로 simSec 초 만큼 진행. 수입은 곧장 S 에 반영된다.
   const pump=ev('Battle').pumpFrame;
@@ -238,7 +261,12 @@ function dailyStep(){
     }
   }
   // 요일던전 — 오늘 5회, 3단계(영웅 재료) 가능하면 최대한
-  const DD_RQ=ev('DD_RQ'); const ti=(new Date().getDay()+6)%7;
+  /* ★ v5.242: 요일 인덱스를 실제 실행 요일(new Date)에서 시뮬 시간 기반으로 교체 —
+     종전엔 월요일에 돌면 월요일 던전만 400h 내내 돌고 화요일엔 다른 던전이 돌아
+     같은 시드(42)도 실행 요일마다 전체 궤적이 갈라졌다(실측: 400h CP 281,355 vs
+     288,211). 재현성은 전후 비교의 신뢰 기반이라 시뮬 시간 24h마다 요일이 순환하도록
+     고정한다 — 게임 규칙(매일 다른 재료)도 더 충실하게 재현된다. */
+  const DD_RQ=ev('DD_RQ'); const ti=Math.floor(simSec/86400)%7;
   let dl=5;
   for(const st of [3,2,1]){
     const rg=['N','R','E'][st-1], qty=Math.max(1,Math.round(DD_RQ[ti]/3*st));
@@ -341,10 +369,10 @@ function riskEnhanceStep(){
     } else if(S.gold < 16000000+cost) break;
     if((S.stones||0)<stoneCost) break;
     S.gold-=cost; S.stones-=stoneCost; riskTally.tries++;
-    if(Math.random()<p){ tgt.enh++; ups++; riskTally.success++;
+    if(srand()<p){ tgt.enh++; ups++; riskTally.success++;
       if(tgt.enh===25) riskTally.max20++;
     }
-    else if(risky && Math.random()<0.5){
+    else if(risky && srand()<0.5){
       const have2 = prot.cur==='hammerN'?(S.hammerN||0):(S.hammers||0);
       if(have2>=prot.n){
         if(prot.cur==='hammerN') S.hammerN-=prot.n; else S.hammers-=prot.n;
@@ -372,7 +400,7 @@ function enhanceStep(){
       const stoneCost=1+Math.floor(it.enh/5);
       if(S.gold < 16000000+cost || (S.stones||0)<stoneCost) return ups;
       S.gold-=cost; S.stones-=stoneCost;
-      if(Math.random() < (it.enh<5?0.95:0.82)){ it.enh++; ups++; }
+      if(srand() < (it.enh<5?0.95:0.82)){ it.enh++; ups++; }
       else it.enh=Math.max(0,it.enh-1);
     }
   }
@@ -441,7 +469,7 @@ function synthStep(){
       if(batches<=0) continue;
       batches=Math.min(batches, 200);
       let ok=0;
-      for(let b=0;b<batches;b++){ if(Math.random()*100<rateOf(to)) ok++; }
+      for(let b=0;b<batches;b++){ if(srand()*100<rateOf(to)) ok++; }
       if(ok>0){
         ev('matSpend')(src, batches*30);
         ev('matGain')(dst, ok);
@@ -487,11 +515,14 @@ log(`\n[밸런스 시뮬] 시드 42 · 최대 ${MAX_HOURS}시뮬시간 · 창 ${
 let lastCP=myCP(), lastEventT=0, windows=0;
 let lastSetm=1;                    // ★ v5.228 세트 계측 — 창 사이 배율 변화 감지용
 const gradeReached={};
-while(simSec < MAX_HOURS*3600 && windows<6400){   // v5.239: 창 상한 6400(=3200h 측정 가능)
+while(simSec < MAX_HOURS*3600 && windows<12800){   // v5.242: 창 상한 12800(=6400h 측정)
   // ① 사냥터 선택(합리적 플레이)
   const idx=pickHuntIdx();
   ev('S').huntTier=idx; ev('Battle').setHunt();
   const tier=ev('HUNT_TIERS')[idx];
+
+  // 시뮬 시계를 현재 창 시각으로 — 게임의 모든 Date.now()/new Date()가 이 값을 본다(v5.242)
+  SIM_NOW=simSec*1000;
 
   // ② 전투 창
   const goldBefore=ev('S').gold, killsBefore=ev('S').stats.kills;
