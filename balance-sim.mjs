@@ -299,7 +299,7 @@ function dailyStep(){
    50% 파괴[망치 prot.n개 소모로 방지 가능] / 나머지 50% 단계 -1(와드 없음 정책).
    파괴되면 다음 창의 upgradeCandidates가 같은 부위를 재제작(안전 강화 → 재도전) —
    실제 플레이어가 겪는 나선을 그대로 재현한다. */
-const riskTally={tries:0,success:0,drop:0,saved:0,destroyed:0,hammerGold:0,max20:0};
+const riskTally={tries:0,success:0,drop:0,saved:0,destroyed:0,hammerGold:0,hammerStone:0,max20:0};
 function riskEnhanceStep(){
   const S=ev('S'), leader=leaderId(), PC=ev('PROTECT_COST');
   const worn=S.equips.filter(e=>e.equipped&&(!e.heroId||e.heroId===leader));
@@ -322,15 +322,22 @@ function riskEnhanceStep(){
     const enh=tgt.enh, grade=tgt.grade;
     const p = enh<5?0.95:enh<10?0.82:enh<15?0.63:enh<20?0.44:0.30;
     const cost=[50000,300000,1500000,6000000,20000000][Math.min(4,Math.floor(enh/5))];
-    const stoneCost=1+Math.floor(enh/5);
+    const stoneCost=enh>=20 ? 20 : 1+Math.floor(enh/5);   // v5.238: 극한 강화석 20개(과잉 싱크)
     const prot=PC[grade]||PC.N;
     const have = prot.cur==='hammerN'?(S.hammerN||0):(S.hammers||0);
     const risky = enh>=11 && enh<20;                  // 파괴 가능 구간 (openEnhance 실측). +21~25 극한은 실패해도 유지(v5.236)
     if(risky && have<prot.n){
       const price = prot.cur==='hammerN'?15000000:40000000;   // 상점 X10 묶음 정본가
-      if(S.gold < 16000000+price+cost) break;         // 소환서 예산(16M)은 항상 확보
-      S.gold-=price; riskTally.hammerGold+=price;
-      if(prot.cur==='hammerN') S.hammerN=(S.hammerN||0)+10; else S.hammers=(S.hammers||0)+10;
+      const stonePrice = prot.cur==='hammerN'?150:500;        // v5.238 강화석 교환가
+      /* ★ v5.238: 골드가 부족하면 강화석 교환으로 구매(정책) — 강화석은 200+α 여유를
+         남긴다(극한 시도 20/회 예약). 과잉 강화석의 싱크이자 골드 병목 완화. */
+      if(S.gold >= 16000000+price+cost){
+        S.gold-=price; riskTally.hammerGold+=price;
+        if(prot.cur==='hammerN') S.hammerN=(S.hammerN||0)+10; else S.hammers=(S.hammers||0)+10;
+      } else if((S.stones||0) >= stonePrice+200){
+        S.stones-=stonePrice; riskTally.hammerStone+=stonePrice;
+        if(prot.cur==='hammerN') S.hammerN=(S.hammerN||0)+10; else S.hammers=(S.hammers||0)+10;
+      } else break;                                          // 골드·강화석 둘 다 부족
     } else if(S.gold < 16000000+cost) break;
     if((S.stones||0)<stoneCost) break;
     S.gold-=cost; S.stones-=stoneCost; riskTally.tries++;
@@ -576,7 +583,7 @@ log(`\n총 시뮬: ${(simSec/3600).toFixed(1)}h · 창 ${windows}회 · 최종 C
   log(`[진단] 강화석 보유: ${Math.floor(S.stones||0)} · 리더 평균 강화: ${(worn.reduce((a,e)=>a+(e.enh||0),0)/(worn.length||1)).toFixed(1)}`);
   /* ★ v5.229: 위험 강화 축 집계 — 시도/성공/하락/보호/파괴와 망치 구매 골드.
      부위당 기대 비용은 hammerGold/파괴 재제작까지 합쳐 실측된다(종전 몬테카를로 479M 갱신). */
-  log(`[진단] 위험강화: 시도 ${riskTally.tries} · 성공 ${riskTally.success} · 하락 ${riskTally.drop} · 보호 ${riskTally.saved} · 파괴 ${riskTally.destroyed} · +25도달 ${riskTally.max20}부위 · 망치구매 ${(riskTally.hammerGold/1e6).toFixed(0)}M`);
+  log(`[진단] 위험강화: 시도 ${riskTally.tries} · 성공 ${riskTally.success} · 하락 ${riskTally.drop} · 보호 ${riskTally.saved} · 파괴 ${riskTally.destroyed} · +25도달 ${riskTally.max20}부위 · 망치구매 골드 ${(riskTally.hammerGold/1e6).toFixed(0)}M + 강화석 ${riskTally.hammerStone}개`);
   log(`[진단] 보유 영웅별 CP:`, ev('ownedHeroes')().map(h=>`${h.name.slice(0,5)}(${h.grade})=${ev('heroPower')(h)}`).join(' · '));
   log('[진단] 골드 보유:', Math.floor(S.gold));
   // E 아이템 첫 후보 왜 안 되는지 — recipeOk/gold 각각 출력

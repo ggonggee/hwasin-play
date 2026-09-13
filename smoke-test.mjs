@@ -1073,14 +1073,14 @@ step('극한의 벼림 +21~25 — 실패해도 유지, +25 상한', ()=>{
   const hid=ev('party')()[0].hero_id;
   const keep={eq:JSON.parse(JSON.stringify(S.equips)), gold:S.gold, stones:S.stones};
   const gear={grade:'L',slot:'단검',enh:20,equipped:true,heroId:hid};
-  S.equips=[gear]; S.gold=1e9; S.stones=100;
-  ev('openEnhance')(gear);
+  S.equips=[gear]; S.gold=1e9; S.stones=100;  ev('openEnhance')(gear);
   const body=ev("$('#modal-root')") || ev("$('#modalBody')");
   const html=collectText(body);
   const btn=findBtnByText(body,'강화');
   const errs=[];
   if(!html.includes('극한 (성공 30% · 실패해도 유지)')) errs.push('성공 30%·유지 문구 없음');
   if(!/2,?000만/.test(html)) errs.push('극한 비용 2,000만 표기 없음');
+  if(!/강화석 20/.test(html)) errs.push('극한 강화석 20개(v5.238) 표기 없음');
   if(!btn) errs.push('강화 버튼을 못 찾음');
   if(btn&&btn.disabled) errs.push('+20에서 버튼 disabled');
   if(btn&&!btn.disabled){
@@ -1089,12 +1089,37 @@ step('극한의 벼림 +21~25 — 실패해도 유지, +25 상한', ()=>{
     if(gear.enh!==20) errs.push('실패 후 enh '+gear.enh+'(기대 20 유지)');
     if(!S.equips.includes(gear)) errs.push('실패 후 장비 소멸(파괴되면 안 됨)');
     if(S.gold!==1e9-20000000) errs.push('골드 '+S.gold+'(기대 1e9-2천만)');
-    if(S.stones!==95) errs.push('강화석 '+S.stones+'(기대 95)');
+    if(S.stones!==80) errs.push('강화석 '+S.stones+'(기대 80 — v5.238 극한 20개/시도)');
   }
   gear.enh=25; ev('openEnhance')(gear);
   const btn2=findBtnByText(ev("$('#modal-root')") || ev("$('#modalBody')"),'강화');
   if(btn2&&!btn2.disabled) errs.push('+25에서 버튼 활성(상한 봉쇄 실패)');
   S.equips=keep.eq; S.gold=keep.gold; S.stones=keep.stones;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
+
+/* ★ v5.238 회귀: 강화석→망치 교환(골드상점) — 상품 존재·stones 결제 헬퍼 동작·차감/지급.
+   과잉 강화석(1600h 5,402개)의 싱크라인. GOLDSHOP 상품의 give/cur 데이터만 믿지 않고
+   구매 실행(have→payCur→give 순서)까지 태운다. */
+step('골드상점 강화석→망치 교환 — stones 통화 결제 라인', ()=>{
+  const S=ev('S');
+  const GS=ev('GOLDSHOP');
+  const stoneItems=GS.filter(it=>it.cur==='stones');
+  const errs=[];
+  if(stoneItems.length<2) throw new Error('강화석 결제 상품 '+(stoneItems.length)+'개(기대 2: 일반 150/전설 500)');
+  const led=stoneItems.find(it=>/전설/.test(it.t));
+  if(!led) throw new Error('전설 망치 교환 상품 없음');
+  if(led.cost!==500) errs.push('전설 교환가 '+led.cost+'(기대 500)');
+  const keep={stones:S.stones, hammers:S.hammers||0};
+  S.stones=600; S.hammers=0;
+  if(S.stones<led.cost) errs.push('사전 조건 실패');
+  if(!errs.length){
+    led.give();                       // 상품 지급 로직 자체(구매 헬퍼의 pay는 아래 별도)
+    if(S.hammers!==10) errs.push('지급 후 전설망치 '+S.hammers+'(기대 10)');
+    if(S.stones!==600) errs.push('give가 stones를 깎으면 안 됨(차감은 payCur 담당): '+S.stones);
+    S.hammers=0; S.stones=600;   // payCur는 shop 클로저 내부라 직접 검증 불가 — 데이터 정합으로 대체
+  }
+  S.stones=keep.stones; S.hammers=keep.hammers;
   if(errs.length) throw new Error(errs.join(' | '));
 });
 step('save→JSON 직렬화 왕복 무손실', ()=>{

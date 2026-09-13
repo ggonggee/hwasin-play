@@ -774,12 +774,19 @@ const RUBYPROMO = [
 ];
 const RUBY_NOTICE = '구매 후 7일 이내에는 청약을 철회할 수 있습니다 [단, 이미 일부를 사용했거나 되돌릴 수 없는 경우는 제외]';
 
-/* ★ B7/G-93: 골드상점 7항목 = 골드 결제 5 + 루비 환전 2 */
+/* ★ B7/G-93: 골드상점 = 골드 결제 5 + 강화석 교환 2(v5.238) + 루비 환전 2 */
 const GOLDSHOP = [
   { t:'영웅 소환서 X10',   ic:'📜', cur:'gold', cost:15000000, give:()=>{ S.tickHero+=10; } },
   { t:'재료 열쇠 X10',     ic:'🗝️', cur:'gold', cost:15000000, give:()=>{ S.tickMat+=10; } },
   { t:'망치 X10',          ic:'🔨', cur:'gold', cost:15000000, give:()=>{ S.hammerN=(S.hammerN||0)+10; } },
   { t:'전설 망치 X10',     ic:'🔨', cur:'gold', cost:40000000, give:()=>{ S.hammers=(S.hammers||0)+10; } },
+  /* ★ v5.238: 강화석 → 망치 교환(자체 설계) — 1600h 시뮬에서 강화석 보유 5,310개로
+     유입(탑 소탕 도달×3 ≈ 65/일, 실측 정본 공식이라 못 줄임)이 소모를 크게 앞질렀다.
+     망치는 위험 강화(+11~20) 보호의 병목 재화(전설 X10 = 골드 4천만)라, 강화석 대안가를
+     주면 과잉 강화석 싱크 + 골드 병목 완화 + 위험·극한 진행 가속이 한 번에 풀린다.
+     환율은 골드 정본가 기준: 전설 4천만→500개(일 65개 수급 기준 약 8일), 일반 1,500만→150개. */
+  { t:'망치 X10 (강화석)',   ic:'🔨', cur:'stones', cost:150, give:()=>{ S.hammerN=(S.hammerN||0)+10; } },
+  { t:'전설 망치 X10 (강화석)', ic:'🔨', cur:'stones', cost:500, give:()=>{ S.hammers=(S.hammers||0)+10; } },
   { t:'투기장 입장권 X1',  ic:'🎫', cur:'gold', cost:5000000,  give:()=>{ S.ticket=Math.min(30,S.ticket+1); } },
   { t:'골드 10,000,000',   ic:'🪙', cur:'ruby', cost:300,  give:()=>{ addGold(10000000); } },
   { t:'골드 200,000,000 + 전설 망치 20', ic:'🪙', cur:'ruby', cost:2800, give:()=>{ addGold(200000000); S.hammers=(S.hammers||0)+20; } },
@@ -5611,10 +5618,10 @@ const MODALS = {
     const body=el('div'); b.appendChild(body);
 
     /* --- 결제 공용 헬퍼 (차감 전 보유량 재확인 = 재화 안전장치) --- */
-    const CURN={ gold:'골드', ruby:'루비', guild:'길드 코인', gray:'회색코인' };
-    const have=cur=> cur==='gold'? S.gold : cur==='ruby'? S.ruby : cur==='gray'? (S.gray||0) : (S.guildCoin||0);
+    const CURN={ gold:'골드', ruby:'루비', guild:'길드 코인', gray:'회색코인', stones:'강화석' };   // stones: v5.238 망치 교환
+    const have=cur=> cur==='gold'? S.gold : cur==='ruby'? S.ruby : cur==='gray'? (S.gray||0) : cur==='stones'? (S.stones||0) : (S.guildCoin||0);
     const payCur=(cur,n)=>{ if(cur==='gold') S.gold-=n; else if(cur==='ruby') S.ruby-=n;
-      else if(cur==='gray') S.gray=Math.max(0,(S.gray||0)-n); else S.guildCoin=(S.guildCoin||0)-n; };
+      else if(cur==='gray') S.gray=Math.max(0,(S.gray||0)-n); else if(cur==='stones') S.stones=Math.max(0,(S.stones||0)-n); else S.guildCoin=(S.guildCoin||0)-n; };
     const priceTxt=(cur,n)=> `${CURN[cur]} ${cur==='gold'?fmt(n):n.toLocaleString('ko-KR')}`;
     /* ★ v5.0: 자체 렌더러 탭(광고·버프·루비·코스튬·스타터)도 같은 카드 골격을 쓰도록 하는 공용 빌더.
        mkBuy 와 달리 결제 로직이 제각각이라 카드 껍데기만 만들어 주고 버튼은 호출부가 붙인다. */
@@ -7632,7 +7639,12 @@ function openEnhance(e){
      67개의 장기 싱크다. 파괴 스릴은 실측 구간 +11~20에 그대로 남는다. */
   const p = e.enh<5?0.95:e.enh<10?0.82:e.enh<15?0.63:e.enh<20?0.44:0.30;
   const cost = [50000,300000,1500000,6000000,20000000][Math.min(4,Math.floor(e.enh/5))];
-  const stoneCost = 1+Math.floor(e.enh/5);
+  /* ★ v5.238: 극한(+21~25) 강화석 5→20개 — 1600h 시뮬에서 강화석 보유 5,310개로
+     유입(탑 소탕 도달×3 ≈ 65/일 + 가이드 목표 1,470개)이 소모를 크게 앞질렀다.
+     탑 보상은 실측 정본 공식이라 못 줄이므로 소모측(자체 설계 구간)을 늘린다:
+     부위당 약 13회×20 = 260개, 10부위 완주 기준 약 2,600개의 추가 싱크. 과잉 재화는
+     선택이 없는 무의미한 축적이라 재미가 아니라는 판단. */
+  const stoneCost = e.enh>=20 ? 20 : 1+Math.floor(e.enh/5);
   const prot = PROTECT_COST[e.grade] || PROTECT_COST.N;
   const protHave = ()=> (prot.cur==='hammerN' ? (S.hammerN||0) : (S.hammers||0));
   // 상단 3행 상시 카운터
