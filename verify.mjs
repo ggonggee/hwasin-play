@@ -64,6 +64,17 @@ const fail = (m)=>FAIL.push(m);
     }
   }
   if(bad.length) fail('give 상태 키 존재 불일치(freshState 미선언): '+[...new Set(bad)].join(', '));
+/* ★ v5.273: 모달 수·README 정합 — README 가 "화면(모달) N종" 이라고 쓴 N 이 실제
+   MODALS 최상위 키 수와 같은지. 모달 추가 시 문서 갱신을 잊으면 README 가 거짓말을
+   하므로 게이트가 막는다(코드-문서 정합 자동화). */
+{
+  const block2=js.slice(js.indexOf('const MODALS = {'), js.indexOf('\n};', js.indexOf('const MODALS = {')));
+  const keys=[...block2.matchAll(/^\s{2}(\w+):\s*\{?\s*title/gm)].map(m=>m[1]);
+  let rm=null;
+  try{ const readme=fs.readFileSync(D+'README.md','utf8'); rm=readme.match(/화면\(모달\)\s*\|\s*(\d+)종/); }catch(e){}
+  if(rm && Number(rm[1])!==keys.length) fail('모달 수·README 불일치: 실제 '+keys.length+'종 vs README '+rm[1]+'종');
+}
+
 }
 
 }
