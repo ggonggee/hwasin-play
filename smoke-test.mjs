@@ -1110,6 +1110,11 @@ step('골드상점 강화석→망치 교환 — stones 통화 결제 라인', (
   const led=stoneItems.find(it=>/전설/.test(it.t));
   if(!led) throw new Error('전설 망치 교환 상품 없음');
   if(led.cost!==500) errs.push('전설 교환가 '+led.cost+'(기대 500)');
+  /* ★ v5.240: 기록서 골드 라인 — 3천만/권, 심화 각성의 엔드게임 골드 싱크 */
+  const book=GS.find(it=>it.cur==='gold' && /기록서/.test(it.t));
+  if(!book) errs.push('기록서 골드 상품 없음(v5.240)');
+  else if(book.cost!==30000000) errs.push('기록서 가격 '+book.cost+'(기대 3천만)');
+  else { const rb=ev('S').records||0; book.give(); if((ev('S').records||0)!==rb+1) errs.push('기록서 지급 오류'); ev('S').records=rb; }
   const keep={stones:S.stones, hammers:S.hammers||0};
   S.stones=600; S.hammers=0;
   if(S.stones<led.cost) errs.push('사전 조건 실패');

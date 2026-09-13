@@ -381,10 +381,11 @@ function enhanceStep(){
 /* 각성 정책 — 조각(직업 공용)이 여유일 때(전 영웅 보유 후 남는 조각) 기본 12단계까지.
    ★ v5.230: 심화 각성(13~30) 통합 — 기록서는 탑 상자 교환(dailyStep)으로 수급하고
    비용은 정본 공식 1+floor((lv-12)/2) (13~14:1권 · 15~16:2권 … 30단계까지 총 90권).
-   heroPower의 aw=1+lv×0.015가 곡선에 자동 반영된다. */
+   heroPower의 aw=1+lv×0.015가 곡선에 자동 반영된다.
+   ★ v5.240: 기록서 골드 구매(3천만/권) 정책 추가 — awakenTally.gold에 지출 누적. */
+const awakenTally={gold:0};
 function awakenStep(){
-  const S=ev('S');
-  if(S.guideStep<ev('GUIDE_CHAIN').length) return 0;
+  const S=ev('S');  if(S.guideStep<ev('GUIDE_CHAIN').length) return 0;
   const owned=ev('ownedHeroes')().length;
   if(owned<9) return 0;                        // 로스터 우선 — 조각은 합성이 먼저
   let steps=0;
@@ -397,7 +398,15 @@ function awakenStep(){
   }
   while(S.awaken>=12 && S.awaken<50 && steps<40){   // 심화 — 기록서 축 (v5.236 상한 50)
     const cost=1+Math.floor((S.awaken-12)/2);
-    if((S.records||0)<cost) break;
+    if((S.records||0)<cost){
+      /* ★ v5.240: 기록서 골드 구매 라인(상점 정본가 3천만/권) — 극한 완주 후 골드가
+         쌓이기만 하는 싱크 고갈 대응. 망치 1묶음(4천만)·소환서 예산(16M)은 항상 확보. */
+      const price=30000000;
+      if(S.gold >= 16000000 + 40000000 + cost*price){
+        S.gold-=cost*price; awakenTally.gold+=cost*price;
+        S.records=(S.records||0)+cost;
+      } else break;
+    }
     S.records-=cost; S.awaken++; steps++;
   }
   return steps;
@@ -570,7 +579,7 @@ log(`\n총 시뮬: ${(simSec/3600).toFixed(1)}h · 창 ${windows}회 · 최종 C
 /* 진단: 리더·장착·보유영웅 — CP 정체의 원인을 구분한다(리더 등급? 레벨? 장비 기여?) */
 {
   const S=ev('S'), ld=ev('party')()[0];
-  log(`[진단] 각성 +${S.awaken} · 리더 ${ld.name}(grade ${ld.grade} · Lv${ld.level}) · 보유 영웅 ${ev('ownedHeroes')().length}/9 · 조각`,
+  log(`[진단] 각성 +${S.awaken}${awakenTally.gold>0?` (골드 구매 ${(awakenTally.gold/1e6).toFixed(0)}M)`:''} · 리더 ${ld.name}(grade ${ld.grade} · Lv${ld.level}) · 보유 영웅 ${ev('ownedHeroes')().length}/9 · 조각`,
     Object.entries(S.shards).map(([k,v])=>`${k}:${Math.floor(v)}`).join(' '));
   /* ★ v5.230: 심화 각성 축 상태 — 탑 기록·상자·기록서. */
   log(`[진단] 탑 최고 ${S._tower||0}Wave · 상자 ${S.towerBox||0}개 · 기록서 ${S.records||0}권 (심화 각성 재화)`);
