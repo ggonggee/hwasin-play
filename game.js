@@ -7914,7 +7914,9 @@ function isSkullGear(c){
    z-index 30으로 띄우고 2.2초 후 스스로 지운다. */
 function legendaryFlash(slot){
   const root=$('#modal-root'); if(!root) return;
-  if(root.querySelector('.lgd-flash')) return;   // 중복 방지
+  /* children 직접 스캔 — querySelector와 실제 DOM에서 의미가 동등하면서
+     DOM 스텁(innerHTML이 자식을 만들지 않는 근사 환경)에서도 정확히 동작한다(v5.260). */
+  if([...root.children].some(c=>c.classList&&c.classList.contains('lgd-flash'))) return;   // 중복 방지
   const ov=el('div','lgd-flash');
   ov.innerHTML='<div class="lf-rays"></div><div class="lf-item">'+equipImg(slot,6)+'</div><div class="lf-title">LEGENDARY</div>';
   root.appendChild(ov);

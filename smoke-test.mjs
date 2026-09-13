@@ -55,7 +55,17 @@ class Node2{
   hasAttribute(k){ return !!(this._at&&k in this._at); }
   getBoundingClientRect(){ return {top:0,left:0,right:390,bottom:500,width:390,height:500,x:0,y:0}; }
   scrollIntoView(){} focus(){} blur(){} click(){ this.onclick&&this.onclick({stopPropagation(){},preventDefault(){},target:this}); }
-  querySelector(s){ return CTX.document.querySelector(s); }
+  /* ★ v5.260: 노드 스코프 querySelector — '.cls'를 자기 서브트리에서 먼저 찾고,
+     실패 시 document 로 폴백한다(종전 동작 호환 — shop 의 card.querySelector
+     ('.sh-left')가 innerHTML 스텁이 자식을 안 만들어 폴백 더미에 의존한다).
+     노드 스코프 '실존 여부'가 필요한 검사(legendaryFlash 중복 방지)는 게임 코드가
+     children 직접 스캔을 쓴다 — querySelector의 스텁 근사는 존재 탐색용으로만. */
+  querySelector(s){
+    const str=String(s);
+    const cm=/^\.([\w-]+)$/.exec(str);
+    if(cm){ const hits=[]; const walk=n=>{ if(n.classList&&n.classList.contains&&n.classList.contains(cm[1])) hits.push(n); (n.children||[]).forEach(walk); }; walk(this); if(hits[0]) return hits[0]; }
+    return CTX.document.querySelector(s);
+  }
   querySelectorAll(s){ return CTX.document.querySelectorAll(s); }
   closest(){ return null; }
   getContext(){ return CANVAS2D; }
@@ -83,13 +93,25 @@ const documentStub={
   createTextNode(t){ return {nodeValue:String(t),textContent:String(t)}; },
   createDocumentFragment(){ return new Node2('fragment'); },
   getElementById(id){ return registry.get(id) || null; },
+  /* ★ v5.260: 클래스 셀렉터 지원 — 종전 '.foo'가 항상 더미 노드를 반환해 게임의
+     중복 체크(legendaryFlash 등)가 첫 호출부터 차단됐다(v5.259 실측). registry 노드와
+     그 자식을 재귀 순회해 classList 매치를 찾는다 — document 레벨 근사(노드 스코프
+     아님)지만 회귀들은 상태 원복 패턴으로 고립되어 있어 실용적으로 충분하다. */
+  _findByClass(cls){
+    const hits=[];
+    const walk=n=>{ if(n.classList && n.classList.contains && n.classList.contains(cls)) hits.push(n); (n.children||[]).forEach(walk); };
+    registry.forEach(walk);
+    return hits;
+  },
   querySelector(s){
     if(typeof s!=='string') return null;
     const m=/^#([\w-]+)/.exec(s); if(m) return registry.get(m[1]) || null;
+    const cm=/^\.([\w-]+)$/.exec(s); if(cm) return this._findByClass(cm[1])[0] || new Node2('div');
     return new Node2('div');
   },
   querySelectorAll(s){
     if(typeof s==='string' && s.includes('[data-modal]')) return modalNodes;
+    if(typeof s==='string'){ const cm=/^\.([\w-]+)$/.exec(s); if(cm) return this._findByClass(cm[1]); }
     return [];
   },
   addEventListener(t,f){ (documentStub._ev=documentStub._ev||{})[t]=f; },
@@ -1310,16 +1332,21 @@ step('월간 의뢰 — 렌더·진행·수령·렌더 무지급', ()=>{
 
 /* ★ v5.259 회귀: 레전더리 제작 성공 플래시 — 오버레이 추가·중복 방지.
    2.2초 자기 제거(setTimeout)는 스텁 환경에서 검증하지 않는다(존재만 주석 명시). */
-step('레전더리 플래시 — 함수 정합', ()=>{
-  /* ⚠ 스텁 한계: 게임 코드의 중복 체크(root.querySelector('.lgd-flash'))가 스텁
-     documentStub.querySelector(클래스 셀렉터 미지원 → 항상 더미 반환) 때문에 첫 호출부터
-     차단된다 — 실제 브라우저에서는 정상 동작. 따라서 여기선 함수 존재·무예외만 검증하고
-     오버레이 렌더·중복 방지·2.2초 자기 제거는 실물 QA에서 확인한다. */
-  if(typeof ev('legendaryFlash')!=='function') throw new Error('legendaryFlash 없음');
-  ev('legendaryFlash')('용암 대검');   // 무예외
-  const src=fs.readFileSync('game.js','utf8');
-  if(!src.includes("root.querySelector('.lgd-flash')")) throw new Error('중복 방지 체크 없음');
-  if(!/setTimeout\(\(\)=>ov\.remove\(\),\s*2200\)/.test(src)) throw new Error('2.2초 자기 제거 없음');
+step('레전더리 플래시 — 오버레이 렌더·중복 방지', ()=>{
+  /* ★ v5.260: documentStub 클래스 셀렉터 지원(노드 스코프 querySelector)으로
+     렌더 검증 복원 — v5.259에서 강등했던 회귀. */
+  const root=ev("document.querySelector('#modal-root')") || ev("$('#modal-root')");
+  if(!root) throw new Error('#modal-root 없음');
+  const count=()=>[...(root.children||[])].filter(c=>c.classList&&c.classList.contains('lgd-flash')).length;
+  const before=count();
+  ev('legendaryFlash')('용암 대검');
+  const a1=count();
+  if(a1!==before+1) throw new Error('호출 후 오버레이 +1 아님: '+before+'→'+a1);
+  ev('legendaryFlash')('용암 완드');
+  const a2=count();
+  if(a2!==a1) throw new Error('중복 호출 방지 실패: '+a1+'→'+a2);
+  [...(root.children||[])].filter(c=>c.classList&&c.classList.contains('lgd-flash')).forEach(nn=>nn.remove());
+  if(count()!==before) throw new Error('정리 실패');
 });
 
 /* ★ v5.236 회귀: 극한의 벼림 +21~25 — 성공 30% 표기 · 실패 시 단계 유지(파괴·하락 없음,
