@@ -1423,6 +1423,34 @@ step('의뢰 리듬 날짜 경계(2월 말·연말 월·ISO 주 비대칭)', ()=
   if(errs.length) throw new Error(errs.join(' | '));
 });
 
+/* ★ v5.284 회귀: 7일 출석 주기 반복 — 완주(7칸 전부 수령) 다음 날 rollDaily 가
+   claimed.attend 를 리셋해 1일차가 다시 열리고, 도중 미수령(이어받기 중)이면
+   리셋하지 않는다. 종전 리셋 경로가 없어 완주자의 출석 보상이 영구히 끊겼다. */
+step('7일 출석 완주 — 다음 날 새 주기 리셋·미완주는 이어받기', ()=>{
+  const errs=[];
+  const S=ev('S');
+  const backup=JSON.stringify({ claimed:S.claimed, attendLastDate:S.attendLastDate, daily:S.daily, day:S.day });
+  try{
+    // A: 7칸 완주 + 날짜 경과 → 리셋 + 1일차 오픈
+    S.claimed.attend=ev('ATTEND_DAYS').map(()=>true);
+    S.daily.date='Thu Jan 01 2026'; S.attendLastDate='Thu Jan 01 2026';
+    ev('rollDaily')();
+    if(JSON.stringify(S.claimed.attend)!=='{}') errs.push('완주 다음날 리셋 안 됨: '+JSON.stringify(S.claimed.attend));
+    if(!ev('attendClaimable')()) errs.push('리셋 후 attendClaimable 여전히 false');
+    const M=ev('MODALS'); const b=new Node2('div'); M.attend.render(b);
+    if(!collectText(b).includes('오늘 개봉 가능 · 1일차')) errs.push('리셋 후 1일차 미오픈');
+    // B: 3칸만 수령(이어받기 중) → 리셋 금지
+    S.claimed.attend=ev('ATTEND_DAYS').map((_,i)=>i<3);
+    S.daily.date='Thu Jan 01 2026';
+    ev('rollDaily')();
+    if(S.claimed.attend.filter(Boolean).length!==3) errs.push('미완주 리셋 오동작: '+JSON.stringify(S.claimed.attend));
+  } finally {
+    const o=JSON.parse(backup);
+    S.claimed=o.claimed; S.attendLastDate=o.attendLastDate; S.daily=o.daily; S.day=o.day;
+  }
+  if(errs.length) throw new Error(errs.join(' | '));
+});
+
 /* ★ v5.265 회귀: 주간·월간 의뢰 수령 배지 — 진행 완료 미수령 시 questClaimable true,
    미완료·수령 후·새 주(키 불일치) false. */
 step('의뢰 수령 배지 — weeklyClaimable·monthlyClaimable', ()=>{

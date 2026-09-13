@@ -1657,6 +1657,18 @@ function rollDaily(){
     const rw=loginRewardGive(S.day);
     if(rw){ (S._pendingLoginToast=S._pendingLoginToast||[]).push(rw);
       sysLog(`${S.day}일차 접속 보상 — ${rw}`); }
+    /* ★ v5.284: 7일 출석 주기 반복 — claimed.attend 를 새 주기로 리셋하는 경로가 통째로
+       없어 7일 완주자는 8일째부터 출석 보상이 영구히 끊겼다(일일 접속 훅 소멸 — 전수
+       grep 실증: claimed.attend 참조 전부 읽기/수령뿐). rollDaily 는 자정 경과를 확정하는
+       유일한 공식 지점(입장권 충전·연속 접속 보상도 여기)이므로 '전 칸 수령 완료'일 때
+       여기서 새 주기를 연다. 보상 수량(B9/G-124 실측)은 그대로 두고 반복 주기만 추가 —
+       주간 의뢰(v5.249 매주 월요일 리셋)와 같은 '주기 반복' 리듬 원칙이다. 도중 미수령
+       상태에서는 리셋하지 않는다(이어받기 우선). */
+    if(S.claimed && S.claimed.attend && ATTEND_DAYS.every((_,i)=>S.claimed.attend[i])){
+      S.claimed.attend={};
+      (S._pendingLoginToast=S._pendingLoginToast||[]).push('7일 출석 완주 — 새 주기가 시작됩니다');
+      sysLog('7일 출석 완주 — 새 주기 1일차부터 다시 수령 가능합니다.');
+    }
   }
 }
 function dailyLeft(key, max){ rollDaily(); return max-(S.daily.counts[key]||0); }
@@ -6466,8 +6478,10 @@ const MODALS = {
         toast(`${t} 수령`); sysLog(`7일 출석 ${i+1}일차 — ${t}`); openModal('attend'); refreshHUD(); };
       g.appendChild(c); });
     b.appendChild(g);
-    b.appendChild(el('div','center small mut', claimedToday ? '오늘 출석 완료 — 내일 다시 방문하세요.'
-      : (next<0 ? '7일 출석을 모두 완료했습니다.' : `오늘 개봉 가능 · ${next+1}일차`)));
+    /* ★ v5.284: 완주 문구가 '다시 방문하세요' 였을 때 받을 게 없었다 — 새 주기(rollDaily
+       리셋)를 명시해 완주 후에도 출석할 이유가 보이게 한다. */
+    b.appendChild(el('div','center small mut', next<0 ? '7일 완주 — 자정 경과 후 1일차부터 새 주기가 열립니다.'
+      : (claimedToday ? '오늘 출석 완료 — 내일 다시 방문하세요.' : `오늘 개봉 가능 · ${next+1}일차`)));
   }},
 
   /* ★ B9/G-128: 허브 2열×3행 + 하단 가로 [닫기] · G-129~G-132: 본문 규칙 문구 정합 */
