@@ -1361,6 +1361,29 @@ step('레전더리 플래시 — 오버레이 렌더·중복 방지', ()=>{
   if(count()!==before) throw new Error('정리 실패');
 });
 
+/* ★ v5.264 회귀: 의뢰 리셋 남은 일수 — 계산 정합 + 주간 탭 렌더 표기.
+   주간은 1~7 범위, 월간은 '당월 일수 - 오늘 날짜 + 1'(다음 1일까지)와 정합. */
+step('의뢰 리셋 남은 일수 — 계산·렌더 정합', ()=>{
+  const r=ev('(function(){ const d=new Date(); const day=(d.getDay()+6)%7; return { raw:7-day, month:Math.ceil(daysToMonthlyReset()), todayDay:d.getDate(), daysInMonth:new Date(d.getFullYear(), d.getMonth()+1, 0).getDate() }; })()');
+  const errs=[];
+  if(r.raw<1||r.raw>7) errs.push('주간 남은일수 범위 밖: '+r.raw);
+  if(ev('daysToWeeklyReset')()!==r.raw) errs.push('daysToWeeklyReset 비정합');
+  const expectedMonth=r.daysInMonth-r.todayDay+1;
+  if(r.month!==expectedMonth) errs.push('월간 남은일수 '+r.month+'(기대 '+expectedMonth+')');
+  const S=ev('S'); const M=ev('MODALS');
+  const keep=S.weekly?JSON.parse(JSON.stringify(S.weekly)):null;
+  S.weekly={ key:ev('getWeekKey')(), base:{kills:0,crafts:0,summons:0,towerTries:0}, claimed:{} };
+  const b=new Node2('div'); M.quest.render(b);
+  // 기본 탭은 임무목록 — 주간 탭 노드를 찾아 클릭해야 리셋 표시가 렌더된다
+  // (el()은 텍스트를 innerHTML로 넣으므로 _html을 본다 — v5.254 발견과 동일)
+  const findTab=(n)=>{ if(!n||!n.children) return null; for(const c of n.children){ if(String(c._text||c._html||'').trim()==='주간') return c; const f=findTab(c); if(f) return f; } return null; };
+  const tabNode=findTab(b);
+  if(!tabNode) errs.push('주간 탭 노드 미발견'); else tabNode.click();
+  if(!/다음 리셋 \d+일 남음/.test(collectText(b))) errs.push('주간 탭 리셋 표시 없음');
+  S.weekly=keep?JSON.parse(JSON.stringify(keep)):{key:'',base:null,claimed:{}};
+  if(errs.length) throw new Error(errs.join(' | '));
+});
+
 /* ★ v5.236 회귀: 극한의 벼림 +21~25 — 성공 30% 표기 · 실패 시 단계 유지(파괴·하락 없음,
    재화만 소모) · +25 상한. 실패 분기 강제는 vm 안 Math.random 후킹(D5 패턴)으로. */
 step('극한의 벼림 +21~25 — 실패해도 유지, +25 상한', ()=>{

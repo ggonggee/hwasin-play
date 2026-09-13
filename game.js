@@ -4540,6 +4540,10 @@ function subBody(title, opts){
      영웅 기록서 X3 · 장비 15회 제작(후반엔 이것이 주간 목표가 됨) → 전설 망치 X10 ·
      영웅 소환 30회 → 골드 2,000만. 보상은 엔드게임 재화(결정 축 연결)로 준다.
    · 수령은 의뢰별 1회성(weekly.claimed) — 재접속해도 유지. */
+/* ★ v5.264: 의뢰 리셋 남은 일수 — 주간(다음 월요일)·월간(다음 1일). ceil로
+   당일 리셋 전까지는 0이 아니라 1 이상으로 세는 쪽이 사용자 기대에 가깝다. */
+function daysToWeeklyReset(){ const d=new Date(); const day=(d.getDay()+6)%7; return 7-day; }
+function daysToMonthlyReset(){ const d=new Date(); return (new Date(d.getFullYear(), d.getMonth()+1, 1) - d)/86400000; }
 function getWeekKey(){ const d=new Date(); const t=new Date(d.getFullYear(),d.getMonth(),d.getDate());
   const day=(t.getDay()+6)%7; t.setDate(t.getDate()-day+3); const firstThu=new Date(t.getFullYear(),0,4);
   const fday=(firstThu.getDay()+6)%7; firstThu.setDate(firstThu.getDate()-fday+3);
@@ -6603,7 +6607,7 @@ const MODALS = {
            WEEKLY_REWARD_TXT 로만 한다. */
         const w=weeklyState();
         body.appendChild(el('div','datehead', '주간 의뢰 · ' + w.key));
-        body.appendChild(el('div','small mut','매주 월요일 리셋 · 진행은 실제 행동으로 자동 반영됩니다'));
+        body.appendChild(el('div','small mut','매주 월요일 리셋 · 진행은 실제 행동으로 자동 반영됩니다 · <b>다음 리셋 '+Math.ceil(daysToWeeklyReset())+'일 남음</b>'));
         WEEKLY_QUESTS.forEach(q=>{
           const now=S.stats[q.stat]||0, base=(w.base&&w.base[q.stat])||0;
           const prog=Math.min(q.goal, Math.max(0, now-base));
@@ -6623,7 +6627,7 @@ const MODALS = {
            표시는 MONTHLY_REWARD_TXT 로만. */
         const m=monthlyState();
         body.appendChild(el('div','datehead', '월간 의뢰 · ' + m.key));
-        body.appendChild(el('div','small mut','매월 1일 리셋 · 진행은 실제 행동으로 자동 반영됩니다'));
+        body.appendChild(el('div','small mut','매월 1일 리셋 · 진행은 실제 행동으로 자동 반영됩니다 · <b>다음 리셋 '+Math.ceil(daysToMonthlyReset())+'일 남음</b>'));
         MONTHLY_QUESTS.forEach(q=>{
           const now=S.stats[q.stat]||0, base=(m.base&&m.base[q.stat])||0;
           const prog=Math.min(q.goal, Math.max(0, now-base));
