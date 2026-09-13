@@ -5142,15 +5142,18 @@ const MODALS = {
 
   /* ★ v5.8: 각성 12단계에서 성장이 끊기고 조각 수요도 함께 사라지던 공백을 잇는다.
      · 1~12단계 = 조각 소모(현행 유지, 밸런스기획서 342행 확정 커브 250×1.08^n)
-     · 13~20단계(→v5.193 부터 30) = **심화 각성**, 영웅 기록서 소모. 기록서는 그동안 유료 패키지로만 들어오고
+     · 13~20단계(→v5.193 부터 30, v5.236 부터 50) = **심화 각성**, 영웅 기록서 소모. 기록서는 그동안 유료 패키지로만 들어오고
        소비처가 0 이던 고아 재화였다 — 두 문제를 한 축으로 묶는다.
      기록서 무과금 획득: 회색코인 상점 / 시련의 탑 웨이브 상자 교환(v5.8 에서 함께 신설). */
   awaken:{ title:'각성', render(b){
     /* ★ v5.193: 심화 상한 20→30 — 밸런스 시뮬(600h) 확정 곡선에서 L 완성(~139h) 이후
      성장 축이 레벨·강화뿐이었다. 각성은 기록서(회색코인 상점·탑 상자)라는 별도 재화를
      쓰는 엔드게임 싱크라 상한 확장이 경제를 흔들지 않는다 — 21~30단계는 +15%p 계정 스탯.
-     자체 설계(캡처 근거 없음). */
-    const lv=S.awaken, BASE_CAP=12, DEEP_CAP=30;
+     자체 설계(캡처 근거 없음).
+     ★ v5.236: 30→50 — 1600h 시뮬(800h 시점 각성 +24 · 탑 21Wave 정체로 기록서 공급도
+     둔화)에서 30 상한 소진이 확인됐다. 31~50은 같은 비용 공식(총 290권, 탑 소탕 기준
+     중반 2권/일 ≈ 5개월 여정)으로 연장 — 심화는 기록서 전용 싱크라 골드 경제 불개입. */
+    const lv=S.awaken, BASE_CAP=12, DEEP_CAP=50;
     const deep = lv>=BASE_CAP;                       // 심화 구간 진입 여부
     const shardCost = Math.round(250*Math.pow(1.08, lv));
     const recCost   = 1 + Math.floor((lv-BASE_CAP)/2);   // 13~14:1권 · 15~16:2권 …
@@ -6267,7 +6270,7 @@ const MODALS = {
       /* ★ v5.168→v5.197: '각성 상한 12'는 심화 각성 도입 전 정보였다 — 각성 화면의 실제 상한과
          맞춘다(v5.193 부터 상한 30). 숫자를 손으로 쓰면 또 어긋난다(v5.168 정정의 반복) —
          정본 DEEP_CAP 에서 파생시킨다. */
-      '영웅':`영웅은 등급(일반→레전더리)과 레벨로 성장합니다. 소환으로 조각을 모아 합성하면 등급이 오릅니다(합성 시 레벨 100% 승계). 각 영웅은 직업별 스킬 4종을 자동으로 사용합니다. 각성은 계정 전체 스탯을 +1.5%/단계 올립니다(기본 12단계 · 이후 심화 각성으로 최대 30단계, 영웅 기록서 소모).<br><br>강화 실패 시 장비가 파괴됩니다. 파괴방지에는 일반 망치 5개·희귀 망치 10개·영웅 전설망치 5개·레전더리 전설망치 10개가 필요합니다.`,
+      '영웅':`영웅은 등급(일반→레전더리)과 레벨로 성장합니다. 소환으로 조각을 모아 합성하면 등급이 오릅니다(합성 시 레벨 100% 승계). 각 영웅은 직업별 스킬 4종을 자동으로 사용합니다. 각성은 계정 전체 스탯을 +1.5%/단계 올립니다(기본 12단계 · 이후 심화 각성으로 최대 50단계, 영웅 기록서 소모).<br><br>강화 실패 시 장비가 파괴됩니다. 파괴방지에는 일반 망치 5개·희귀 망치 10개·영웅 전설망치 5개·레전더리 전설망치 10개가 필요합니다.`,
       // G-131: 난이도 배율(X1~X3)은 요일던전 전용이라 삭제하고, 소환속도·보스 드랍 규칙으로 교체
       /* ★ v5.198: '소환속도 1.5초' 문구 정정 — 코드에 그런 스탯이 없다(실제 스폰 간격은
          0.4~1초 랜덤, 동시 상한은 마릿수 선택기). 이 세계에 없는 스탯을 설명하면 플레이어는
@@ -6314,12 +6317,12 @@ const MODALS = {
       const tier=st.tiers.filter(t=>c<t.k).sort((a,b2)=>a.k-b2.k)[0];
       if(tier){ const gap=tier.k-c; if(!next||gap<next.gap) next={n:st.n,c,k:tier.k,gap}; }
     });
-    const awakenMaxed=(S.awaken||0)>=30;
+    const awakenMaxed=(S.awaken||0)>=50;
     b.innerHTML=`<div class="hint" style="line-height:1.8">
     <b style="color:#f0cd82">■ 내 장기 목표 진행</b> <span class="mut small">(실시간)</span><br>
     · 세트: ${act.length? act.slice(0,3).map(x=>`${x.n} ${x.c}/${(SET_PIECES[x.n]||[]).length}`).join(' · ') : '3조각부터 발동'}${next?` — 다음: <b style="color:var(--g-legend)">${next.n} ${next.k}세트</b> (${next.gap}조각 남음)`:''}<br>
-    · 강화: 홈 출격 영웅 평균 <b>+${enhAvg}</b> / 목표 +20 (+11부터 망치 필수)<br>
-    · 각성: <b>+${S.awaken||0}</b> / 30${(S.awaken||0)>=12?` · 기록서 ${S.records||0}권 보유`:''}${awakenMaxed?' · 완료 🎉':''}<br>
+    · 강화: 홈 출격 영웅 평균 <b>+${enhAvg}</b> / 목표 +25 (+11부터 망치 필수)<br>
+    · 각성: <b>+${S.awaken||0}</b> / 50${(S.awaken||0)>=12?` · 기록서 ${S.records||0}권 보유`:''}${awakenMaxed?' · 완료 🎉':''}<br>
     · 시련의 탑: 최고 <b>${S._tower||0} Wave</b> (일 1회 도전·소탕)<br><br>
     <b style="color:#f0cd82">■ 성장 로드맵 (실측 곡선 기준)</b><br>
     1) 대장간 '지금 제작 가능' 표시를 따라 장비를 채운다 (일반 전 장비 약 2시간)<br>
@@ -6332,8 +6335,8 @@ const MODALS = {
     · 골드: 골드던전(일 3회) · 마을회관 · 오프라인 정산(최대 8시간)<br>
     · 창고: 하위 등급은 일괄분해로 골드 회수 (환급 90% 상한)<br><br>
     <b style="color:#f0cd82">■ 장기 목표 (레전더리 완성 이후)</b><br>
-    · 강화 +11~20: 망치로 파괴를 막으며 도전 — 부위당 약 3.2억 골드 (전 부위 약 32억)<br>
-    · 심화 각성 13~30단계: 영웅 기록서(탑 상자·회색코인)로 계정 스탯 상승<br>
+    · 강화 +11~25: 망치로 파괴를 막으며 도전 — +20까지 부위당 약 3.2억 골드, +21~25 극한(성공 30%)<br>
+    · 심화 각성 13~50단계: 영웅 기록서(탑 상자·회색코인)로 계정 스탯 상승<br>
     · 시련의 탑 고층 도전 · 몬스터 도감 전종(20종) 완성</div>`;
     }},
 
@@ -6442,7 +6445,7 @@ const MODALS = {
           ['재료 합성',S.stats.synths||0,[10,100,500]],
           ['보스 도전',S.stats.bossChallenges||0,[10,50,200]],
           ['영웅 합성',S.stats.fuses||0,[1,4,8]],
-          ['각성 단계',S.awaken||0,[3,12,30]],
+          ['각성 단계',S.awaken||0,[3,12,50]],
           ['장비 분해',S.stats.salvages||0,[10,100,1000]],
           ['레전더리 제작',S.stats.legendCrafts||0,[1,5,9]],
         ].forEach(([t,v,ms])=>{
@@ -7620,8 +7623,15 @@ function itemDetail(e, heroId){ _itemDetailHeroId=heroId||null;
 function openEnhance(e){
   const b=subBody('강화');   // ★ v5.1 착용창 위 오버레이
   b.appendChild(el('div','center',`<div class="ei" style="font-size:52px">${equipImg(e.slot,2.5)}</div><div class="big" style="color:${GRADES[e.grade].color}">${GRADES[e.grade].name} ${e.slot} +${e.enh}</div>`));
-  const p = e.enh<5?0.95:e.enh<10?0.82:e.enh<15?0.63:0.44;
-  const cost = [50000,300000,1500000,6000000][Math.min(3,Math.floor(e.enh/5))];
+  /* ★ v5.236: +21~25 '극한의 벼림' 구간 추가(자체 설계) — 1600h 시뮬에서 800h 시점
+     위험강화 평균 +18.2·+20 도달 1부위로 상한 소진이 확인됐고, 그 뒤로 골드 18억+가
+     쌓이기만 했다(싱크 부족). 성공 30% · 골드 2천만 · 강화석 5개.
+     ★ 실패해도 파괴·하락이 없다(단계 유지) — 첫 설계(하락 유지)는 기대 진행이
+     0.30×1 − 0.35×1 = −0.05/시도로 수학적으로 불가능했다(1600h 시뮬 +25 도달 0부위로
+     실증). 극한 구간의 벽은 '확률'이 아니라 '비용' — 부위당 약 13회·2.7억 골드·강화석
+     67개의 장기 싱크다. 파괴 스릴은 실측 구간 +11~20에 그대로 남는다. */
+  const p = e.enh<5?0.95:e.enh<10?0.82:e.enh<15?0.63:e.enh<20?0.44:0.30;
+  const cost = [50000,300000,1500000,6000000,20000000][Math.min(4,Math.floor(e.enh/5))];
   const stoneCost = 1+Math.floor(e.enh/5);
   const prot = PROTECT_COST[e.grade] || PROTECT_COST.N;
   const protHave = ()=> (prot.cur==='hammerN' ? (S.hammerN||0) : (S.hammers||0));
@@ -7634,13 +7644,15 @@ function openEnhance(e){
   b.appendChild(cnt);
   b.appendChild(el('div','stat-line',`<span>성공 확률</span><span class="v" style="color:#5ecb6a">${Math.round(p*100)}%</span>`));
   b.appendChild(el('div','stat-line',`<span>강화 비용</span><span class="v" style="color:#f0cd82">골드 ${fmt(cost)} · 강화석 ${stoneCost}</span>`));
-  b.appendChild(el('div','warn','⚠ 벼림이 실패하면 단계가 내려가고, +11부터는 장비 자체가 부서질 수 있습니다'));
+  b.appendChild(el('div','warn', e.enh>=20
+    ? '⚗ 극한의 벼림 — 실패해도 단계가 유지됩니다 (파괴·하락 없음) · 대신 재화가 계속 소모됩니다'
+    : '⚠ 벼림이 실패하면 단계가 내려가고, +11부터는 장비 자체가 부서질 수 있습니다'));
   /* ★ v5.222: 위험 구간 경계 표시 + 기대 비용 — '+11부터 위험'이 문구뿐이었다.
      현재 단계가 어느 구간인지, 파괴 확률이 얼마인지, 보호 없이 도전 시 기대 손실이
      얼마인지를 한 줄로 보여준다. 정보가 위험 관리 결정을 가능하게 한다. */
-  const destrP = e.enh>=11 ? 50*(1-p) : 0;   // 파괴 확률 = 실패확률×50%
-  const zone = e.enh<5 ? '안전 (성공 95%)' : e.enh<10 ? '주의 (성공 82%)' : e.enh<15 ? '위험 (성공 63% · 파괴 '+(50*(1-p)).toFixed(1)+'%)' : '고위험 (성공 44% · 파괴 '+(50*(1-p)).toFixed(1)+'%)';
-  const zColor = e.enh<10 ? 'var(--ok)' : e.enh<15 ? '#f0a24a' : 'var(--bad)';
+  const destrP = e.enh>=11 && e.enh<20 ? 50*(1-p) : 0;   // 파괴 확률 = 실패확률×50% (극한 +21~25은 파괴 없음)
+  const zone = e.enh<5 ? '안전 (성공 95%)' : e.enh<10 ? '주의 (성공 82%)' : e.enh<15 ? '위험 (성공 63% · 파괴 '+(50*(1-p)).toFixed(1)+'%)' : e.enh<20 ? '고위험 (성공 44% · 파괴 '+(50*(1-p)).toFixed(1)+'%)' : '극한 (성공 30% · 실패해도 유지)';
+  const zColor = e.enh<10 ? 'var(--ok)' : e.enh<15 ? '#f0a24a' : e.enh<20 ? 'var(--bad)' : '#c85a5a';
   b.appendChild(el('div','stat-line',`<span>현재 구간</span><span class="v" style="color:${zColor}">${zone}</span>`));
   if(destrP>0){
     const expLoss=Math.round(cost*2 + (CRAFT[e.grade]||CRAFT.N).gold*0.9);   // 대략: 재시도 비용 + 장비 가치 90%
@@ -7656,11 +7668,12 @@ function openEnhance(e){
   const wt=el('button','btn sm','OFF'); wt.onclick=()=>{ if((S.wards||0)<=0){ toast('하락 방지권이 없습니다.'); return; }
     useWard=!useWard; wt.textContent=useWard?'ON':'OFF'; wt.classList.toggle('gold',useWard); };
   wr.appendChild(wt); b.appendChild(wr);
-  const btn=el('button','btn gold wide','강화'); btn.style.marginTop='8px'; if(S.gold<cost||S.stones<stoneCost||e.enh>=20) btn.disabled=true;
+  const btn=el('button','btn gold wide','강화'); btn.style.marginTop='8px'; if(S.gold<cost||S.stones<stoneCost||e.enh>=25) btn.disabled=true;
   btn.onclick=()=>{ if(S.gold<cost||S.stones<stoneCost){toast('재화 부족');return;} S.gold-=cost; S.stones-=stoneCost;
     if(Math.random()<p){ e.enh++; sfx('craft'); toast(`강화 성공 +${e.enh}`); sysLog(`장비 강화 <span class="rar">+${e.enh}</span> 성공`); }
     else { sfx('fail');
-      if(e.enh>=11 && Math.random()<0.5){
+      if(e.enh>=20){ toast('극한의 벼림 실패 — 단계 유지 (재화만 소모)'); }   // v5.236: +21~25은 파괴·하락 없음
+      else if(e.enh>=11 && Math.random()<0.5){
         if(useHammer && protHave()>=prot.n){
           if(prot.cur==='hammerN') S.hammerN-=prot.n; else S.hammers-=prot.n;
           toast(`강화 실패 · ${prot.label} ${prot.n} 소모로 파괴 방지`);

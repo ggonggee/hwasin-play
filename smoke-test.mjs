@@ -1018,6 +1018,85 @@ step('공략 진행 카드 — 장기 목표 실시간 수치 반영', ()=>{
   if(miss.length) throw new Error('공략 진행 카드 누락: '+miss.join(', '));
   if(!/다음: <b[^>]*>[가-힣]+ \d세트/.test(html)) throw new Error('다음 세트 목표 라인 없음');
 });
+
+/* ★ v5.236: Node2 스텁은 innerHTML/textContent 가 setter 전용 백텍스트라 appendChild 로
+   쌓은 트리는 innerHTML 이 비어 있다. appendChild 방식 모달(awaken·openEnhance 서브화면)의
+   렌더 검증은 자식 재귀로 _html/_text 를 직접 수집해야 한다. */
+function collectText(n){
+  if(!n||typeof n!=='object') return '';
+  let out=(n._html||'')+(n._text||'');
+  (n.children||[]).forEach(c=>{ out+=collectText(c); });
+  return out;
+}
+function findBtnByText(root, label, last){
+  /* el() 헬퍼는 세 번째 인자를 innerHTML 로 넣으므로(game.js 1664행) 순수 텍스트 버튼도
+     _text 가 아니라 _html 에 들어 있다 — 둘 다 본다. last=true 면 재렌더 시 트리에 남은
+     옛 렌더의 버튼을 건너뛰고 최신 것을 반환한다(subBody closeSub 가 스텁에선 느슨하다). */
+  let found=null;
+  const rec=n=>{
+    if(!n||typeof n!=='object') return;
+    const txt=String(n._text||n._html||'').trim();
+    if(n.tagName==='BUTTON' && txt===label) found=n;
+    (n.children||[]).forEach(rec);
+  };
+  rec(root);
+  return found;
+}
+
+/* ★ v5.236 회귀: 심화 각성 상한 30→50 연장 — 30은 더 이상 완료가 아니고, 비용 공식은
+   그대로(31단계=기록서 10권). 연장 자체는 v5.193(20→30)과 같은 패턴이라 모달 렌더로 잡는다. */
+step('심화 각성 50단계 연장 — 30은 완료가 아니다', ()=>{
+  const S=ev('S'), M=ev('MODALS');
+  const keep=S.awaken;
+  const probe=lv=>{
+    S.awaken=lv;
+    const b=new Node2('div'); M.awaken.render(b);
+    const h=collectText(b);
+    return { maxed:h.includes('최대 단계 도달'),
+             rec:(h.match(/영웅 기록서 (\d+)권이 소모/)||[])[1],
+             cap50:h.includes('상한 50단계') };
+  };
+  const at30=probe(30), at31=probe(31), at50=probe(50);
+  S.awaken=keep;
+  const errs=[];
+  if(at30.maxed) errs.push('30에서 완료 표시(연장 미반영)');
+  if(at31.maxed) errs.push('31에서 완료 표시');
+  if(at31.rec!=='10') errs.push('31단계 기록서 '+at31.rec+'권(기대 10권)');
+  if(!at50.maxed||!at50.cap50) errs.push('50 완료 표시/상한 문구 없음');
+  if(errs.length) throw new Error(errs.join(' | '));
+});
+
+/* ★ v5.236 회귀: 극한의 벼림 +21~25 — 성공 30% 표기 · 실패 시 단계 유지(파괴·하락 없음,
+   재화만 소모) · +25 상한. 실패 분기 강제는 vm 안 Math.random 후킹(D5 패턴)으로. */
+step('극한의 벼림 +21~25 — 실패해도 유지, +25 상한', ()=>{
+  const S=ev('S');
+  const hid=ev('party')()[0].hero_id;
+  const keep={eq:JSON.parse(JSON.stringify(S.equips)), gold:S.gold, stones:S.stones};
+  const gear={grade:'L',slot:'단검',enh:20,equipped:true,heroId:hid};
+  S.equips=[gear]; S.gold=1e9; S.stones=100;
+  ev('openEnhance')(gear);
+  const body=ev("$('#modal-root')") || ev("$('#modalBody')");
+  const html=collectText(body);
+  const btn=findBtnByText(body,'강화');
+  const errs=[];
+  if(!html.includes('극한 (성공 30% · 실패해도 유지)')) errs.push('성공 30%·유지 문구 없음');
+  if(!/2,?000만/.test(html)) errs.push('극한 비용 2,000만 표기 없음');
+  if(!btn) errs.push('강화 버튼을 못 찾음');
+  if(btn&&btn.disabled) errs.push('+20에서 버튼 disabled');
+  if(btn&&!btn.disabled){
+    ev("globalThis.__t236=Math.random; Math.random=function(){return 0.999;};");
+    try{ btn.click(); }finally{ ev("Math.random=globalThis.__t236; delete globalThis.__t236;"); }
+    if(gear.enh!==20) errs.push('실패 후 enh '+gear.enh+'(기대 20 유지)');
+    if(!S.equips.includes(gear)) errs.push('실패 후 장비 소멸(파괴되면 안 됨)');
+    if(S.gold!==1e9-20000000) errs.push('골드 '+S.gold+'(기대 1e9-2천만)');
+    if(S.stones!==95) errs.push('강화석 '+S.stones+'(기대 95)');
+  }
+  gear.enh=25; ev('openEnhance')(gear);
+  const btn2=findBtnByText(ev("$('#modal-root')") || ev("$('#modalBody')"),'강화');
+  if(btn2&&!btn2.disabled) errs.push('+25에서 버튼 활성(상한 봉쇄 실패)');
+  S.equips=keep.eq; S.gold=keep.gold; S.stones=keep.stones;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 step('save→JSON 직렬화 왕복 무손실', ()=>{
   /* 바로 위 검사가 모달 클릭을 다시 전수 실행하면서 [데이터 초기화]·[가져오기]를 또 눌러
      저장을 재봉인한다(사유는 [7] 끝 주석 참조). 이 검사는 save() 가 실제로 써야 성립하므로

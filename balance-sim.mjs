@@ -309,21 +309,23 @@ function riskEnhanceStep(){
   /* 제작 업그레이드가 남아 있으면 장비부터 — 강화는 그 다음(합리적 플레이어 순서). */
   if(upgradeCandidates().some(u=>u.recOK)) return {ups:0,ev:''};
   const tgt=worn.slice().sort((a,b)=>(a.enh||0)-(b.enh||0))[0];
-  if((tgt.enh||0)>=20) return {ups:0,ev:''};
+  /* ★ v5.236: +21~25 극한 구간(성공 30% · 골드 2천만 · 상한 +25) 동기화 —
+     openEnhance와 같은 공식. +20 소진 이후 골드 싱크가 사라지던 800h+ 공백 대응. */
+  if((tgt.enh||0)>=25) return {ups:0,ev:''};
   /* ★ L등급 장비에만 도전 — 하위 등급(N/E) +11+은 L 전환 시 같은 부위가 파괴되는
      매몰비용이다(실측: 72h에 E장비 +11~13 → L 교체로 전부 소멸). 합리적 플레이어는
      최상위 등급에만 위험 투자를 한다. */
   if(tgt.grade!=='L') return {ups:0,ev:''};
   let ups=0, evDesc='';
   let guard=0;
-  while((tgt.enh||0)<20 && guard++<40 && S.equips.includes(tgt)){
+  while((tgt.enh||0)<25 && guard++<40 && S.equips.includes(tgt)){
     const enh=tgt.enh, grade=tgt.grade;
-    const p = enh<5?0.95:enh<10?0.82:enh<15?0.63:0.44;
-    const cost=[50000,300000,1500000,6000000][Math.min(3,Math.floor(enh/5))];
+    const p = enh<5?0.95:enh<10?0.82:enh<15?0.63:enh<20?0.44:0.30;
+    const cost=[50000,300000,1500000,6000000,20000000][Math.min(4,Math.floor(enh/5))];
     const stoneCost=1+Math.floor(enh/5);
     const prot=PC[grade]||PC.N;
     const have = prot.cur==='hammerN'?(S.hammerN||0):(S.hammers||0);
-    const risky = enh>=11;                            // 파괴 가능 구간 (openEnhance 실측)
+    const risky = enh>=11 && enh<20;                  // 파괴 가능 구간 (openEnhance 실측). +21~25 극한은 실패해도 유지(v5.236)
     if(risky && have<prot.n){
       const price = prot.cur==='hammerN'?15000000:40000000;   // 상점 X10 묶음 정본가
       if(S.gold < 16000000+price+cost) break;         // 소환서 예산(16M)은 항상 확보
@@ -333,7 +335,7 @@ function riskEnhanceStep(){
     if((S.stones||0)<stoneCost) break;
     S.gold-=cost; S.stones-=stoneCost; riskTally.tries++;
     if(Math.random()<p){ tgt.enh++; ups++; riskTally.success++;
-      if(tgt.enh===20) riskTally.max20++;
+      if(tgt.enh===25) riskTally.max20++;
     }
     else if(risky && Math.random()<0.5){
       const have2 = prot.cur==='hammerN'?(S.hammerN||0):(S.hammers||0);
@@ -342,7 +344,8 @@ function riskEnhanceStep(){
         riskTally.saved++;                            // 보호 소모 — 단계 유지
       } else { S.equips=S.equips.filter(x=>x!==tgt); riskTally.destroyed++; evDesc='파괴'; break; }
     }
-    else { tgt.enh=Math.max(0,tgt.enh-1); riskTally.drop++; }
+    else if(risky){ tgt.enh=Math.max(0,tgt.enh-1); riskTally.drop++; }
+    /* 극한(+21~25) 실패 — 단계 유지(재화만 소모) */
   }
   return {ups,ev:evDesc};
 }
@@ -385,7 +388,7 @@ function awakenStep(){
     Object.keys(S.shards).forEach(k=>S.shards[k]=Math.max(0,(S.shards[k]||0)-cost/5));
     S.awaken++; steps++;
   }
-  while(S.awaken>=12 && S.awaken<30 && steps<40){   // 심화 — 기록서 축
+  while(S.awaken>=12 && S.awaken<50 && steps<40){   // 심화 — 기록서 축 (v5.236 상한 50)
     const cost=1+Math.floor((S.awaken-12)/2);
     if((S.records||0)<cost) break;
     S.records-=cost; S.awaken++; steps++;
@@ -452,7 +455,7 @@ log(`\n[밸런스 시뮬] 시드 42 · 최대 ${MAX_HOURS}시뮬시간 · 창 ${
 let lastCP=myCP(), lastEventT=0, windows=0;
 let lastSetm=1;                    // ★ v5.228 세트 계측 — 창 사이 배율 변화 감지용
 const gradeReached={};
-while(simSec < MAX_HOURS*3600 && windows<1600){
+while(simSec < MAX_HOURS*3600 && windows<3200){
   // ① 사냥터 선택(합리적 플레이)
   const idx=pickHuntIdx();
   ev('S').huntTier=idx; ev('Battle').setHunt();
@@ -573,7 +576,7 @@ log(`\n총 시뮬: ${(simSec/3600).toFixed(1)}h · 창 ${windows}회 · 최종 C
   log(`[진단] 강화석 보유: ${Math.floor(S.stones||0)} · 리더 평균 강화: ${(worn.reduce((a,e)=>a+(e.enh||0),0)/(worn.length||1)).toFixed(1)}`);
   /* ★ v5.229: 위험 강화 축 집계 — 시도/성공/하락/보호/파괴와 망치 구매 골드.
      부위당 기대 비용은 hammerGold/파괴 재제작까지 합쳐 실측된다(종전 몬테카를로 479M 갱신). */
-  log(`[진단] 위험강화: 시도 ${riskTally.tries} · 성공 ${riskTally.success} · 하락 ${riskTally.drop} · 보호 ${riskTally.saved} · 파괴 ${riskTally.destroyed} · +20도달 ${riskTally.max20}부위 · 망치구매 ${(riskTally.hammerGold/1e6).toFixed(0)}M`);
+  log(`[진단] 위험강화: 시도 ${riskTally.tries} · 성공 ${riskTally.success} · 하락 ${riskTally.drop} · 보호 ${riskTally.saved} · 파괴 ${riskTally.destroyed} · +25도달 ${riskTally.max20}부위 · 망치구매 ${(riskTally.hammerGold/1e6).toFixed(0)}M`);
   log(`[진단] 보유 영웅별 CP:`, ev('ownedHeroes')().map(h=>`${h.name.slice(0,5)}(${h.grade})=${ev('heroPower')(h)}`).join(' · '));
   log('[진단] 골드 보유:', Math.floor(S.gold));
   // E 아이템 첫 후보 왜 안 되는지 — recipeOk/gold 각각 출력
