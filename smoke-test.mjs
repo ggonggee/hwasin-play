@@ -1457,6 +1457,17 @@ step('칭호 개선 배지 — titleUpgradeable 판정', ()=>{
   if(errs.length) throw new Error(errs.join(' | '));
 });
 
+/* ★ v5.272 회귀: 의뢰 스냅샷 조기 확정 — enterHome 이 weeklyState/monthlyState 를
+   호출하는 소스 정합(호출하지 않으면 리셋 후 첫 오픈까지 진행이 새지 않는 불리). */
+step('의뢰 스냅샷 조기 확정 — enterHome 정합', ()=>{
+  const src=fs.readFileSync('game.js','utf8');
+  const i=src.indexOf("sysLog('결정의 시대에 오신 것을 환영합니다, 군주여.');");
+  if(i<0) throw new Error('enterHome 환영 로그 미발견(앵커 드리프트)');
+  const win=src.slice(i, i+900);
+  if(!win.includes('weeklyState();')||!win.includes('monthlyState();'))
+    throw new Error('enterHome 이 weeklyState/monthlyState 호출 누락');
+});
+
 /* ★ v5.236 회귀: 극한의 벼림 +21~25 — 성공 30% 표기 · 실패 시 단계 유지(파괴·하락 없음,
    재화만 소모) · +25 상한. 실패 분기 강제는 vm 안 Math.random 후킹(D5 패턴)으로. */
 step('극한의 벼림 +21~25 — 실패해도 유지, +25 상한', ()=>{
