@@ -23,6 +23,11 @@ import { fileURLToPath } from 'node:url';
 const D = path.dirname(fileURLToPath(import.meta.url)) + '/';
 const js = fs.readFileSync(D+'game.js','utf8');
 const MAX_HOURS = Number(process.argv[2]||240);
+/* ★ v5.274: 캐주얼 시나리오 — 세 번째 인자 'casual'. 하루(48창) 중 첫 16창(8시간)만
+   접속, 나머지 32창(16시간)은 오프라인(offlinePending 적립, 접속 재개 창에서 8h 상한
+   정산). 실유저 '하루 8시간 접속' 근사 — 무한 축이 캐주얼에게도 작동하는지 검증. */
+const CASUAL = process.argv[3]==='casual';
+const ACTIVE_WINDOWS_PER_DAY = 16;
 
 /* ---- 최소 DOM 스텁 (smoke-test 의 것에서 전투 구동에 필요한 만큼만) ---- */
 class CL{ constructor(){this.s=new Set();}
@@ -573,6 +578,13 @@ while(simSec < MAX_HOURS*3600 && windows<51200){   // ★ v5.257: 창 상한 512
   // 시뮬 시계를 현재 창 시각으로 — 게임의 모든 Date.now()/new Date()가 이 값을 본다(v5.242)
   SIM_NOW=simSec*1000;
 
+  // ② 전투 창 — 캐주얼: 하루 16창만 접속. 비접속 창은 오프라인 적립 후 스킵.
+  if(CASUAL && (windows % 48) >= ACTIVE_WINDOWS_PER_DAY){
+    const Ss=ev('S');
+    Ss.offlinePending=(Ss.offlinePending||0)+Math.floor(ev('OFFLINE_GPM')/60*WINDOW);
+    simSec+=WINDOW; windows++;
+    continue;
+  }
   // ② 전투 창
   const goldBefore=ev('S').gold, killsBefore=ev('S').stats.kills;
   battleWindow(WINDOW);
@@ -581,6 +593,14 @@ while(simSec < MAX_HOURS*3600 && windows<51200){   // ★ v5.257: 창 상한 512
   simSec+=WINDOW; windows++;
 
   // ③ 일일 콘텐츠·소환서 구매 → 합성·소환 (의도 루프)
+  /* 캐주얼: 접속 재개(하루 첫 활성 창)에서 오프라인 정산 수령 — settle 의 addGold 경로.
+     8h 상한 적용(16h치 적립돼도 8h분만 — 정본 computeOffline 규칙). */
+  if(CASUAL && (windows % 48)===1 && (windows>1)){
+    const Sc=ev('S');
+    const cap=Math.floor(ev('OFFLINE_GPM')/60*8*3600);
+    const give=Math.min(Sc.offlinePending||0, cap);
+    if(give>0){ ev('addGold')(give); Sc.offlinePending=0; }
+  }
   const dailyActs=dailyStep();   // ★ v5.245: 일일 루프(탑·던전)도 액션 이벤트로
   const buffActs=buffStep();         // ★ v5.247: 결정 가호(골드 버프) 구매
   const awakenUps=awakenStep();
