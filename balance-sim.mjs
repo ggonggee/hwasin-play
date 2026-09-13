@@ -310,6 +310,16 @@ function dailyStep(){
      소환서가 아니라 탑 상자로 가므로 12단계까지만. */
   while(S.gold>=16000000 && (ev('ownedHeroes')().length<9 || (S.awaken||0)<12)){ S.gold-=15000000; S.tickHero+=10; }
 
+  /* ★ v5.249: 주간 의뢰 수령 정책 — weeklyState()가 새 주(ISO 키)면 스냅샷·수령을
+     리셋한다(FakeDate라 시뮬 시간 기준 동작). 진행 충족 의뢰를 일 1회 체크해 수령. */
+  {
+    const w=ev('weeklyState')();
+    ev('WEEKLY_QUESTS').forEach(q=>{
+      if(w.claimed[q.id]) return;
+      const st=ev('S').stats||{}, now=st[q.stat]||0, base=(w.base&&w.base[q.stat])||0;
+      if(now-base>=q.goal){ w.claimed[q.id]=true; q.give(); acts+='주간의뢴 '; }
+    });
+  }
   return acts.trim();   // ★ v5.245: 일일 콘텐츠 수행 요약(액션 집계용)
 }
 /* ── +11~20 위험 강화의 엔드게임 기대값 — 몬테카를로(2026-09-12) → 시뮬 내 측정(v5.229) ──

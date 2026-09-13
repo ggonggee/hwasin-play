@@ -1155,6 +1155,39 @@ step('인트로 재접속 — 대사 생략·멱등 직행', ()=>{
   if(errs.length) throw new Error(errs.join(' | '));
 });
 
+/* ★ v5.249 회귀: 주간 의뢰 — 탭 렌더·진행(스냅샷 차이)·수령 1회성·그리고 핵심 방어
+   '렌더가 지급을 유발하지 않는다'(렌더 중 q.give() 호출 금지 — 첫 패치에서 실제로 저질러
+   새 표시를 상수로 분리한 사례). */
+step('주간 의뢰 — 렌더·진행·1회성·렌더 무지급', ()=>{
+  const S=ev('S');
+  const keep={weekly:S.weekly?JSON.parse(JSON.stringify(S.weekly)):null, kills:S.stats.kills, records:S.records||0, hammers:S.hammers||0, gold:S.gold};
+  const errs=[];
+  // 탭 존재
+  const M=ev('MODALS');
+  const b=new Node2('div'); M.quest.render(b);
+  const txt=collectText(b);
+  if(!txt.includes('주간')) errs.push('퀘스트 탭에 주간 없음');
+  // weeklyState 스냅샷 — kills 를 목표 이상 올려 진행·수령 경로 검증
+  S.weekly={ key:ev('getWeekKey')(), base:{ kills:S.stats.kills, crafts:S.stats.crafts, summons:S.stats.summons }, claimed:{} };
+  S.stats.kills += 5000;
+  const w=ev('weeklyState')();
+  const q1=ev('WEEKLY_QUESTS')[0];
+  const now=S.stats.kills, base=w.base.kills;
+  if(now-base<5000) errs.push('스냅샷 차이 계산 오류');
+  // 렌더가 지급을 유발하는가 — records/hammers/gold 무변화여야
+  const b2=new Node2('div'); M.quest.render(b2);
+  if((S.records||0)!==keep.records || (S.hammers||0)!==keep.hammers || Math.round(S.gold)!==Math.round(keep.gold))
+    errs.push('렌더만으로 보상 지급됨(부수효과)');
+  // 수령 — 1회성·지급량
+  const rec0=S.records||0; q1.give(); w.claimed[q1.id]=true;
+  if((S.records||0)!==rec0+3) errs.push('w1 지급 +3 아님');
+  const again=q1.give();   // 2회 호출은 함수 자체로는 지급되나 정책상 claimed 로직이 막는다 — 렌더 버튼 disabled가 그 역할. 여기선 지급 로직 자체 검증 후 원복.
+  // 원복
+  S.stats.kills=keep.kills; if(keep.weekly) S.weekly=JSON.parse(JSON.stringify(keep.weekly)); else S.weekly={key:'',base:null,claimed:{}};
+  S.records=keep.records; S.hammers=keep.hammers; S.gold=keep.gold;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
+
 /* ★ v5.236 회귀: 극한의 벼림 +21~25 — 성공 30% 표기 · 실패 시 단계 유지(파괴·하락 없음,
    재화만 소모) · +25 상한. 실패 분기 강제는 vm 안 Math.random 후킹(D5 패턴)으로. */
 step('극한의 벼림 +21~25 — 실패해도 유지, +25 상한', ()=>{

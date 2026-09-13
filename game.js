@@ -1413,6 +1413,10 @@ function freshState(){
     /* ★ v5.241: '각성의 결정' 단계 — 심화 각성 50 완료 후 해금되는 무한 축.
        플레이 진행도 자체라 freshState 소유(마이그레이션 판정 플래그 아님, 3-3 무관). */
     awakenCrystal:0,
+    /* ★ v5.249: 주간 의뢰 진행 — 월요일 리셋(길드 랭킹과 같은 기준). key=ISO 주,
+       base=주 시작 스냅샷(stats), claimed=의뢰별 1회성 수령. 진행도 상태라 freshState 소유
+       (마이그레이션 판정 플래그 아님, 3-3 무관). */
+    weekly:{ key:'', base:null, claimed:{} },
     /* ★ B9/G-120 bossChallenges·raids · ★ F2 칭호 조건 카운터 신규
        craftFail/craftWin 은 '현재 연속(스트릭)', ...Best 는 '최고 스트릭'이다.
        칭호는 한 번 달성하면 유지돼야 하므로 have() 는 Best 만 본다. */
@@ -4508,6 +4512,29 @@ function subBody(title, opts){
      3) 덮어쓰기 전에 지금 세이브를 백업 키로 복사한다. 손상 세이브 처리와 같은 방식이다.
      4) 그 다음에 쓰고 새로고침 — load()+mergeDefaults() 를 정상 경로로 다시 태운다.
         여기서 S 를 직접 갈아끼우지 않는 이유는, 화면·전투가 옛 S 를 참조한 채로 남기 때문이다. */
+/* ★ v5.249: 주간 의뢰(자체 설계) — 일일 루프에 주간 리듬을 얹는다.
+   · 리셋: 매주 월요일(길드 랭킹 정산과 같은 기준) — getWeekKey 로 ISO 주를 잡는다.
+   · 진행: 주 시작 스냅샷(weekly.base)과 현재 stats 의 차이. 새 주면 스냅샷·수령 리셋.
+   · 의뢰 3종(주간 누적): 몬스터 5,000처치(일일 ~700킬 기준 꾸준히 사냥한 주) →
+     영웅 기록서 X3 · 장비 15회 제작(후반엔 이것이 주간 목표가 됨) → 전설 망치 X10 ·
+     영웅 소환 30회 → 골드 2,000만. 보상은 엔드게임 재화(결정 축 연결)로 준다.
+   · 수령은 의뢰별 1회성(weekly.claimed) — 재접속해도 유지. */
+function getWeekKey(){ const d=new Date(); const t=new Date(d.getFullYear(),d.getMonth(),d.getDate());
+  const day=(t.getDay()+6)%7; t.setDate(t.getDate()-day+3); const firstThu=new Date(t.getFullYear(),0,4);
+  const fday=(firstThu.getDay()+6)%7; firstThu.setDate(firstThu.getDate()-fday+3);
+  const wk=1+Math.round((t-firstThu)/(7*86400000)); return t.getFullYear()+'-W'+wk; }
+function weeklyState(){
+  if(!S.weekly || typeof S.weekly!=='object') S.weekly={ key:'', base:null, claimed:{} };
+  const k=getWeekKey();
+  if(S.weekly.key!==k){ S.weekly.key=k; S.weekly.base={ kills:S.stats.kills||0, crafts:S.stats.crafts||0, summons:S.stats.summons||0 }; S.weekly.claimed={}; save(); }
+  return S.weekly;
+}
+const WEEKLY_REWARD_TXT={ w1:'영웅 기록서 X3', w2:'전설 망치 X10', w3:'골드 2,000만' };
+const WEEKLY_QUESTS=[
+  { id:'w1', icon:'⚔️', txt:'몬스터 5,000마리 처치', stat:'kills',  goal:5000, give:()=>{ S.records=(S.records||0)+3; return '영웅 기록서 X3'; } },
+  { id:'w2', icon:'⚒️', txt:'장비 15회 제작',       stat:'crafts', goal:15,   give:()=>{ S.hammers=(S.hammers||0)+10; return '전설 망치 X10'; } },
+  { id:'w3', icon:'📜', txt:'영웅 소환 30회',       stat:'summons',goal:30,   give:()=>{ addGold(20000000,true); return '골드 2,000만'; } },
+];
 function saveSnapshot(){
   try{ return localStorage.getItem(SAVE_KEY) || JSON.stringify(S); }
   catch(e){ return JSON.stringify(S); }
@@ -6487,7 +6514,7 @@ const MODALS = {
   /* ---------- 간이/정보 모달 ---------- */
   /* ★ B9/G-122: 3탭 [임무목록][일일][업적] — 별도 quest2 모달을 '업적' 탭으로 흡수(모달 폐지). */
   quest:{ title:'퀘스트', render(b){
-    let tab='임무목록'; const TB=['임무목록','일일','업적'];
+    let tab='임무목록'; const TB=['임무목록','일일','주간','업적'];   // ★ v5.249: 주간 의뢰 탭
     const tabs=el('div','tabrow'); TB.forEach(t=>{ const x=el('div','tab'+(t===tab?' on':''),t); x.onclick=()=>{ tab=t; render(); [...tabs.children].forEach((c,i)=>c.classList.toggle('on',TB[i]===tab)); }; tabs.appendChild(x); });
     b.appendChild(tabs); const body=el('div'); b.appendChild(body);
     function render(){ body.innerHTML='';
@@ -6525,6 +6552,28 @@ const MODALS = {
             row.appendChild(btn);
           }
           body.appendChild(row); });
+      } else if(tab==='주간'){
+        /* ★ v5.249: 주간 의뢰 — 매주 월요일 리셋(weeklyState가 새 주면 스냅샷·수령 초기화).
+           진행 = 현재 stats − 주 시작 스냅샷. 수령은 의뢰별 1회성.
+           ⚠ 렌더에서 q.give() 를 절대 부르지 마라 — 지급 부수효과가 있다. 표시는
+           WEEKLY_REWARD_TXT 로만 한다. */
+        const w=weeklyState();
+        body.appendChild(el('div','datehead', '주간 의뢰 · ' + w.key));
+        body.appendChild(el('div','small mut','매주 월요일 리셋 · 진행은 실제 행동으로 자동 반영됩니다'));
+        WEEKLY_QUESTS.forEach(q=>{
+          const now=S.stats[q.stat]||0, base=(w.base&&w.base[q.stat])||0;
+          const prog=Math.min(q.goal, Math.max(0, now-base));
+          const done=prog>=q.goal, claimed=!!w.claimed[q.id];
+          const row=el('div','pack'); row.style.opacity=claimed?'.5':'1';
+          row.innerHTML=`<div class="pic">${q.icon}</div><div class="info"><div class="t">${q.txt}</div><div class="d">진행 ${prog}/${q.goal} · 보상 ${claimed?'수령 완료 ✓':WEEKLY_REWARD_TXT[q.id]}</div></div>`;
+          const btn=el('button','btn sm'+(done&&!claimed?' gold':''), claimed?'완료':'받기');
+          if(!done||claimed) btn.disabled=true;
+          btn.onclick=()=>{ if(claimed||prog<q.goal) return;
+            w.claimed[q.id]=true; const what=q.give();
+            toast(`주간 의뢰 완료 보상 — ${what}`); sysLog(`주간 의뢰 완료(${q.txt}) — ${what}`);
+            save(); render(); refreshHUD(); };
+          row.appendChild(btn); body.appendChild(row);
+        });
       } else {
         /* ★ B9/G-122 → v5.172: 업적 탭 — 종전엔 '(데모)' 라벨의 고정 목표 6줄 진행바였다
            (100처치/10제작… 단일 목표, 100% 찍으면 그대로 죽는 화면).
