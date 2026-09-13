@@ -697,7 +697,18 @@ log('\n[등급 도달] ', Object.entries(gradeReached).map(([g,h])=>`${g}:${h}h`
   const bins=[[0,50],[50,200],[200,600],[600,3200],[3200,12800],[12800,Infinity]];   // ★ v5.261: 25600h 측정용
   const per=()=> bins.map(([a,b])=>{ const n=funTimes.filter(t=>t>=a&&t<b).length;
       const h=Math.max(0,Math.min(b,totalH)-a); return h>0? a+'~'+(b===Infinity?'+':b)+'h '+n+'회('+(n/h).toFixed(2)+'/h='+(n/h*24).toFixed(1)+'/일)':null; }).filter(Boolean).join(' · ');
-log('[재미 지표] 액션 이벤트 '+funTimes.length+'회 · 평균 '+(funTimes.length/Math.max(1,totalH)).toFixed(2)+'회/h(='+((funTimes.length/Math.max(1,totalH))*24).toFixed(1)+'/일) · 최장 공백 '+(funGapMax/3600).toFixed(1)+'h(@'+funGapAt+'h) — /h는 24h 연속 가정, 체감은 /일(접속 세션당 몰아하기) 기준으로 볼 것');
+/* ★ v5.276: 세그먼트별 분모 명시 — 캐주얼은 비접속 16h가 시계에 포함돼 /h·/일이
+   구조적으로 낮다(4.1/일 오탐 사례). 캐주얼 모드에선 '/접속일'(접속 시간 8h 기준)을
+   병기해 감시 규칙(5/일) 판정을 세그먼트에 맞게 적용한다. */
+{
+  const perDay=(funTimes.length/Math.max(1,totalH))*24;
+  const activeH=totalH*(ACTIVE_WINDOWS_PER_DAY/48);   // 총 접속 시간(h)
+  const perActiveDay=CASUAL ? (funTimes.length/Math.max(1,activeH)*8) : null;   // 8h 접속일 환산
+  const segNote = CASUAL
+    ? ' · 캐주얼: '+perActiveDay.toFixed(1)+'/접속일(접속 8h 기준 — 감시 규칙은 이 값으로 판정)'
+    : '';
+  log('[재미 지표] 액션 이벤트 '+funTimes.length+'회 · 평균 '+(funTimes.length/Math.max(1,totalH)).toFixed(2)+'회/h(='+perDay.toFixed(1)+'/일)'+segNote+' · 최장 공백 '+(funGapMax/3600).toFixed(1)+'h(@'+funGapAt+'h) — /h는 24h 연속 가정, 체감은 세그먼트별 분모 기준');
+}
   log('[재미 지표] 구간 밀도 — '+per());
 }const GORDER=['N','R','E','L'];
 let walls=[];
