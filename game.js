@@ -7668,7 +7668,12 @@ function openEnhance(e){
   const wt=el('button','btn sm','OFF'); wt.onclick=()=>{ if((S.wards||0)<=0){ toast('하락 방지권이 없습니다.'); return; }
     useWard=!useWard; wt.textContent=useWard?'ON':'OFF'; wt.classList.toggle('gold',useWard); };
   wr.appendChild(wt); b.appendChild(wr);
-  const btn=el('button','btn gold wide','강화'); btn.style.marginTop='8px'; if(S.gold<cost||S.stones<stoneCost||e.enh>=25) btn.disabled=true;
+  /* ★ v5.237: 실행 버튼 sticky — 위험 구간 안내(v5.222)·극한 안내(v5.236)가 쌓이며 오버레이가
+     887px로 길어져 .sub-body(632px)를 넘었다. 실물 확인(2026-09-13): '+20 강화' 버튼이 첫
+     화면에 안 보이고 255px 스크롤해야 누를 수 있었다 — 극한 강화를 하러 온 플레이어가
+     정작 실행 버튼을 못 찾는 구조. sticky bottom으로 항상 보이게 고정한다. */
+  const btn=el('button','btn gold wide','강화'); btn.style.marginTop='8px'; btn.style.position='sticky'; btn.style.bottom='0'; btn.style.zIndex='2';
+  if(S.gold<cost||S.stones<stoneCost||e.enh>=25) btn.disabled=true;
   btn.onclick=()=>{ if(S.gold<cost||S.stones<stoneCost){toast('재화 부족');return;} S.gold-=cost; S.stones-=stoneCost;
     if(Math.random()<p){ e.enh++; sfx('craft'); toast(`강화 성공 +${e.enh}`); sysLog(`장비 강화 <span class="rar">+${e.enh}</span> 성공`); }
     else { sfx('fail');
