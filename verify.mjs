@@ -38,6 +38,34 @@ const fail = (m)=>FAIL.push(m);
   }
   const dup=Object.entries(owners).filter(([k,v])=>v.size>1);
   if(dup.length) fail('버프 키 이중 소유: '+dup.map(([k,v])=>k+' ← '+[...v].join(',')).join(' | '));
+/* ★ v5.268: 상품 give 상태 키 존재 검사 — give 바디가 S.<키>= / S.<키>+= 로
+   세팅하는 키가 freshState 본문에 선언돼 있는지 확인(오타 → 조용한 미지급 방어).
+   freshState 블록은 중첩 객체를 세는 스캐너로 통째로 추출한다 — 첫 '\n}'로 자르면
+   중첩 객체에서 잘려 정상 키까지 오탐한다(자기 검증에서 발견). */
+{
+  const freshBlock=(()=>{
+    const fi=js.indexOf('function freshState()');
+    let d=0,k=js.indexOf('{',fi),out='';
+    for(;k<js.length;k++){ const c=js[k];
+      if(c==='{')d++; else if(c==='}'){ d--; if(d===0) break; } }
+    out=js.slice(fi,k);
+    return out;
+  })();
+  const arrays2=['GOLDSHOP','BUFFSHOP','RUBYPKG','STARTERPKG','ACCOUNT_PACKS'];
+  const bad=[];
+  for(const aname of arrays2){
+    const ai=js.indexOf('const '+aname+' =');
+    if(ai<0) continue;
+    const aj=js.indexOf('];',ai);
+    const body=js.slice(ai,aj>0?aj:ai+2000);
+    for(const m of body.matchAll(/S\.(\w+)\s*(?:\+=|=(?!=))/g)){
+      const key=m[1];
+      if(!new RegExp('\\b'+key+'\\b').test(freshBlock)) bad.push(aname+' → S.'+key);
+    }
+  }
+  if(bad.length) fail('give 상태 키 존재 불일치(freshState 미선언): '+[...new Set(bad)].join(', '));
+}
+
 }
 
 
