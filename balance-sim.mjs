@@ -519,6 +519,11 @@ log(`\n[밸런스 시뮬] 시드 42 · 최대 ${MAX_HOURS}시뮬시간 · 창 ${
 let lastCP=myCP(), lastEventT=0, windows=0;
 let lastSetm=1;                    // ★ v5.228 세트 계측 — 창 사이 배율 변화 감지용
 const gradeReached={};
+/* ★ v5.244 재미 지표 — '재미'의 시뮬 근사: 액션 이벤트(제작·합성·강화·세트·각성 등
+   플레이어가 무언가를 한 창)의 밀도와 최장 공백. CP 상승만 있는 창(방치 레벨링)은
+   액션에서 제외한다 — 방치 수익과 능동 플레이를 구분해야 '썰렁한 구간'이 보인다.
+   세트 변화도 액션으로 센다(장착 의사결정의 결과). 각성·결정은 did 에 텍스트가 붙는다. */
+const funTimes=[]; let funGapNow=0, funGapMax=0, funGapAt=0;
 while(simSec < MAX_HOURS*3600 && windows<12800){   // v5.242: 창 상한 12800(=6400h 측정)
   // ① 사냥터 선택(합리적 플레이)
   const idx=pickHuntIdx();
@@ -600,8 +605,13 @@ while(simSec < MAX_HOURS*3600 && windows<12800){   // v5.242: 창 상한 12800(=
       const act=ev('activeSets')().filter(x=>x.c>=3).map(x=>`${x.n} ${x.c}`).join(', ')||'없음';
       events.push({t:+(simSec/3600).toFixed(2), cp, what:`세트 ×${setm.toFixed(3)} (${act})`});
       lastSetm=setm;
+      did+=' 세트';   // v5.244: 세트 변화도 액션 이벤트로 집계
     }
   }
+  /* ★ v5.244 재미 집계 — did 가 비어 있으면 '액션 없는 창'. 최장 공백은 어느 시점에서
+     생기는지(funGapAt)까지 남긴다 — 썰렁한 구간의 정체를 다음 개선의 표적으로 삼는다. */
+  if(did.trim()){ funTimes.push(+(simSec/3600).toFixed(2)); funGapNow=0; }
+  else { funGapNow+=WINDOW; if(funGapNow>funGapMax){ funGapMax=funGapNow; funGapAt=+(simSec/3600).toFixed(1); } }
 
   /* ★ 정체 판정기 수정 — 종전엔 위 push 가 lastCP 를 갱신한 뒤 비교해 cp===lastCP 가
      거의 항상 참이었고, 성장 중에도 타이머가 매창 쌓여 48h 무성장 오판으로 강제 종료했다.
@@ -618,7 +628,17 @@ while(simSec < MAX_HOURS*3600 && windows<12800){   // v5.242: 창 상한 12800(=
 log('\n[곡선] 시각(시뮬시간) | 전투력 | 이벤트');
 events.forEach(e=>log(`  ${String(e.t).padStart(7)}h | ${String(e.cp).padStart(7)} | ${e.what}`));
 log('\n[등급 도달] ', Object.entries(gradeReached).map(([g,h])=>`${g}:${h}h`).join(' · ')||'—');
-const GORDER=['N','R','E','L'];
+
+/* ★ v5.244 재미 지표 리포트 — 액션 이벤트(제작·합성·강화·세트·각성 창)의 밀도와 최장
+   공백. 구간 밀도가 급감하는 구간이 '썰렁한 구간' — 다음 재미 개선의 데이터 표적. */
+{
+  const totalH=simSec/3600;
+  const bins=[[0,50],[50,200],[200,600],[600,Infinity]];
+  const per=()=> bins.map(([a,b])=>{ const n=funTimes.filter(t=>t>=a&&t<b).length;
+      const h=Math.max(0,Math.min(b,totalH)-a); return h>0? a+'~'+(b===Infinity?'+':b)+'h '+n+'회('+(n/h).toFixed(2)+'/h)':null; }).filter(Boolean).join(' · ');
+  log('[재미 지표] 액션 이벤트 '+funTimes.length+'회 · 평균 '+(funTimes.length/Math.max(1,totalH)).toFixed(2)+'회/h · 최장 공백 '+(funGapMax/3600).toFixed(1)+'h(@'+funGapAt+'h)');
+  log('[재미 지표] 구간 밀도 — '+per());
+}const GORDER=['N','R','E','L'];
 let walls=[];
 for(let i=1;i<events.length;i++){
   const gap=events[i].t-events[i-1].t;
