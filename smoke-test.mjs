@@ -621,6 +621,33 @@ step('백그라운드 탭 복귀 정산 — 정본 비율 적립 · 30초 미만
   if((S.offlinePending||0)!==before+want) throw new Error('offlinePending 에 적립되지 않았다');
   if(settle(Date.now()-30e3, Date.now())!==0) throw new Error('30초 미만 숨김에 적립됐다');
 });
+/* ★ v5.286 회귀: 오프라인 정산 8h 상한 — 위 스텝은 1시간·30초만 봤다. 밤샘(12h)·주말(48h)
+   방치가 상한 없이 적립되면 '인게임 방치의 50%·최대 8시간' 약속과 어긋난다. 부팅 경로
+   (computeOffline)와 백그라운드 복귀(_visibilitySettle) 양쪽의 min(elapsed, 8h) 상한과
+   60초 엄격 임계(>60)를 실증한다. 방치 게임의 핵심 수급 경로 경계. */
+step('오프라인 정산 8h 상한 — 부팅·복귀 양 경로 + 60초 임계', ()=>{
+  const S=ev('S'), GPM=ev('OFFLINE_GPM');
+  const errs=[];
+  const want8h=Math.floor(GPM/60*8*3600);
+  for(const hrs of [12, 48]){
+    const keep={ pending:S.offlinePending||0, lastSeen:S.lastSeen };
+    S.offlinePending=0; S.lastSeen=Date.now()-hrs*3600e3;
+    ev('computeOffline')();
+    if((S.offlinePending||0)!==want8h) errs.push(`computeOffline ${hrs}h → ${S.offlinePending}(기대 ${want8h})`);
+    S.offlinePending=keep.pending; S.lastSeen=keep.lastSeen;
+  }
+  { const keep={ pending:S.offlinePending||0, lastSeen:S.lastSeen };
+    S.offlinePending=0; S.lastSeen=Date.now()-60e3;   // 정확히 60초 — >60 엄격
+    ev('computeOffline')();
+    if((S.offlinePending||0)!==0) errs.push('computeOffline 60초 경과분이 적립됐다(임계 >60 위반)');
+    S.offlinePending=keep.pending; S.lastSeen=keep.lastSeen; }
+  { const before=S.offlinePending||0;
+    const got=ev('_visibilitySettle')(Date.now()-12*3600e3, Date.now());
+    if(got!==want8h) errs.push(`_visibilitySettle 12h → ${got}(기대 ${want8h})`);
+    if((S.offlinePending||0)!==before+want8h) errs.push('_visibilitySettle 상한분 미적립');
+    S.offlinePending=before; }
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ v5.9: 몬스터 종 수 검증 — 등급당 5종, 총 20종(설계 기준). 마릿수 선택기 기본값 30.
    종전 120종(등급당 30종)은 "30마리" 마릿수 선택기를 도감 종 수로 오독한 것이었다. */
 step('몬스터 종 수 = 20 (등급당 5종) + 마릿수 기본 30', ()=>{
