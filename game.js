@@ -1406,6 +1406,9 @@ function freshState(){
     /* ★ v5.195: 등급 도감 완성 1회성 보상 수령 플래그 — 보상 데이터 상태라 freshState 소유
        (마이그레이션 판정 플래그가 아님, HANDOFF 3-3 과 무관). */
     codexReward:{},
+    /* ★ v5.241: '각성의 결정' 단계 — 심화 각성 50 완료 후 해금되는 무한 축.
+       플레이 진행도 자체라 freshState 소유(마이그레이션 판정 플래그 아님, 3-3 무관). */
+    awakenCrystal:0,
     /* ★ B9/G-120 bossChallenges·raids · ★ F2 칭호 조건 카운터 신규
        craftFail/craftWin 은 '현재 연속(스트릭)', ...Best 는 '최고 스트릭'이다.
        칭호는 한 번 달성하면 유지돼야 하므로 have() 는 Best 만 본다. */
@@ -1825,13 +1828,19 @@ function tomeMul(){
   (S.equips||[]).forEach(e=>{ if(e && e.slot && e.slot.indexOf('고서')>=0) kinds.add(e.slot); });
   return 1 + kinds.size*0.03;
 }
+/* ★ v5.241: 각성 배율의 정본 관문 — 기본+심화 각성(1.5%/단계)과 '각성의 결정'
+   (v5.241, 50 완료 후 해금·0.5%/단계·상한 없음)을 한 곳에서 합산한다.
+   종전 3곳(전투력·CP구성·영웅상세)이 각자 1+S.awaken*0.015 를 계산했기 때문에
+   새 축을 넣으면 세 곳이 어긋날 수 있었다 — 관문 하나로 정합을 강제한다. */
+function awMul(){ return 1 + S.awaken*0.015 + (S.awakenCrystal||0)*0.005; }
+
 function heroPower(h){
   const g = GRADES[h.grade].mult;
   /* 착용 중이고 이 영웅에게 귀속된 장비만 합산 */
   const heroId = h.hero_id || h.hid;
   const eq = S.equips.filter(e=>e.equipped && (!e.heroId || e.heroId===heroId))
     .reduce((a,e)=>a+(1+e.enh*0.12)*GRADES[e.grade].mult,0);
-  const aw = 1 + S.awaken*0.015;
+  const aw = awMul();
   const costume = costumeStatMul();
   const setm = setDamageMul();
   return Math.round((100 + h.level*30) * g * aw * (1 + eq*0.05) * (S&&S.classTrait?1.02:1) * costume * setm * tomeMul());
@@ -1846,7 +1855,7 @@ function openCPBreakdown(){
     .reduce((a,e)=>a+(1+(e.enh||0)*0.12)*GRADES[e.grade].mult,0);
   const base=(100+h.level*30);
   const g=GRADES[h.grade].mult;
-  const aw=1+S.awaken*0.015;
+  const aw=awMul();   // v5.241: 결정 축 포함 정본 관문
   const eqMul=1+eq*0.05;
   const costume=costumeStatMul();
   const setm=setDamageMul();
@@ -1864,7 +1873,7 @@ function openCPBreakdown(){
   b.appendChild(el('div','center',`<div class="big" style="color:var(--g-legend)">${fmt(totalCP())}</div><div class="small mut">총 전투력 (영웅 9종 합계) · 아래는 리더 [${h.name}] 기준</div>`));
   b.appendChild(el('div','',row('기본 (Lv '+h.level+')', fmt(base), pct(base))));
   b.appendChild(el('div','',row('등급 ('+GRADES[h.grade].name+')', '×'+g.toFixed(1), pct(final-without('g')))));
-  b.appendChild(el('div','',row('각성 +'+S.awaken, '×'+aw.toFixed(2), pct(final-without('aw')))));
+  b.appendChild(el('div','',row('각성 +'+S.awaken+((S.awakenCrystal||0)>0?(' · 결정 +'+S.awakenCrystal):''), '×'+aw.toFixed(2), pct(final-without('aw')))));
   b.appendChild(el('div','',row('장비 (eq '+eq.toFixed(1)+')', '×'+eqMul.toFixed(2), pct(final-without('eq')))));
   b.appendChild(el('div','',row('세트 효과', '×'+setm.toFixed(2), pct(final-without('setm')))));
   b.appendChild(el('div','',row('고서 보유', '×'+tome.toFixed(2), pct(final-without('tome')))));
@@ -5198,7 +5207,7 @@ const MODALS = {
     const deep = lv>=BASE_CAP;                       // 심화 구간 진입 여부
     const shardCost = Math.round(250*Math.pow(1.08, lv));
     const recCost   = 1 + Math.floor((lv-BASE_CAP)/2);   // 13~14:1권 · 15~16:2권 …
-    const pct=(lv*1.5).toFixed(1);
+    const pct=(lv*1.5 + (S.awakenCrystal||0)*0.5).toFixed(1);   // v5.241: 결정 배율(+0.5%/단계) 합산
     b.appendChild(el('div','awaken-orb', deep?'🌟':'🪨'));
     b.appendChild(el('div','awaken-lv','+'+lv));
     ['최종 최대 체력 증가','최종 공격력·마법 공격력 증가','최종 방어력·마법 저항력 증가']
@@ -5211,7 +5220,28 @@ const MODALS = {
     const have  = deep ? recs : totalShards;
 
     if(maxed){
-      b.appendChild(el('div','center mut small',`최대 단계 도달 (+${lv}) · 시즌1 상한 ${DEEP_CAP}단계`));
+      b.appendChild(el('div','center mut small',`최대 단계 도달 (+${lv}) · 상한 ${DEEP_CAP}단계`));
+      /* ★ v5.241: 각성의 결정 — 50 완료 후 해금되는 무한 축. 3200h 시뮬에서 각성 50
+         완주 후 기록서가 다시 고아 재화가 됐다(완주 시점 잔여 23권 + 공급 지속). 상한을
+         다시 늘리는 대신(연장마다 같은 문제가 재발) '낮은 효율·무한 심크'로 전환한다:
+         비용 20+5×단계권, 효과 +0.5%/단계(기본 각성 1.5%의 1/3) — 골드 라인(3천만/권,
+         v5.240)과 연결돼 엔드게임 골드·기록서 싱크가 영구히 유지된다. */
+      const clv=S.awakenCrystal||0, cCost=20+5*clv;
+      b.appendChild(el('div','awaken-lv','✦'+clv));
+      b.appendChild(el('div','warn',`*각성의 결정 — 영웅 기록서 ${cCost}권이 소모됩니다* (보유 ${recs}권)`));
+      b.appendChild(el('div','center mut small','단계당 계정 스탯 +0.5% · 상한 없음 — 심화 각성의 여정을 잇습니다'));
+      const cbtn=el('button','btn gold wide','결정 각성');
+      cbtn.style.marginTop='8px';
+      if(recs<cCost) cbtn.disabled=true;
+      cbtn.onclick=()=>{
+        if(S.records<cCost){ toast('영웅 기록서가 부족합니다.'); return; }
+        S.records-=cCost; S.awakenCrystal=(S.awakenCrystal||0)+1;
+        sfx('awaken'); Battle.refreshParty();
+        toast(`각성의 결정 ✦${S.awakenCrystal}! 계정 전체 스탯 +0.5%`);
+        sysLog(`<span class="lgd">각성의 결정</span> <span class="lgd">✦${S.awakenCrystal}단계</span> 달성`);
+        openModal('awaken'); refreshHUD();
+      };
+      b.appendChild(cbtn);
     } else if(deep){
       b.appendChild(el('div','warn',`*심화 각성 — 영웅 기록서 ${recCost}권이 소모됩니다* (보유 ${recs}권)`));
       b.appendChild(el('div','center mut small',`단계당 +1.5% · 13~${DEEP_CAP}단계는 기록서로 진행합니다`));
@@ -6378,6 +6408,7 @@ const MODALS = {
     <b style="color:#f0cd82">■ 장기 목표 (레전더리 완성 이후)</b><br>
     · 강화 +11~25: 망치로 파괴를 막으며 도전 — +20까지 부위당 약 3.2억 골드, +21~25 극한(성공 30%)<br>
     · 심화 각성 13~50단계: 영웅 기록서(탑 상자·회색코인)로 계정 스탯 상승<br>
+    · 50 완료 후 '각성의 결정'(기록서 20+5×단계권 · +0.5%/단계 · 상한 없음)<br>
     · 시련의 탑 고층 도전 · 몬스터 도감 전종(20종) 완성 — 전종 완성 시 1회성 대보상(기록서 X10 · 전설 망치 X10 · 골드 5000만 · 강화석 X200)</div>`;
     }},
 
@@ -6954,7 +6985,7 @@ const MODALS = {
     b.appendChild(el('div','center small mut','현재 적용 중인 버프 집계 (15종)'));
     [ ['📕','고서 보유',        tomeKinds>0?`계정 스탯 +${(tomeKinds*3)}% (${tomeKinds}종)`:'미보유'],
       ['🧪','물약 보유',        potKinds>0?`자연 회복 +${(potKinds*100)}% (${potKinds}종)`:'미보유'],
-      ['⚡','각성',             `+${(S.awaken*1.5).toFixed(1)}% (${S.awaken}단계)`],
+      ['⚡','각성',             `+${(S.awaken*1.5).toFixed(1)}% (${S.awaken}단계${(S.awakenCrystal||0)>0?` · 결정 ✦${S.awakenCrystal}`:''})`],
       ['🧩','세트 효과',        setsOn.length?setsOn.map(x=>`${x.n} ${x.c}`).join(' · '):'미착용'],
       ['🪙','최종 골드',        `+${goldPct.toFixed(2)}%`],
       ['📈','최종 경험치',      `+${expPct.toFixed(2)}%`],
@@ -7472,7 +7503,7 @@ function heroDetail(hidOrJob){
     n.onclick=()=>{ _heroTab=t; heroDetail(hid); }; tabrow.appendChild(n); });
   b.append(tabrow, body);
 
-  const gm=G.mult, aw=1+S.awaken*0.015, lv=e.level;
+  const gm=G.mult, aw=awMul(), lv=e.level;   // v5.241: 결정 축 포함 정본 관문
   if(_heroTab==='스탯'){
     const rows=[
       ['레벨',            String(lv)],

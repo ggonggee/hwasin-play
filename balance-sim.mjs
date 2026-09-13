@@ -409,6 +409,22 @@ function awakenStep(){
     }
     S.records-=cost; S.awaken++; steps++;
   }
+  /* ★ v5.241: 각성의 결정 — 50 완료 후 무한 축(비용 20+5×단계권, 골드 라인 병행).
+     50 완료 후 기록서가 고아 재화가 되는 것을 막는다. 창당 상한은 완화(기록서·골드가
+     남는 한 이어감)하되 steps<20으로 루프 보호. */
+  if(S.awaken>=50){
+    let csteps=0;
+    while(csteps<20){
+      const cCost=20+5*(S.awakenCrystal||0);
+      if((S.records||0)>=cCost){ S.records-=cCost; S.awakenCrystal=(S.awakenCrystal||0)+1; csteps++; continue; }
+      const price=30000000;
+      if(S.gold >= 16000000 + 40000000 + cCost*price){
+        S.gold-=cCost*price; awakenTally.gold+=cCost*price;
+        S.records=(S.records||0)+cCost;
+      } else break;
+    }
+    steps+=csteps;
+  }
   return steps;
 }
 function synthStep(){
@@ -579,7 +595,7 @@ log(`\n총 시뮬: ${(simSec/3600).toFixed(1)}h · 창 ${windows}회 · 최종 C
 /* 진단: 리더·장착·보유영웅 — CP 정체의 원인을 구분한다(리더 등급? 레벨? 장비 기여?) */
 {
   const S=ev('S'), ld=ev('party')()[0];
-  log(`[진단] 각성 +${S.awaken}${awakenTally.gold>0?` (골드 구매 ${(awakenTally.gold/1e6).toFixed(0)}M)`:''} · 리더 ${ld.name}(grade ${ld.grade} · Lv${ld.level}) · 보유 영웅 ${ev('ownedHeroes')().length}/9 · 조각`,
+  log(`[진단] 각성 +${S.awaken}${(S.awakenCrystal||0)>0?` · 결정 ✦${S.awakenCrystal}`:''}${awakenTally.gold>0?` (골드 구매 ${(awakenTally.gold/1e6).toFixed(0)}M)`:''} · 리더 ${ld.name}(grade ${ld.grade} · Lv${ld.level}) · 보유 영웅 ${ev('ownedHeroes')().length}/9 · 조각`,
     Object.entries(S.shards).map(([k,v])=>`${k}:${Math.floor(v)}`).join(' '));
   /* ★ v5.230: 심화 각성 축 상태 — 탑 기록·상자·기록서. */
   log(`[진단] 탑 최고 ${S._tower||0}Wave · 상자 ${S.towerBox||0}개 · 기록서 ${S.records||0}권 (심화 각성 재화)`);
