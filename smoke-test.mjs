@@ -1411,6 +1411,27 @@ step('의뢰 수령 배지 — weeklyClaimable·monthlyClaimable', ()=>{
   if(errs.length) throw new Error(errs.join(' | '));
 });
 
+/* ★ v5.269 회귀: 오프라인 정산 배지 — offlinePending>0 시 timepod 점·수령 후 소등.
+   _setDot 은 children 직접 스캔이므로 Node2 스텁에서도 정확히 동작한다. */
+step('오프라인 정산 배지 — 점 등/소등', ()=>{
+  const S=ev('S');
+  const keep=S.offlinePending||0;
+  const tp=ev("document.getElementById('timepod')");
+  if(!tp) throw new Error('#timepod 노드 없음');
+  const hasDot=()=>[...(tp.children||[])].some(c=>c.classList&&c.classList.contains('rdot'));
+  const errs=[];
+  S.offlinePending=0; ev('refreshClaimBadges')();
+  const off1=hasDot();
+  if(off1) errs.push('pending 0인데 점 켜짐');
+  S.offlinePending=100000; ev('refreshClaimBadges')();
+  if(!hasDot()) errs.push('pending>0인데 점 안 켜짐');
+  // 수령 경로 소등 — settle 버튼 직접 클릭은 모달 렌더가 필요하므로 지급식(+소등) 재현
+  S.offlinePending=0; ev('refreshClaimBadges')();
+  if(hasDot()) errs.push('수령(0화) 후 점 잔존');
+  S.offlinePending=keep; ev('refreshClaimBadges')();
+  if(errs.length) throw new Error(errs.join(' | '));
+});
+
 /* ★ v5.236 회귀: 극한의 벼림 +21~25 — 성공 30% 표기 · 실패 시 단계 유지(파괴·하락 없음,
    재화만 소모) · +25 상한. 실패 분기 강제는 vm 안 Math.random 후킹(D5 패턴)으로. */
 step('극한의 벼림 +21~25 — 실패해도 유지, +25 상한', ()=>{

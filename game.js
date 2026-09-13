@@ -1697,11 +1697,16 @@ function _setDot(parent, on){
   else if(!on && dot) dot.remove();
 }
 function refreshClaimBadges(){
+  /* ★ v5.269: 미수령 오프라인 정산 배지 — offlinePending(방치 골드)이 쌓여 있어도
+     timepod 을 누르기 전엔 표시가 없어 보상 존재를 몰랐다. 점으로 상시 알리고
+     수령(offlinePending=0)과 함께 소등한다. */
+  const od=(S && (S.offlinePending||0))>0;
   const q=questClaimable(), a=attendClaimable(), n=noticeUnseen()>0;
   _setDot(document.querySelector('[data-modal="quest"]'), q);
   _setDot(document.querySelector('[data-modal="attend"]'), a);
   _setDot(document.querySelector('[data-modal="notice"]'), n);   // ★ v5.167: 공지 미열람
-  _setDot(document.getElementById('btnMenuToggle'), q||a||n);
+  _setDot(document.getElementById('timepod'), od);                 // ★ v5.269: 오프라인 정산(id 부여 — 클래스 쿼리가 스텁에서 노드별 새 인스턴스를 만드는 문제 회피)
+  _setDot(document.getElementById('btnMenuToggle'), q||a||n||od);
 }
 
 /* ----------------------------- 유틸 ----------------------------- */
@@ -6575,7 +6580,7 @@ const MODALS = {
     b.appendChild(two);
     if(S.offlinePending>0){
       const btn=el('button','btn gold wide','수령'); btn.style.marginTop='6px';
-      btn.onclick=()=>{ addGold(S.offlinePending); toast(`오프라인 골드 +${fmt(S.offlinePending)}`); sysLog(`오프라인 방치 보상 +${fmt(S.offlinePending)}G`); S.offlinePending=0; closeModal(); refreshHUD(); };
+      btn.onclick=()=>{ addGold(S.offlinePending); toast(`오프라인 골드 +${fmt(S.offlinePending)}`); sysLog(`오프라인 방치 보상 +${fmt(S.offlinePending)}G`); S.offlinePending=0; closeModal(); refreshHUD(); refreshClaimBadges(); };
       b.appendChild(btn);
     } else b.appendChild(el('div','center mut small','현재 온라인 실시간 수급 중 · 접속 종료 시 자동 누적됩니다.'));
   }},
