@@ -7909,6 +7909,17 @@ function isSkullGear(c){
   return /해골|백골/.test(nm);
 }
 // forceSuccess=true 이면 확정제작 — 성공 100% 보장 + 남은 시간 스킵 (G-29)
+/* ★ v5.259: 레전더리 제작 성공 풀스크린 연출 — v5.190의 토스트·사운드에 시각 피크가
+   없었다. 순수 DOM+CSS 오버레이라 결정론(D1)·cosmetic 지대 무관. 모달·전투 위
+   z-index 30으로 띄우고 2.2초 후 스스로 지운다. */
+function legendaryFlash(slot){
+  const root=$('#modal-root'); if(!root) return;
+  if(root.querySelector('.lgd-flash')) return;   // 중복 방지
+  const ov=el('div','lgd-flash');
+  ov.innerHTML='<div class="lf-rays"></div><div class="lf-item">'+equipImg(slot,6)+'</div><div class="lf-title">LEGENDARY</div>';
+  root.appendChild(ov);
+  setTimeout(()=>ov.remove(), 2200);
+}
 function resolveCraft(forceSuccess){
   if(!S.craft) return; const c=S.craft;
   const ok = forceSuccess ? true : (Math.random()<c.p0);
@@ -7942,7 +7953,7 @@ function resolveCraft(forceSuccess){
     /* ★ v5.190: 레전더리 제작 성공 특별 연출 — 40% 확률을 뚫은 이 게임의 가장 큰 제작 순간이
        일반 성공과 같은 소리·표시였다. 금색 토스트 + legendary 음 + 시스템 로그 강조.
        E(80%)는 일반 연출 유지 — 희소성이 연출의 크기를 정한다. */
-    if(grade==='L'){ sfx('legendary');
+    if(grade==='L'){ sfx('legendary'); legendaryFlash(slot);
       S.stats.legendCrafts=(S.stats.legendCrafts||0)+1;   // ★ v5.219: 업적 집계
       toast(`✨ <b style="color:var(--g-legend)">레전더리 ${slot} 제작 성공!</b>`);
       sysLog(`<b style="color:var(--g-legend)">레전더리 ${slot} 탄생 — 40% 확률을 뚫었습니다</b>`); }

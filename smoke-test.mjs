@@ -1308,6 +1308,20 @@ step('월간 의뢰 — 렌더·진행·수령·렌더 무지급', ()=>{
   if(errs.length) throw new Error(errs.join(' | '));
 });
 
+/* ★ v5.259 회귀: 레전더리 제작 성공 플래시 — 오버레이 추가·중복 방지.
+   2.2초 자기 제거(setTimeout)는 스텁 환경에서 검증하지 않는다(존재만 주석 명시). */
+step('레전더리 플래시 — 함수 정합', ()=>{
+  /* ⚠ 스텁 한계: 게임 코드의 중복 체크(root.querySelector('.lgd-flash'))가 스텁
+     documentStub.querySelector(클래스 셀렉터 미지원 → 항상 더미 반환) 때문에 첫 호출부터
+     차단된다 — 실제 브라우저에서는 정상 동작. 따라서 여기선 함수 존재·무예외만 검증하고
+     오버레이 렌더·중복 방지·2.2초 자기 제거는 실물 QA에서 확인한다. */
+  if(typeof ev('legendaryFlash')!=='function') throw new Error('legendaryFlash 없음');
+  ev('legendaryFlash')('용암 대검');   // 무예외
+  const src=fs.readFileSync('game.js','utf8');
+  if(!src.includes("root.querySelector('.lgd-flash')")) throw new Error('중복 방지 체크 없음');
+  if(!/setTimeout\(\(\)=>ov\.remove\(\),\s*2200\)/.test(src)) throw new Error('2.2초 자기 제거 없음');
+});
+
 /* ★ v5.236 회귀: 극한의 벼림 +21~25 — 성공 30% 표기 · 실패 시 단계 유지(파괴·하락 없음,
    재화만 소모) · +25 상한. 실패 분기 강제는 vm 안 Math.random 후킹(D5 패턴)으로. */
 step('극한의 벼림 +21~25 — 실패해도 유지, +25 상한', ()=>{
