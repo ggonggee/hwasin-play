@@ -320,6 +320,15 @@ function dailyStep(){
       if(now-base>=q.goal){ w.claimed[q.id]=true; q.give(); acts+='주간의뢴 '; }
     });
   }
+  /* ★ v5.256: 월간 의뢰 수령 — 주간(v5.249)과 동일 패턴. */
+  {
+    const m=ev('monthlyState')();
+    ev('MONTHLY_QUESTS').forEach(q=>{
+      if(m.claimed[q.id]) return;
+      const st=ev('S').stats||{}, now=st[q.stat]||0, base=(m.base&&m.base[q.stat])||0;
+      if(now-base>=q.goal){ m.claimed[q.id]=true; q.give(); acts+='월간의뢴 '; }
+    });
+  }
   return acts.trim();   // ★ v5.245: 일일 콘텐츠 수행 요약(액션 집계용)
 }
 /* ── +11~20 위험 강화의 엔드게임 기대값 — 몬테카를로(2026-09-12) → 시뮬 내 측정(v5.229) ──

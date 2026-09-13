@@ -1283,6 +1283,31 @@ step('명패 배지 — 가호·프리미엄 버프 상시 표시', ()=>{
   ev('refreshHUD')();
 });
 
+/* ★ v5.256 회귀: 월간 의뢰 — 주간(v5.249) 회귀의 월간판(렌더·스냅샷 진행·수령·렌더 무지급). */
+step('월간 의뢰 — 렌더·진행·수령·렌더 무지급', ()=>{
+  const S=ev('S');
+  const M=ev('MODALS');
+  const keep={monthly:S.monthly?JSON.parse(JSON.stringify(S.monthly)):null, kills:S.stats.kills, records:S.records||0};
+  const errs=[];
+  const b=new Node2('div'); M.quest.render(b);
+  if(!collectText(b).includes('월간')) errs.push('퀘스트 탭에 월간 없음');
+  S.monthly={ key:ev('getMonthKey')(), base:{ kills:S.stats.kills, crafts:S.stats.crafts, summons:S.stats.summons }, claimed:{} };
+  S.stats.kills += 30000;
+  const m=ev('monthlyState')();
+  const q1=ev('MONTHLY_QUESTS')[0];
+  // 렌더 무지급
+  const rec0=S.records||0;
+  const b2=new Node2('div'); M.quest.render(b2);
+  if((S.records||0)!==rec0) errs.push('렌더만으로 지급됨(부수효과)');
+  // 수령 +10·1회성
+  q1.give(); m.claimed[q1.id]=true;
+  if((S.records||0)!==rec0+10) errs.push('m1 지급 +10 아님');
+  // 원복
+  S.stats.kills=keep.kills; S.records=keep.records;
+  if(keep.monthly) S.monthly=JSON.parse(JSON.stringify(keep.monthly)); else S.monthly={key:'',base:null,claimed:{}};
+  if(errs.length) throw new Error(errs.join(' | '));
+});
+
 /* ★ v5.236 회귀: 극한의 벼림 +21~25 — 성공 30% 표기 · 실패 시 단계 유지(파괴·하락 없음,
    재화만 소모) · +25 상한. 실패 분기 강제는 vm 안 Math.random 후킹(D5 패턴)으로. */
 step('극한의 벼림 +21~25 — 실패해도 유지, +25 상한', ()=>{

@@ -1418,6 +1418,9 @@ function freshState(){
        base=주 시작 스냅샷(stats), claimed=의뢰별 1회성 수령. 진행도 상태라 freshState 소유
        (마이그레이션 판정 플래그 아님, 3-3 무관). */
     weekly:{ key:'', base:null, claimed:{} },
+    /* ★ v5.256: 월간 의뢰 — 일(미션)-주(의뢰)-월(의뢰) 리듬 완결. 주간(v5.249)과
+       동일 패턴(키·스냅샷·의뢰별 1회성)을 월 규모로. */
+    monthly:{ key:'', base:null, claimed:{} },
     /* ★ B9/G-120 bossChallenges·raids · ★ F2 칭호 조건 카운터 신규
        craftFail/craftWin 은 '현재 연속(스트릭)', ...Best 는 '최고 스트릭'이다.
        칭호는 한 번 달성하면 유지돼야 하므로 have() 는 Best 만 본다. */
@@ -4546,6 +4549,22 @@ function weeklyState(){
   if(S.weekly.key!==k){ S.weekly.key=k; S.weekly.base={ kills:S.stats.kills||0, crafts:S.stats.crafts||0, summons:S.stats.summons||0 }; S.weekly.claimed={}; save(); }
   return S.weekly;
 }
+/* ★ v5.256: 월간 의뢰 — 매월 1일 리셋. 목표는 성실 플레이 기준(일 킬 ~700×30일=21,000에
+   여유를 둔 30,000 · 제작 60 · 소환 150), 보상은 주간의 3~5배(월 1회라 곡선 영향 미미).
+   월간 소환 보상 골드는 raw(생성 아님). */
+function getMonthKey(){ const d=new Date(); return d.getFullYear()+'-'+(d.getMonth()+1); }
+function monthlyState(){
+  if(!S.monthly || typeof S.monthly!=='object') S.monthly={ key:'', base:null, claimed:{} };
+  const k=getMonthKey();
+  if(S.monthly.key!==k){ S.monthly.key=k; S.monthly.base={ kills:S.stats.kills||0, crafts:S.stats.crafts||0, summons:S.stats.summons||0 }; S.monthly.claimed={}; save(); }
+  return S.monthly;
+}
+const MONTHLY_REWARD_TXT={ m1:'영웅 기록서 X10', m2:'전설 망치 X30', m3:'골드 1억' };
+const MONTHLY_QUESTS=[
+  { id:'m1', icon:'⚔️', txt:'몬스터 30,000마리 처치', stat:'kills',  goal:30000, give:()=>{ S.records=(S.records||0)+10; return '영웅 기록서 X10'; } },
+  { id:'m2', icon:'⚒️', txt:'장비 60회 제작',        stat:'crafts', goal:60,   give:()=>{ S.hammers=(S.hammers||0)+30; return '전설 망치 X30'; } },
+  { id:'m3', icon:'📜', txt:'영웅 소환 150회',       stat:'summons',goal:150,  give:()=>{ addGold(100000000,true); return '골드 1억'; } },
+];
 const WEEKLY_REWARD_TXT={ w1:'영웅 기록서 X3', w2:'전설 망치 X10', w3:'골드 2,000만' };
 const WEEKLY_QUESTS=[
   { id:'w1', icon:'⚔️', txt:'몬스터 5,000마리 처치', stat:'kills',  goal:5000, give:()=>{ S.records=(S.records||0)+3; return '영웅 기록서 X3'; } },
@@ -6531,7 +6550,7 @@ const MODALS = {
   /* ---------- 간이/정보 모달 ---------- */
   /* ★ B9/G-122: 3탭 [임무목록][일일][업적] — 별도 quest2 모달을 '업적' 탭으로 흡수(모달 폐지). */
   quest:{ title:'퀘스트', render(b){
-    let tab='임무목록'; const TB=['임무목록','일일','주간','업적'];   // ★ v5.249: 주간 의뢰 탭
+    let tab='임무목록'; const TB=['임무목록','일일','주간','월간','업적'];   // ★ v5.249 주간 · ★ v5.256 월간
     const tabs=el('div','tabrow'); TB.forEach(t=>{ const x=el('div','tab'+(t===tab?' on':''),t); x.onclick=()=>{ tab=t; render(); [...tabs.children].forEach((c,i)=>c.classList.toggle('on',TB[i]===tab)); }; tabs.appendChild(x); });
     b.appendChild(tabs); const body=el('div'); b.appendChild(body);
     function render(){ body.innerHTML='';
@@ -6588,6 +6607,26 @@ const MODALS = {
           btn.onclick=()=>{ if(claimed||prog<q.goal) return;
             w.claimed[q.id]=true; const what=q.give();
             toast(`주간 의뢰 완료 보상 — ${what}`); sysLog(`주간 의뢰 완료(${q.txt}) — ${what}`);
+            save(); render(); refreshHUD(); };
+          row.appendChild(btn); body.appendChild(row);
+        });
+      } else if(tab==='월간'){
+        /* ★ v5.256: 월간 의뢰 — 주간(v5.249)과 동일 패턴. 렌더에서 give() 금지(부수효과),
+           표시는 MONTHLY_REWARD_TXT 로만. */
+        const m=monthlyState();
+        body.appendChild(el('div','datehead', '월간 의뢰 · ' + m.key));
+        body.appendChild(el('div','small mut','매월 1일 리셋 · 진행은 실제 행동으로 자동 반영됩니다'));
+        MONTHLY_QUESTS.forEach(q=>{
+          const now=S.stats[q.stat]||0, base=(m.base&&m.base[q.stat])||0;
+          const prog=Math.min(q.goal, Math.max(0, now-base));
+          const done=prog>=q.goal, claimed=!!m.claimed[q.id];
+          const row=el('div','pack'); row.style.opacity=claimed?'.5':'1';
+          row.innerHTML=`<div class="pic">${q.icon}</div><div class="info"><div class="t">${q.txt}</div><div class="d">진행 ${prog}/${q.goal} · 보상 ${claimed?'수령 완료 ✓':MONTHLY_REWARD_TXT[q.id]}</div></div>`;
+          const btn=el('button','btn sm'+(done&&!claimed?' gold':''), claimed?'완료':'받기');
+          if(!done||claimed) btn.disabled=true;
+          btn.onclick=()=>{ if(claimed||prog<q.goal) return;
+            m.claimed[q.id]=true; const what=q.give();
+            toast(`월간 의뢰 완료 보상 — ${what}`); sysLog(`월간 의뢰 완료(${q.txt}) — ${what}`);
             save(); render(); refreshHUD(); };
           row.appendChild(btn); body.appendChild(row);
         });
