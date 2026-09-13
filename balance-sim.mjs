@@ -473,11 +473,16 @@ function awakenStep(){
         S.records-=cCost; S.stones-=cStones; S.awakenCrystal=(S.awakenCrystal||0)+1; csteps++; continue;
       }
       if((S.records||0)<cCost){
+        /* ★ v5.251: 기록서 분할 구매(권 단위) — 종전 '비용 전액' 조건(✦24=40.5억)이
+           골드를 캡(50억) 근처까지 쌓이게 하고도 결정을 멈추게 했다(12800h 실측 40.8억
+           적체). 망치 1묶음(40M)+소환서(16M) 예산 위 여유에서 1권씩(3천만) 산다 —
+           실사용자의 분할 구매와 같고, 창이 지나면 이어서 산다. */
         const price=30000000;
-        if(S.gold >= 16000000 + 40000000 + cCost*price){
-          S.gold-=cCost*price; awakenTally.gold+=cCost*price;
-          S.records=(S.records||0)+cCost;
-        } else break;
+        let need=cCost-(S.records||0);
+        while(need>0 && S.gold >= 16000000 + 40000000 + price){
+          S.gold-=price; awakenTally.gold+=price; S.records=(S.records||0)+1; need--;
+        }
+        if(need>0) break;
       } else break;   // 강화석 부족 — 싱크가 유입을 따라잡은 지점
     }
     steps+=csteps;
