@@ -579,7 +579,7 @@ const funTimes=[]; let funGapNow=0, funGapMax=0, funGapAt=0;
 /* ★ v5.287: 행동 종류 분포 — 재미 지표가 밀도·공백만 보던 사각: 액션이 한두 종류에
    몰리면(행동 단조) 총 밀도가 좋아도 지루하다. did 토큰을 체감 행동 6종으로 분류해
    창 수를 센다. 한 창에서 여러 행동은 여러 번 센다(체감 그대로). */
-const funKinds={ '제작':0, '강화':0, '합성':0, '상급재료':0, '세트':0, '일일콘텐츠':0 };
+const funKinds={ '제작':0, '강화':0, '합성':0, '상급재료':0, '세트':0, '일일콘텐츠':0, '각성·결정':0 };
 while(simSec < MAX_HOURS*3600 && windows<51200){   // ★ v5.257: 창 상한 51200(=25600h 측정 가능)
   // ① 사냥터 선택(합리적 플레이)
   const idx=pickHuntIdx();
@@ -620,6 +620,10 @@ while(simSec < MAX_HOURS*3600 && windows<51200){   // ★ v5.257: 창 상한 512
 
   // ④ 제작·장착 (가능한 만큼)
   let did=((dailyActs||'')?dailyActs+' ':'') + ((buffActs||'')?buffActs+' ':'');   // ★ v5.245 일일 콘텐츠 + v5.247 결정 가호
+  /* ★ v5.288: 각성·심화·결정 스텝이 did 에 안 붙어 있었다 — 위 주석("각성·결정은 did 에
+     텍스트가 붙는다")과 코드가 어긋난 종전 결함. 각성 축의 창이 재미 밀도·종류 분포 모두에서
+     누락돼 밀도가 과소 측정됐다(600h 기준 실측으로 아래 커밋 참조). */
+  if(awakenUps>0) did+=`각성+${awakenUps} `;
   if(fusedName) did+=`영웅 합성[${fusedName}] `;
   if(synthGot>0) did+=`상급재료+${synthGot} `;
   let c=bestCraftable();
@@ -688,7 +692,8 @@ while(simSec < MAX_HOURS*3600 && windows<51200){   // ★ v5.257: 창 상한 512
     if(/영웅 합성/.test(did)) funKinds['합성']++;
     if(/상급재료/.test(did)) funKinds['상급재료']++;
     if(/세트/.test(did)) funKinds['세트']++;
-    if(/탑|소탕|기록서|골드던전|요일던전/.test(did)) funKinds['일일콘텐츠']++; }
+    if(/탑|소탕|기록서|골드던전|요일던전/.test(did)) funKinds['일일콘텐츠']++;
+    if(/각성|결정가호|✦/.test(did)) funKinds['각성·결정']++; }
   else { funGapNow+=WINDOW; if(funGapNow>funGapMax){ funGapMax=funGapNow; funGapAt=+(simSec/3600).toFixed(1); } }
 
   /* ★ 정체 판정기 수정 — 종전엔 위 push 가 lastCP 를 갱신한 뒤 비교해 cp===lastCP 가
@@ -739,7 +744,7 @@ log('\n[등급 도달] ', Object.entries(gradeReached).map(([g,h])=>`${g}:${h}h`
      단조 신호(밀도 지표만으로는 보이지 않던 재미 결함). 종류 수 자체도 함께. */
   const kinds=Object.entries(funKinds).filter(([,n])=>n>0).sort((a,b)=>b[1]-a[1]);
   const ksum=kinds.reduce((a,[,n])=>a+n,0)||1;
-  log('[재미 지표] 행동 종류 분포 — '+kinds.map(([k,n])=>`${k} ${n}창(${Math.round(n/ksum*100)}%)`).join(' · ')+` · ${kinds.length}/6종`);
+  log('[재미 지표] 행동 종류 분포 — '+kinds.map(([k,n])=>`${k} ${n}창(${Math.round(n/ksum*100)}%)`).join(' · ')+` · ${kinds.length}/7종`);
 }const GORDER=['N','R','E','L'];
 let walls=[];
 for(let i=1;i<events.length;i++){
