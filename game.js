@@ -3020,7 +3020,11 @@ const Battle = (()=>{
       st.exp = (st.exp||0) + Math.max(1, Math.round(baseExp * expMul));
       /* ★ v5.39: need를 while 안에서 매번 재계산 — 종전엔 루프 바깥에서 한 번만 계산해서
          다단계 레벨업이 안 됐음. */
-      while(st.exp >= (st.level||1) * 250 && (st.level||1) < 999){
+      /* ★ v5.252: 레벨 상한 999→9,999 — 999엔 캡처 근거가 없는 임시 상한이었는데
+         12800h 시뮬에서 실제 포화(Lv999 도달 ≈ 9,500h)가 확인됐다(캡 이후 2,800h+
+         레벨 성장 정지 — 장기 목표 소멸). 상향의 실질 효과는 목표 유지뿐: 필요 XP
+         (Σ level×250)가 도달을 사실상 수십 년으로 밀어 밸런스 영향은 미미하다. */
+      while(st.exp >= (st.level||1) * 250 && (st.level||1) < 9999){
         st.exp -= (st.level||1) * 250;
         st.level = (st.level||1) + 1;
         h.lvl = st.level;
@@ -3047,7 +3051,7 @@ const Battle = (()=>{
         if(inBattle[e.hero_id]) return;
         const st=S.heroes[e.hero_id]; if(!st) return;
         st.exp=(st.exp||0)+benchExp;
-        while(st.exp >= (st.level||1)*250 && (st.level||1)<999){
+        while(st.exp >= (st.level||1)*250 && (st.level||1)<9999){   // v5.252: 상한 999→9,999(주석은 전투 측 루프에)
           st.exp-=(st.level||1)*250; st.level=(st.level||1)+1;
           /* ★ v5.189: 벤치 마일스톤 로그 — 10레벨마다 한 줄만. v5.186 으로 로스터 전체가
              자라는데 레벨업이 조용해서(v5.186 설계) '내 영웅들이 자라고 있다'가 체감 안 났다.

@@ -1188,6 +1188,18 @@ step('주간 의뢰 — 렌더·진행·1회성·렌더 무지급', ()=>{
   if(errs.length) throw new Error(errs.join(' | '));
 });
 
+/* ★ v5.252 회귀: 레벨 상한 999→9,999 — XP 루프 조건식의 경계값을 소스 정합으로
+   검증한다(런타임 999 도달은 12800h 시뮬이 커버 — 캡 해제 전 실측 Lv999 참조). */
+step('레벨 상한 9,999 — 캡 해제·상한 경계 정합', ()=>{
+  const src=fs.readFileSync('game.js','utf8');
+  const errs=[];
+  const loops=[...src.matchAll(/while\(st\.exp >= \(st\.level\|\|1\)\s*\*?\s*250 && \(st\.level\|\|1\)\s*<\s*(\d+)\)/g)].map(m=>m[1]);
+  if(loops.length<2) errs.push('XP 루프 탐지 '+loops.length+'개(기대 2 이상)');
+  loops.forEach((v,i)=>{ if(v!=='9999') errs.push('루프'+i+' 상한 '+v+'(기대 9999)'); });
+  if(src.includes('<999)') || src.includes('< 999)')) errs.push('잔여 999 상한 조건식 존재');
+  if(errs.length) throw new Error(errs.join(' | '));
+});
+
 /* ★ v5.236 회귀: 극한의 벼림 +21~25 — 성공 30% 표기 · 실패 시 단계 유지(파괴·하락 없음,
    재화만 소모) · +25 상한. 실패 분기 강제는 vm 안 Math.random 후킹(D5 패턴)으로. */
 step('극한의 벼림 +21~25 — 실패해도 유지, +25 상한', ()=>{
