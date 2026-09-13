@@ -42,7 +42,7 @@ assets/             아이콘·몬스터·영웅 스프라이트·이펙트·배
 
 version.mjs         버전 정본(package.json) → index.html 캐시버스터·표기 동기화
 verify.mjs          정적 무결성 검사 (실패하면 종료코드 1 — 게이트다)
-balance-sim.mjs     장기 진행 시뮬레이터 (npm run sim [시간] — 실제 game.js 구동)
+balance-sim.mjs     장기 진행 시뮬레이터 (npm run sim [시간] [casual] — 실제 game.js 구동 · casual=일 8h 접속+오프라인 정산 세그먼트)
 smoke-test.mjs      런타임 스모크 테스트 (DOM 스텁 위에서 실제 실행)
 icon-pack.mjs       아이콘 팩 → assets/icons 매핑 도구 (ICON_PACK 환경변수로 원본 팩 경로 지정)
 
