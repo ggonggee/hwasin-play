@@ -250,14 +250,14 @@ function dailyStep(){
   const S=ev('S');
   const day=Math.floor(simSec/86400);
   if(day===dailyStep._day) return; dailyStep._day=day;
-  const cp=myCP();
+  const cp=myCP(); let acts='';   // ★ v5.245: 일일 콘텐츠 수행을 액션 이벤트로 반환
   // 골드던전 — 오늘 3회, foeCP ≤ 내 CP 인 최고 단계
   let left=3;
   for(let i=ev('GOLD_DUNGEON').length-1;i>=0&&left>0;i--){
     const d=ev('GOLD_DUNGEON')[i];
     if(d.foe<=cp*1.5 && ev('matAvail')(d.mat)>=d.need){
       const n=Math.min(left, Math.floor(ev('matAvail')(d.mat)/d.need));
-      ev('matSpend')(d.mat, d.need*n); ev('addGold')(d.gold*n); left-=n;
+      ev('matSpend')(d.mat, d.need*n); ev('addGold')(d.gold*n); left-=n; acts+=('골드던전x'+n+' ');
     }
   }
   // 요일던전 — 오늘 5회, 3단계(영웅 재료) 가능하면 최대한
@@ -271,7 +271,7 @@ function dailyStep(){
   for(const st of [3,2,1]){
     const rg=['N','R','E'][st-1], qty=Math.max(1,Math.round(DD_RQ[ti]/3*st));
     const foe=[800,2200,5200][st-1];
-    if(foe<=cp*1.5&&dl>0){ const n=Math.min(dl,5); for(let k=0;k<n;k++) ev('matGainGrade')(rg,qty); dl=0; }
+    if(foe<=cp*1.5&&dl>0){ const n=Math.min(dl,5); for(let k=0;k<n;k++) ev('matGainGrade')(rg,qty); dl=0; acts+='요일던전 '; }
   }
   /* 시련의 탑 (v5.230 정본 공식 통합) — 도전(일 1회)·소탕(일 1회)·상자→기록서 교환.
      · 도전: 시작 baseCP = 600+최고기록×450, 웨이브당 ×1.18 지수 상승(Battle 2814),
@@ -292,16 +292,16 @@ function dailyStep(){
       dailyStep._towerCh=day;
       ev('addGold')(reach*400000); S.stones=(S.stones||0)+reach*3;
       S.towerBox=(S.towerBox||0)+Math.max(1,Math.floor(reach/2));
-      S._tower=Math.max(best, reach);
+      S._tower=Math.max(best, reach); acts+=('탑'+reach+'F ');
     }
     if(best>=1 && dailyStep._towerSw!==day){
       dailyStep._towerSw=day;
       ev('addGold')(Math.floor(best*400000*0.5));
       S.stones=(S.stones||0)+Math.floor(best*3*0.5);
-      S.towerBox=(S.towerBox||0)+Math.max(1,Math.floor(best/4));
+      S.towerBox=(S.towerBox||0)+Math.max(1,Math.floor(best/4)); acts+='소탕 ';
     }
     const ex=Math.floor((S.towerBox||0)/8);
-    if(ex>0){ S.towerBox-=ex*8; S.records=(S.records||0)+ex; }
+    if(ex>0){ S.towerBox-=ex*8; S.records=(S.records||0)+ex; acts+=('기록서x'+ex+' '); }
   }
   // 소환서 구매 — 골드 여유(16M+)면 10장 팩 (E제작 800k 예산은 항상 확보)
   /* ★ v5.230: 로스터 완성(9/9) 후에도 '각성<12'면 계속 산다 — 조각의 소비처는 합성뿐이
@@ -309,6 +309,8 @@ function dailyStep(){
      9/9에서 끊으면 각성이 조각 기아에 걸린다(실측: 600h 각성 +0). 심화(기록서)는
      소환서가 아니라 탑 상자로 가므로 12단계까지만. */
   while(S.gold>=16000000 && (ev('ownedHeroes')().length<9 || (S.awaken||0)<12)){ S.gold-=15000000; S.tickHero+=10; }
+
+  return acts.trim();   // ★ v5.245: 일일 콘텐츠 수행 요약(액션 집계용)
 }
 /* ── +11~20 위험 강화의 엔드게임 기대값 — 몬테카를로(2026-09-12) → 시뮬 내 측정(v5.229) ──
    구 몬테카를로(부위당 479M)는 '실패마다 망치 소모'로 계산해 실제 규칙보다 비쌌다 —
@@ -541,13 +543,13 @@ while(simSec < MAX_HOURS*3600 && windows<12800){   // v5.242: 창 상한 12800(=
   simSec+=WINDOW; windows++;
 
   // ③ 일일 콘텐츠·소환서 구매 → 합성·소환 (의도 루프)
-  dailyStep();
+  const dailyActs=dailyStep();   // ★ v5.245: 일일 루프(탑·던전)도 액션 이벤트로
   const awakenUps=awakenStep();
   const fusedName=summonStep();
   const synthGot=synthStep();
 
   // ④ 제작·장착 (가능한 만큼)
-  let did='';
+  let did=(dailyActs||'')?dailyActs+' ':'';   // ★ v5.245: 일일 콘텐츠 액션 포함
   if(fusedName) did+=`영웅 합성[${fusedName}] `;
   if(synthGot>0) did+=`상급재료+${synthGot} `;
   let c=bestCraftable();
@@ -635,8 +637,8 @@ log('\n[등급 도달] ', Object.entries(gradeReached).map(([g,h])=>`${g}:${h}h`
   const totalH=simSec/3600;
   const bins=[[0,50],[50,200],[200,600],[600,Infinity]];
   const per=()=> bins.map(([a,b])=>{ const n=funTimes.filter(t=>t>=a&&t<b).length;
-      const h=Math.max(0,Math.min(b,totalH)-a); return h>0? a+'~'+(b===Infinity?'+':b)+'h '+n+'회('+(n/h).toFixed(2)+'/h)':null; }).filter(Boolean).join(' · ');
-  log('[재미 지표] 액션 이벤트 '+funTimes.length+'회 · 평균 '+(funTimes.length/Math.max(1,totalH)).toFixed(2)+'회/h · 최장 공백 '+(funGapMax/3600).toFixed(1)+'h(@'+funGapAt+'h)');
+      const h=Math.max(0,Math.min(b,totalH)-a); return h>0? a+'~'+(b===Infinity?'+':b)+'h '+n+'회('+(n/h).toFixed(2)+'/h='+(n/h*24).toFixed(1)+'/일)':null; }).filter(Boolean).join(' · ');
+  log('[재미 지표] 액션 이벤트 '+funTimes.length+'회 · 평균 '+(funTimes.length/Math.max(1,totalH)).toFixed(2)+'회/h(='+((funTimes.length/Math.max(1,totalH))*24).toFixed(1)+'/일) · 최장 공백 '+(funGapMax/3600).toFixed(1)+'h(@'+funGapAt+'h) — /h는 24h 연속 가정, 체감은 /일(접속 세션당 몰아하기) 기준으로 볼 것');
   log('[재미 지표] 구간 밀도 — '+per());
 }const GORDER=['N','R','E','L'];
 let walls=[];
