@@ -1663,7 +1663,22 @@ function _dc(key){ return (S && S.daily && S.daily.counts && S.daily.counts[key]
    DOM 표시 전용 — 상태 변경·경제 영향 없음. 부팅 직후(S=null) 5초 틱에 닿지 않게 가드. */
 function questClaimable(){
   if(!S) return false;
-  return DAILY_QUESTS.some((q,i)=> !q.noBtn && q.cnt()>=q.goal && dailyLeft('dqc'+i,1)>0);
+  return DAILY_QUESTS.some((q,i)=> !q.noBtn && q.cnt()>=q.goal && dailyLeft('dqc'+i,1)>0)
+    || weeklyClaimable() || monthlyClaimable();   // ★ v5.265: 주간·월간 의뢰
+}
+/* ★ v5.265: 주간·월간 의뢰 수령 가능 판정 — questClaimable(일일)과 같은 패턴.
+   진행 완료 && 미수령. questClaimable 의 or 에 합쳐 퀘스트 아이콘 점이 켜진다. */
+function weeklyClaimable(){
+  if(!S || !S.weekly || !S.weekly.key || S.weekly.key!==getWeekKey()) return false;
+  const w=S.weekly;
+  return WEEKLY_QUESTS.some(q=>{ const now=S.stats[q.stat]||0, base=(w.base&&w.base[q.stat])||0;
+    return !w.claimed[q.id] && (now-base)>=q.goal; });
+}
+function monthlyClaimable(){
+  if(!S || !S.monthly || !S.monthly.key || S.monthly.key!==getMonthKey()) return false;
+  const m=S.monthly;
+  return MONTHLY_QUESTS.some(q=>{ const now=S.stats[q.stat]||0, base=(m.base&&m.base[q.stat])||0;
+    return !m.claimed[q.id] && (now-base)>=q.goal; });
 }
 function attendClaimable(){
   if(!S || S.attendLastDate===today()) return false;

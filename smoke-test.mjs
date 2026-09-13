@@ -1384,6 +1384,33 @@ step('의뢰 리셋 남은 일수 — 계산·렌더 정합', ()=>{
   if(errs.length) throw new Error(errs.join(' | '));
 });
 
+/* ★ v5.265 회귀: 주간·월간 의뢰 수령 배지 — 진행 완료 미수령 시 questClaimable true,
+   미완료·수령 후·새 주(키 불일치) false. */
+step('의뢰 수령 배지 — weeklyClaimable·monthlyClaimable', ()=>{
+  const S=ev('S');
+  const keep={weekly:S.weekly?JSON.parse(JSON.stringify(S.weekly)):null, monthly:S.monthly?JSON.parse(JSON.stringify(S.monthly)):null, kills:S.stats.kills, crafts:S.stats.crafts};
+  const errs=[];
+  // 진행 완료(w1 kills +5000)·미수령 → true
+  S.weekly={ key:ev('getWeekKey')(), base:{kills:S.stats.kills-5000, crafts:S.stats.crafts, summons:S.stats.summons, towerTries:S.stats.towerTries||0}, claimed:{} };
+  if(!ev('weeklyClaimable')()) errs.push('w1 완료 미수령인데 false');
+  // 수령 후 → false
+  S.weekly.claimed.w1=true;
+  if(ev('weeklyClaimable')()) errs.push('수령 후 true');
+  // 미완료 → false
+  S.weekly.claimed={}; S.weekly.base.kills=S.stats.kills;
+  if(ev('weeklyClaimable')()) errs.push('미완료인데 true');
+  // 월간 m2(crafts 60) 완료 → true
+  S.monthly={ key:ev('getMonthKey')(), base:{kills:S.stats.kills, crafts:S.stats.crafts-60, summons:S.stats.summons, towerTries:S.stats.towerTries||0}, claimed:{} };
+  if(!ev('monthlyClaimable')()) errs.push('m2 완료 미수령인데 false');
+  // questClaimable 전체에 합산돼 있는지(주간만 완료 상태에서 true)
+  if(!ev('questClaimable')()) errs.push('questClaimable이 주간 미수령 반영 안 함');
+  // 원복
+  S.weekly=keep.weekly?JSON.parse(JSON.stringify(keep.weekly)):{key:'',base:null,claimed:{}};
+  S.monthly=keep.monthly?JSON.parse(JSON.stringify(keep.monthly)):{key:'',base:null,claimed:{}};
+  S.stats.kills=keep.kills; S.stats.crafts=keep.crafts;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
+
 /* ★ v5.236 회귀: 극한의 벼림 +21~25 — 성공 30% 표기 · 실패 시 단계 유지(파괴·하락 없음,
    재화만 소모) · +25 상한. 실패 분기 강제는 vm 안 Math.random 후킹(D5 패턴)으로. */
 step('극한의 벼림 +21~25 — 실패해도 유지, +25 상한', ()=>{
