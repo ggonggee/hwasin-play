@@ -7,7 +7,9 @@
    · 가상 플레이어 정책(합리적 플레이):
      ① 전투력이 권장치를 충족하는 가장 높은 사냥터에서 사냥
      ② 재료·골드가 되는 가장 좋은 등급·가장 비싼(좋은) 부위를 제작·장착
-     ③ 강화는 하지 않는다(v1) — 강화 실패 RNG가 곡선에 노이즈를 낸다. 제작 파밍 축만 본다.
+     ③ 강화 — v1 에서는 '안 한다'였으나 v5.229 부터 위험(+11~20)·극한(+21~25, v5.236)
+        강화와 강화석 교환(v5.238)까지 시뮬 내 직접 측정한다(아래 riskEnhance·riskTally).
+        이 줄이 종전 "미반영"으로 읽혀 미션이 해소됐는데도 남아있는 것처럼 오독시켰다(루프98 정정).
    · 시간 압축: 전투는 실제 스텝(Battle.pumpFrame, 고정 1/20s)으로 짧은 창을 돌려
      실수입률을 측정하고, 창 사이 '다음 제작 완료 시점'까지는 해석적으로 건너뛴다.
    · 시드 고정 — 실행마다 같은 곡선이 나와야 비교가 된다(M1 결정론 정신).
@@ -26,7 +28,12 @@ const MAX_HOURS = Number(process.argv[2]||240);
 /* ★ v5.274: 캐주얼 시나리오 — 세 번째 인자 'casual'. 하루(48창) 중 첫 16창(8시간)만
    접속, 나머지 32창(16시간)은 오프라인(offlinePending 적립, 접속 재개 창에서 8h 상한
    정산). 실유저 '하루 8시간 접속' 근사 — 무한 축이 캐주얼에게도 작동하는지 검증. */
-const CASUAL = process.argv[3]==='casual';
+const CASUAL = process.argv.slice(3).some(a=>a==='casual');
+/* ★ v5.282: 시드 파라미터화 — 'seed=N' 인자(위치 무관, casual 과 병용 가능).
+   기본 42(기존 재현성·공식 곡선 수치 불변). 곡선 결론이 단일 시드 궤적에만 근거하는
+   약점을 메우기 위한 시드 분산 측정(로버스트니스)용 — 3곳(vm Math.random·srand·
+   Battle.setSeed)이 같은 N을 쓴다. seed=0 금지(xorshift가 0에 갇힘). */
+const SEED = (()=>{ for(const a of process.argv.slice(3)){ const m=/^seed=(\d+)$/.exec(a||''); if(m){ const n=Number(m[1])>>>0; if(!n) throw new Error('seed=0 은 xorshift 붕괴 — 1 이상'); return n; } } return 42; })();
 const ACTIVE_WINDOWS_PER_DAY = 16;
 
 /* ---- 최소 DOM 스텁 (smoke-test 의 것에서 전투 구동에 필요한 만큼만) ---- */
@@ -104,7 +111,7 @@ documentStub._ev.DOMContentLoaded();          // 부트 (빈 저장소 → 신�
    고정하고, 게임이 직접 굴리는 Math.random(onKill 보상 드랍·제작 성공 p0·합성)은 진짜
    난수였다. 전투는 setSeed(42), 전역은 아래 xorshift(시드 42) — 서로 다른 스트림이지만
    둘 다 결정적이면 전체 시뮬도 결정적이다. 스모크(D1~D5)와는 별도 컨텍스트라 무관. */
-ev("globalThis.__g=42>>>0; Math.random=function(){ let r=globalThis.__g; r^=(r<<13)>>>0; r^=(r>>>17); r^=(r<<5)>>>0; r>>>=0; globalThis.__g=r; return r/4294967296; };");
+ev(`globalThis.__g=${SEED}>>>0; Math.random=function(){ let r=globalThis.__g; r^=(r<<13)>>>0; r^=(r>>>17); r^=(r<<5)>>>0; r>>>=0; globalThis.__g=r; return r/4294967296; };`);
 
 /* ---- 시뮬 유틸 ---- */
 const log=(...a)=>console.log(...a);
@@ -112,7 +119,7 @@ const log=(...a)=>console.log(...a);
    코드(위험강화·안전강화·합성 확률)가 vm 밖 진짜 Math.random을 굴려 실행마다 궤적이
    갈라졌다(재현성 실측: 400h CP 303,193 vs 296,486). xorshift32로 시뮬도 시드 고정.
    전투 스트림(setSeed)과는 별개 시퀀스 — 두 스트림 모두 결정적이면 전체도 결정적이다. */
-let _s=42>>>0;
+let _s=SEED>>>0;
 function srand(){ _s^=(_s<<13)>>>0; _s^=(_s>>>17); _s^=(_s<<5)>>>0; _s>>>=0; return _s/4294967296; }
 function battleWindow(simSec){
   // 실전투 창: 고정 스텝(1/20s)으로 simSec 초 만큼 진행. 수입은 곧장 S 에 반영된다.
@@ -549,7 +556,7 @@ function summonStep(){
 }
 
 /* ---- 시뮬 본체 ---- */
-ev('Battle').setSeed(42);
+ev('Battle').setSeed(SEED);
 const S0=ev('S');
 S0.settings.sound=false;
 let simSec=0;
@@ -560,7 +567,7 @@ const killLog=[];               // ★ v5.185 진단: 등급별 제작 시도 �
 
 events.push({t:0, cp:myCP(), what:'시작 — '+ev('party')()[0].name});
 
-log(`\n[밸런스 시뮬] 시드 42 · 최대 ${MAX_HOURS}시뮬시간 · 창 ${WINDOW/60}분\n`);
+log(`\n[밸런스 시뮬] 시드 ${SEED}${CASUAL?' · 캐주얼':''} · 최대 ${MAX_HOURS}시뮬시간 · 창 ${WINDOW/60}분\n`);
 let lastCP=myCP(), lastEventT=0, windows=0;
 let lastSetm=1;                    // ★ v5.228 세트 계측 — 창 사이 배율 변화 감지용
 const gradeReached={};
