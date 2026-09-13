@@ -120,7 +120,12 @@ body{
   padding:2px 7px 2px 3px;
   border:1px solid var(--frame); border-radius:6px; background:linear-gradient(180deg,rgba(0,0,0,.5),rgba(0,0,0,.25)); }
 .cur .ic{ width:17px; height:17px; display:inline-flex; align-items:center; justify-content:center; font-size:var(--fs-base); }
-.cur span:last-child{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:64px; }
+/* ★ v5.281: 64px 말줄임이 B1/G-12 '재화바는 전체 자릿수 노출'(fmtFull)과 모순돼 백만 골드부터
+   "2,000,…"처럼 실제 값과 다르게 읽히게 잘렸다(실물 픽셀 QA 2026-09-13 발견 — 헤드리스
+   렌더에서 sw 88~112px > cw 64px 실측). 조 단위 15자(≈112px)까지 통째로 보이도록 118px 로
+   늘리고, 그 넘는 극단값의 안전장치로 ellipsis 는 유지한다. 명패(.namecap ≈92px 고정) 와
+   합쳐도 상단바 453px 안에 들어온다(검증: 말줄임 해소·요소 무겹침 크롭). */
+.cur span:last-child{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:118px; }
 .cur.gold .ic{ color:var(--gold);} .cur.ruby .ic{ color:var(--ruby);}
 .iconbtn{ flex:0 0 auto; width:26px; height:26px; cursor:pointer;  background:linear-gradient(180deg,#31251a,#150f0a); border:1px solid var(--frame); border-radius:50%;
   color:var(--txt); font-size:var(--fs-md); display:flex; align-items:center; justify-content:center; }
