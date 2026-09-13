@@ -695,8 +695,16 @@ log('\n[등급 도달] ', Object.entries(gradeReached).map(([g,h])=>`${g}:${h}h`
 {
   const totalH=simSec/3600;
   const bins=[[0,50],[50,200],[200,600],[600,3200],[3200,12800],[12800,Infinity]];   // ★ v5.261: 25600h 측정용
+  /* ★ v5.277: 구간 밀도에도 세그먼트 분모 병기 — 총평(v5.276)만 고치니 구간별
+     판정(600~3200h 등)이 여전히 24h 분모 오탐을 냈다. 캐주얼은 구간 접속시간
+     (h×16/48) 기준 '/접속일'을 괄호 안에 추가. */
   const per=()=> bins.map(([a,b])=>{ const n=funTimes.filter(t=>t>=a&&t<b).length;
-      const h=Math.max(0,Math.min(b,totalH)-a); return h>0? a+'~'+(b===Infinity?'+':b)+'h '+n+'회('+(n/h).toFixed(2)+'/h='+(n/h*24).toFixed(1)+'/일)':null; }).filter(Boolean).join(' · ');
+      const h=Math.max(0,Math.min(b,totalH)-a);
+      if(h<=0) return null;
+      const day=(n/h*24).toFixed(1);
+      const seg=CASUAL ? '='+(n/(h*(ACTIVE_WINDOWS_PER_DAY/48))*8).toFixed(1)+'/접속일' : '';
+      return a+'~'+(b===Infinity?'+':b)+'h '+n+'회('+(n/h).toFixed(2)+'/h='+day+'/일'+seg+')';
+    }).filter(Boolean).join(' · ');
 /* ★ v5.276: 세그먼트별 분모 명시 — 캐주얼은 비접속 16h가 시계에 포함돼 /h·/일이
    구조적으로 낮다(4.1/일 오탐 사례). 캐주얼 모드에선 '/접속일'(접속 시간 8h 기준)을
    병기해 감시 규칙(5/일) 판정을 세그먼트에 맞게 적용한다. */
