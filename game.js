@@ -4268,7 +4268,17 @@ function chooseClassTrait(){
   $('#modal-root').classList.add('on'); currentModal='classTrait';
 }
 // --- 인트로 시퀀스 (대사 → 보상 팝업 스택 → 유도 튜토리얼) ---
-function runIntro(){ showDialogue(['안녕하세요, 군주님. 저는 결정의 시대의 대장장이 리안입니다.','결정의 가호로 방치만 해도 골드와 재료가 쌓입니다.','먼저 초반 보상을 받아 성장을 시작하죠!'], introRewards); }
+function runIntro(){
+  /* ★ v5.248: 재접속은 대사를 생략한다 — 온보딩 중 이탈 유저가 매번 리안 대사 3장부터
+     다시 밟았다(QA 11차 UX 후보: 신규 이탈 단면에서 매번 대사가 먼저 온다).
+     tut.introSeen(대사를 한 번이라도 '보기 시작한' 표식)이면 introRewards 로 직행 —
+     보상은 지급 단위별 멱등(v5.115)이라 미수령 칸만 다시 보여준다. 보상까지 완료된
+     상태였면 v5.116 경로(introDone)가 튜토리얼을 이어받는다. */
+  const _t=tutState();
+  if(_t.introSeen){ introRewards(); return; }
+  _t.introSeen=true; save();
+  showDialogue(['안녕하세요, 군주님. 저는 결정의 시대의 대장장이 리안입니다.','결정의 가호로 방치만 해도 골드와 재료가 쌓입니다.','먼저 초반 보상을 받아 성장을 시작하죠!'], introRewards);
+}
 /* ★ B1/G-08: 3개 팝업이 서로 다른 화면이다.
    ① 랭크 보상 카드 ② 7일 출석 전체 그리드(1일차 체크) ③ 오프라인 정산 3필드 */
 function introRewards(){

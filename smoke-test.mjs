@@ -1129,6 +1129,32 @@ step('결정 가호 — 골드 버프 관문·연장', ()=>{
   if(errs.length) throw new Error(errs.join(' | '));
 });
 
+/* ★ v5.248 회귀: 인트로 재접속 대사 생략 — tut.introSeen이면 showDialogue를 거치지
+   않고 introRewards(멱등)로 직행한다. 신규(표식 없음)는 대사가 시작되며 표식이 남는다. */
+step('인트로 재접속 — 대사 생략·멱등 직행', ()=>{
+  const S=ev('S');
+  const keep={ seen:S.seenTutorial, introDone:S.introDone, tut:S.tut?JSON.parse(JSON.stringify(S.tut)):null };
+  const nl=ev("document.querySelector('#npc-layer')");
+  const errs=[];
+  // 1) 재접속(introSeen=true, 보상 전부 수령·introDone) — 대사 없이 조용히 종료 경로
+  S.seenTutorial=false; S.introDone=false;
+  S.tut=S.tut||{}; S.tut.introSeen=true; S.tut.introClaimed={0:true,1:true,2:true};
+  const r1=ev('runIntro')();
+  if(r1!==undefined) errs.push('반환값 있음(v5.116 경로는 return undefined 아님 검증 여지) — '+r1);
+  /* v5.116 경로는 튜토리얼 시작 대사('먼저 몬스터…')를 연다 — 그건 정상 설계다.
+     검증은 '인트로 첫 대사(안녕하세요)가 다시 나오지 않는 것'으로 좁힌다. */
+  const nlTxt=nl ? String(nl.textContent||nl.innerHTML||'') : '';
+  if(nlTxt.includes('안녕하세요')) errs.push('재접속인데 인트로 첫 대사가 다시 열림');
+  // 2) 신규(표식 없음) — 대사 시작 + 표식 세팅
+  S.tut.introSeen=undefined;
+  ev('runIntro')();
+  if(!S.tut.introSeen) errs.push('신규 인트로 후 introSeen 미세팅');
+  // 원복
+  S.seenTutorial=keep.seen; S.introDone=keep.introDone;
+  if(keep.tut) S.tut=JSON.parse(JSON.stringify(keep.tut));
+  if(errs.length) throw new Error(errs.join(' | '));
+});
+
 /* ★ v5.236 회귀: 극한의 벼림 +21~25 — 성공 30% 표기 · 실패 시 단계 유지(파괴·하락 없음,
    재화만 소모) · +25 상한. 실패 분기 강제는 vm 안 Math.random 후킹(D5 패턴)으로. */
 step('극한의 벼림 +21~25 — 실패해도 유지, +25 상한', ()=>{
