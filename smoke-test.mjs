@@ -1110,21 +1110,34 @@ step('결정 가호 — 골드 버프 관문·연장', ()=>{
   if(item.cost!==5000000) errs.push('가격 '+item.cost+'(기대 500만)');
   const keep={buffs:S.buffs?JSON.parse(JSON.stringify(S.buffs)):null, gold:S.gold};
   S.buffs=S.buffs||{};
-  S.buffs.goldUntil=Date.now()-1000;
+  S.buffs.goldPactUntil=Date.now()-1000;
   item.give();
-  if(S.buffs.goldUntil<=Date.now()) errs.push('give 후 goldUntil이 미래 아님');
+  if(S.buffs.goldPactUntil<=Date.now()) errs.push('give 후 goldPactUntil이 미래 아님');
   const base=Date.now()+7200000;
-  S.buffs.goldUntil=base;
+  S.buffs.goldPactUntil=base;
   item.give();
-  if(Math.abs(S.buffs.goldUntil-(base+3600000))>2000) errs.push('연장 집계 오류: '+(S.buffs.goldUntil-base));
-  S.buffs.goldUntil=Date.now()+3600000;
+  if(Math.abs(S.buffs.goldPactUntil-(base+3600000))>2000) errs.push('연장 집계 오류: '+(S.buffs.goldPactUntil-base));
+  /* ★ v5.253: 키 분리·약속 정합 — 가호 1.5 / 프리미엄 2.0 / 병립 2.5(합산).
+     관문엔 칭호 골드 배율(titleGoldMul, 장착 칭호 따라 1.0~1.1+)도 함께 곱해지므로
+     base(버프 0)를 직접 재서 'base의 N배'로 비교한다 — 절대값 비교는 칭호에 깨진다. */
+  delete S.buffs.goldUntil; delete S.buffs.goldPactUntil;
+  const gb0=S.gold; ev('addGold')(1000); const gBase=S.gold-gb0; S.gold=gb0;
+  if(Math.abs(gBase-1000*ev('titleGoldMul')())>0.5) errs.push('base(버프0) 정합 실패: '+gBase);
+  S.buffs.goldPactUntil=Date.now()+3600000;
   const g0=S.gold; ev('addGold')(1000,true);
   const g1=S.gold-g0;
   S.gold=g0; ev('addGold')(1000);
   const g2=S.gold-g0;
   if(Math.abs(g1-1000)>0.5) errs.push('raw 지급이 1000이 아님: '+g1);
-  if(g2<1400) errs.push('버프 ON인데 addGold 반영 없음: '+g2);
-  if(keep.buffs) S.buffs=JSON.parse(JSON.stringify(keep.buffs)); else delete S.buffs.goldUntil;
+  if(Math.abs(g2-gBase*1.5)>1) errs.push('가호만 ON일 때 base*1.5 아님: '+g2+' base '+gBase);
+  S.gold=g0; S.buffs.goldUntil=Date.now()+3600000; delete S.buffs.goldPactUntil;
+  ev('addGold')(1000); const g3=S.gold-g0; S.gold=g0;
+  if(Math.abs(g3-gBase*2)>1) errs.push('프리미엄만 ON일 때 base*2 아님(+100% 약속 정합): '+g3+' base '+gBase);
+  S.buffs.goldPactUntil=Date.now()+3600000;
+  ev('addGold')(1000); const g4=S.gold-g0; S.gold=g0;
+  if(Math.abs(g4-gBase*2.5)>1) errs.push('병립 시 base*2.5 아님(합산): '+g4+' base '+gBase);
+  delete S.buffs.goldUntil;
+  if(keep.buffs) S.buffs=JSON.parse(JSON.stringify(keep.buffs)); else { delete S.buffs.goldUntil; delete S.buffs.goldPactUntil; }
   S.gold=keep.gold;
   if(errs.length) throw new Error(errs.join(' | '));
 });

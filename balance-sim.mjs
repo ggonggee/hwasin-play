@@ -425,10 +425,10 @@ const buffTally={n:0,gold:0};
 function buffStep(){
   const S=ev('S');
   const now=simSec*1000;
-  if(S.buffs && S.buffs.goldUntil>now) return '';
+  if(S.buffs && S.buffs.goldPactUntil>now) return '';
   if(S.gold < 61000000) return '';   // v5.247 조건 완화: 소환서 16M+망치 40M 예산 위(기록서는 버프 이득으로 충당)
   S.gold-=5000000; buffTally.n++; buffTally.gold+=5000000;
-  S.buffs=S.buffs||{}; S.buffs.goldUntil=now+3600000;
+  S.buffs=S.buffs||{}; S.buffs.goldPactUntil=now+3600000;
   return '결정가호';
 }
 /* 각성 정책 — 조각(직업 공용)이 여유일 때(전 영웅 보유 후 남는 조각) 기본 12단계까지.

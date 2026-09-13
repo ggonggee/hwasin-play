@@ -797,7 +797,8 @@ const GOLDSHOP = [
   /* ★ v5.247: 결정 가호 — 골드 버프 라인(자체 설계, 근거는 goldBuffMul 주석). 만료 전
      재구매는 시간을 '연장'한다(덮어쓰지 않게 max(now, 기존)+1h). */
   { t:'결정 가호 1시간 (+50% 골드)', ic:'💠', cur:'gold', cost:5000000,
-    give:()=>{ const now=Date.now(); S.buffs=S.buffs||{}; S.buffs.goldUntil=Math.max(now,S.buffs.goldUntil||0)+3600000; } },
+    /* ★ v5.253: 전용 키 goldPactUntil — 프리미엄 goldUntil(30일 +100%)과 분리. */
+    give:()=>{ const now=Date.now(); S.buffs=S.buffs||{}; S.buffs.goldPactUntil=Math.max(now,S.buffs.goldPactUntil||0)+3600000; } },
   { t:'투기장 입장권 X1',  ic:'🎫', cur:'gold', cost:5000000,  give:()=>{ S.ticket=Math.min(30,S.ticket+1); } },
   { t:'골드 10,000,000',   ic:'🪙', cur:'ruby', cost:300,  give:()=>{ addGold(10000000); } },
   { t:'골드 200,000,000 + 전설 망치 20', ic:'🪙', cur:'ruby', cost:2800, give:()=>{ addGold(200000000); S.hammers=(S.hammers||0)+20; } },
@@ -3629,7 +3630,18 @@ function arenaGoldBuffPct(){
    골드 500만 → 1시간 골드 획득 +50%(시뮬 유입 ~190만/h 기준 +95만/h — 구매 순간
    순싱크 약 405만, 이후 매시간 다시 누를 유인). 결제 통화가 골드라 골드상점에 둔다
    (버프탭은 전부 루비제 — 통화별 탭 일관). 효과는 F2와 같은 단일 관문(addGold)에서. */
-function goldBuffMul(){ return (S.buffs && S.buffs.goldUntil > Date.now()) ? 1.5 : 1; }
+/* ★ v5.253: 골드 버프 키 분리·약속 정합 — v5.247이 결정 가호(+50%·1시간)에 프리미엄
+   구독 키(goldUntil)를 그대로 써서 두 상품이 충돌했다: 30일 +100% 상품(루비 600)은
+   배율 구현이 아예 없다가 v5.247이 우연히 1.5배를 주게 됐고(약속 +100% 위반),
+   가호 구매는 프리미엄 만료 시각에 +1h만 붙었다. 키를 분리하고 퍼센트 합산으로
+   정합 — 프리미엄 goldUntil=+100%, 가호 goldPactUntil=+50%, 둘 다 켜지면 ×2.5. */
+function goldBuffMul(){
+  if(!S.buffs) return 1;
+  const now=Date.now(); let pct=0;
+  if(S.buffs.goldUntil>now) pct+=1;           // 프리미엄 골드 수급 +100% (BUFFSHOP 약속)
+  if(S.buffs.goldPactUntil>now) pct+=0.5;     // 결정 가호 +50% (v5.247)
+  return 1+pct;
+}
 function addGold(n, raw){
   // ★ F2: 칭호의 '몬스터 골드 획득량 +X%' 는 골드 획득 단일 관문인 여기서 한 번만 곱한다.
   // ★ v5.247: 결정 가호(골드 +50%·1시간)도 같은 관문 — raw(고정 보상)에는 적용하지 않는다.
@@ -3684,6 +3696,7 @@ function refreshHUD(){
   if(_pb){
     const now=Date.now(), on=[];
     if(S.buffs.goldUntil>now) on.push('💎G');
+    if(S.buffs.goldPactUntil>now) on.push('💠G50');   // ★ v5.253: 결정 가호 잔여도 상시 표시
     if(S.buffs.expUntil>now) on.push('📘E');
     if(S.buffs.craftUntil>now) on.push('🔨C');
     if(S.raidOn) on.push('⚡');
