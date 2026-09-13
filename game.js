@@ -1426,6 +1426,7 @@ function freshState(){
        칭호는 한 번 달성하면 유지돼야 하므로 have() 는 Best 만 본다. */
     stats:{ kills:0, crafts:0, summons:0, arenaWins:0, synths:0, bossChallenges:0, raids:0,
             fuses:0, arenaEnters:0,          // ★ v5.112: 튜토 STEP7(영웅 합성)·STEP8(투기장 입장) 판정용
+            towerTries:0,                    // ★ v5.262: 시련의 탑 도전 횟수 — 주간 의뢰 w4 축
             craftFail:0, craftFailBest:0,   // 제작 연속 실패
             craftWin:0,  craftWinBest:0,    // 영웅등급 이상 장비 제작 연속 성공
             poorClick:0, poorBest:0,        // 골드 부족 상태에서의 제작 연속 시도
@@ -4546,7 +4547,7 @@ function getWeekKey(){ const d=new Date(); const t=new Date(d.getFullYear(),d.ge
 function weeklyState(){
   if(!S.weekly || typeof S.weekly!=='object') S.weekly={ key:'', base:null, claimed:{} };
   const k=getWeekKey();
-  if(S.weekly.key!==k){ S.weekly.key=k; S.weekly.base={ kills:S.stats.kills||0, crafts:S.stats.crafts||0, summons:S.stats.summons||0 }; S.weekly.claimed={}; save(); }
+  if(S.weekly.key!==k){ S.weekly.key=k; S.weekly.base={ kills:S.stats.kills||0, crafts:S.stats.crafts||0, summons:S.stats.summons||0, towerTries:S.stats.towerTries||0 }; S.weekly.claimed={}; save(); }
   return S.weekly;
 }
 /* ★ v5.256: 월간 의뢰 — 매월 1일 리셋. 목표는 성실 플레이 기준(일 킬 ~700×30일=21,000에
@@ -4565,11 +4566,14 @@ const MONTHLY_QUESTS=[
   { id:'m2', icon:'⚒️', txt:'장비 60회 제작',        stat:'crafts', goal:60,   give:()=>{ S.hammers=(S.hammers||0)+30; return '전설 망치 X30'; } },
   { id:'m3', icon:'📜', txt:'영웅 소환 150회',       stat:'summons',goal:150,  give:()=>{ addGold(100000000,true); return '골드 1억'; } },
 ];
-const WEEKLY_REWARD_TXT={ w1:'영웅 기록서 X3', w2:'전설 망치 X10', w3:'골드 2,000만' };
+const WEEKLY_REWARD_TXT={ w1:'영웅 기록서 X3', w2:'전설 망치 X10', w3:'골드 2,000만', w4:'영웅 기록서 X2' };
 const WEEKLY_QUESTS=[
   { id:'w1', icon:'⚔️', txt:'몬스터 5,000마리 처치', stat:'kills',  goal:5000, give:()=>{ S.records=(S.records||0)+3; return '영웅 기록서 X3'; } },
   { id:'w2', icon:'⚒️', txt:'장비 15회 제작',       stat:'crafts', goal:15,   give:()=>{ S.hammers=(S.hammers||0)+10; return '전설 망치 X10'; } },
   { id:'w3', icon:'📜', txt:'영웅 소환 30회',       stat:'summons',goal:30,   give:()=>{ addGold(20000000,true); return '골드 2,000만'; } },
+  /* ★ v5.262: 탑 도전 의뢰 — 세 의뢰가 전부 사냥/제작/소환 축이었던 다양성 개선.
+     도전은 일 1회라 주 7회가 최대 — 목표 5회는 매일 도전한 주(여유 2일). */
+  { id:'w4', icon:'🗼', txt:'시련의 탑 5회 도전',     stat:'towerTries', goal:5, give:()=>{ S.records=(S.records||0)+2; return '영웅 기록서 X2'; } },
 ];
 function saveSnapshot(){
   try{ return localStorage.getItem(SAVE_KEY) || JSON.stringify(S); }
@@ -6326,7 +6330,8 @@ const MODALS = {
         const foe=600+w*450;
         enterDungeonFight({ name:'불꽃의 탑', col:'#e85a2e', foeCP:foe, kind:'wave', dur:60, waveDur:60, race:true, soloSurvival:true,
           rewardText:'도달 웨이브 비례 보상',
-          reward:(st)=>{ const reach=Math.max(1,(st&&st.wave)||1); S._tower=Math.max(S._tower||0,reach);
+          reward:(st)=>{ S.stats.towerTries=(S.stats.towerTries||0)+1;   // ★ v5.262: 주간 의뢰 w4 축
+            const reach=Math.max(1,(st&&st.wave)||1); S._tower=Math.max(S._tower||0,reach);
             const gold=reach*400000, stn=reach*3, box=Math.max(1,Math.floor(reach/2));
             addGold(gold); S.stones+=stn; S.towerBox=(S.towerBox||0)+box;
             if(reach>=10) matGainGrade(pick(['R','E']), 2);   // ★ v4.5.1: 등급풀 폐지 대응

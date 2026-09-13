@@ -290,6 +290,7 @@ function dailyStep(){
     const reach=Math.max(1, 1+Math.floor(Math.log(Math.max(1,ld)/base)/Math.log(1.18)));
     if(ld>=600 && dailyStep._towerCh!==day){
       dailyStep._towerCh=day;
+      S.stats.towerTries=(S.stats.towerTries||0)+1;   // ★ v5.262: 주간 의뢰 w4 축(게임 reward와 동일 시점)
       ev('addGold')(reach*400000); S.stones=(S.stones||0)+reach*3;
       S.towerBox=(S.towerBox||0)+Math.max(1,Math.floor(reach/2));
       S._tower=Math.max(best, reach); acts+=('탑'+reach+'F ');

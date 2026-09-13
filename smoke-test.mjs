@@ -1203,7 +1203,7 @@ step('주간 의뢰 — 렌더·진행·1회성·렌더 무지급', ()=>{
   const txt=collectText(b);
   if(!txt.includes('주간')) errs.push('퀘스트 탭에 주간 없음');
   // weeklyState 스냅샷 — kills 를 목표 이상 올려 진행·수령 경로 검증
-  S.weekly={ key:ev('getWeekKey')(), base:{ kills:S.stats.kills, crafts:S.stats.crafts, summons:S.stats.summons }, claimed:{} };
+  S.weekly={ key:ev('getWeekKey')(), base:{ kills:S.stats.kills, crafts:S.stats.crafts, summons:S.stats.summons, towerTries:S.stats.towerTries||0 }, claimed:{} };
   S.stats.kills += 5000;
   const w=ev('weeklyState')();
   const q1=ev('WEEKLY_QUESTS')[0];
@@ -1216,6 +1216,12 @@ step('주간 의뢰 — 렌더·진행·1회성·렌더 무지급', ()=>{
   // 수령 — 1회성·지급량
   const rec0=S.records||0; q1.give(); w.claimed[q1.id]=true;
   if((S.records||0)!==rec0+3) errs.push('w1 지급 +3 아님');
+  // ★ v5.262: w4 탑 도전 의뢰 — 존재·축·목표(일 1회 도전 기준 주 5회)·스냅샷 키
+  const q4=ev('WEEKLY_QUESTS').find(q=>q.id==='w4');
+  if(!q4) errs.push('w4 탑 의뢰 없음');
+  else { if(q4.stat!=='towerTries') errs.push('w4 축 '+q4.stat);
+         if(q4.goal!==5) errs.push('w4 목표 '+q4.goal);
+         if(!(w.base && 'towerTries' in w.base)) errs.push('weekly 스냅샷에 towerTries 없음'); }
   const again=q1.give();   // 2회 호출은 함수 자체로는 지급되나 정책상 claimed 로직이 막는다 — 렌더 버튼 disabled가 그 역할. 여기선 지급 로직 자체 검증 후 원복.
   // 원복
   S.stats.kills=keep.kills; if(keep.weekly) S.weekly=JSON.parse(JSON.stringify(keep.weekly)); else S.weekly={key:'',base:null,claimed:{}};
