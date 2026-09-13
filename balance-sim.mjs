@@ -748,6 +748,11 @@ log(`\n총 시뮬: ${(simSec/3600).toFixed(1)}h · 창 ${windows}회 · 최종 C
   log(`[진단] 세트 배율 ×${ev('setDamageMul')().toFixed(3)} · 활성(3+)`,
     ev('activeSets')().filter(x=>x.c>=3).map(x=>`${x.n} ${x.c}세트`).join(', ')||'없음');
   log(`[진단] 강화석 보유: ${Math.floor(S.stones||0)} · 리더 평균 강화: ${(worn.reduce((a,e)=>a+(e.enh||0),0)/(worn.length||1)).toFixed(1)}`);
+  /* ★ v5.285: 세이브 용량 진단 — 시뮬은 localStorage 스텁이라 무제한이지만 실물은 5MB
+     상한이다. 시뮬 정책에 '분해'가 없어 equips 는 실물보다 크게(비관) 자란다 — 이 값이
+     안정적이면 실물 장기 이용자의 세이브 실패(_saveFailFlag) 위험도 안정이라는 뜻.
+     무한 증가 상태 배열(로그는 DOM 전용, 재료는 고정 키)이 없음을 전제로 추이 감시. */
+  log(`[진단] 세이브 직렬화 ${(JSON.stringify(S).length/1024).toFixed(1)}KB (실물 상한 5MB · equips ${S.equips.length}점 · 비관측: 분해 정책 없음)`);
   /* ★ v5.229: 위험 강화 축 집계 — 시도/성공/하락/보호/파괴와 망치 구매 골드.
      부위당 기대 비용은 hammerGold/파괴 재제작까지 합쳐 실측된다(종전 몬테카를로 479M 갱신). */
   log(`[진단] 위험강화: 시도 ${riskTally.tries} · 성공 ${riskTally.success} · 하락 ${riskTally.drop} · 보호 ${riskTally.saved} · 파괴 ${riskTally.destroyed} · +25도달 ${riskTally.max20}부위 · 망치구매 골드 ${(riskTally.hammerGold/1e6).toFixed(0)}M + 강화석 ${riskTally.hammerStone}개`);
