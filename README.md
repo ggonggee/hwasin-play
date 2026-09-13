@@ -42,7 +42,7 @@ assets/             아이콘·몬스터·영웅 스프라이트·이펙트·배
 
 version.mjs         버전 정본(package.json) → index.html 캐시버스터·표기 동기화
 verify.mjs          정적 무결성 검사 (실패하면 종료코드 1 — 게이트다)
-balance-sim.mjs     장기 진행 시뮬레이터 (npm run sim [시간] [casual] — 실제 game.js 구동 · casual=일 8h 접속+오프라인 정산 세그먼트)
+balance-sim.mjs     장기 진행 시뮬레이터 (npm run sim [시간] [casual] [seed=N] — 실제 game.js 구동 · casual=일 8h 접속+오프라인 정산 세그먼트 · seed=N=시드 분산 측정(기본 42, v5.282))
 smoke-test.mjs      런타임 스모크 테스트 (DOM 스텁 위에서 실제 실행)
 icon-pack.mjs       아이콘 팩 → assets/icons 매핑 도구 (ICON_PACK 환경변수로 원본 팩 경로 지정)
 
@@ -132,6 +132,7 @@ push 전 검사 훅(`.githooks/pre-push`)을 설치한다. 안 하면 `git push`
 (매월 1일 리셋 · 3의뢰) — 유저의 캘린더가 채워진다. 영웅 레벨 상한 9,999.
 
 **진행 곡선** (밸런스 시뮬 확정 — `npm run sim 600` 실측 · 시드 42 재현성 확보 ·
+시드 10개 분산에서 중앙값 궤적임을 실증(v5.282) ·
 세트 정복(v5.228)·결정 가호(v5.247) 반영):
 
 | 등급(사냥 개시) | 시각 |
