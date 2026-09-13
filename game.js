@@ -7299,7 +7299,11 @@ const MODALS = {
        기기 변경이면 통째로 사라졌다. 백업 수단이 하나도 없었다(내보내기 경로 0건).
        파일 다운로드는 환경에 따라 막히므로(iframe·인앱 브라우저), 어디서나 되는
        '텍스트 복사/붙여넣기' 로 만든다. */
-    const dr=el('div','pack'); dr.innerHTML=`<div class="pic">💾</div><div class="info"><div class="t">진행도 백업</div><div class="d">다른 기기로 옮기거나 보관해 둡니다</div></div>`;
+    /* ★ v5.289: iOS 사파리 ITP 고지 — Apple 정책상 스크립트 저장소(localStorage 포함)는
+       7일 사용 없으면 삭제되고(홈 화면 추가 사이트는 제외), 방치 게임의 '며칠 쉬고 재접속'
+       리듬과 정면으로 충돌한다. 백업 행 설명에 경고를 상시 노출 — 결함 보고 전에 알려진
+       플랫폼 위험이라 자체 대응(세이브 소실은 재미 검증 자체를 무너뜨린다). */
+    const dr=el('div','pack'); dr.innerHTML=`<div class="pic">💾</div><div class="info"><div class="t">진행도 백업</div><div class="d">다른 기기 이관·보관용 코드<br>⚠ iPhone·iPad 사파리는 홈 화면 추가 없이 7일 미접속 시 삭제될 수 있습니다</div></div>`;
     const dw=el('div','optbtns');
     const exb=el('button','btn sm','내보내기'); exb.onclick=()=>saveExport();
     const imb=el('button','btn sm','가져오기'); imb.onclick=()=>saveImport();

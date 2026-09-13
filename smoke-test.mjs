@@ -1478,6 +1478,17 @@ step('7일 출석 완주 — 다음 날 새 주기 리셋·미완주는 이어�
   if(errs.length) throw new Error(errs.join(' | '));
 });
 
+/* ★ v5.289 회귀: iOS 사파리 ITP 세이브 삭제 고지 — 설정 백업 행에 '7일 미접속 삭제'
+   경고가 상시 노출돼야 한다. 방치 게임의 재접속 리듬과 Apple 정책이 충돌하는 플랫폼
+   위험이라 문구 소실은 유저 보호 구멍이다. 백업 버튼 존재도 함께. */
+step('설정 백업 행 — iOS 사파리 세이브 삭제 고지 존재', ()=>{
+  const M=ev('MODALS');
+  const b=new Node2('div'); M.settings.render(b);
+  const txt=collectText(b);
+  if(!/7일 미접속/.test(txt)) throw new Error('ITP 고지 문구 없음');
+  if(!/내보내기/.test(txt)) throw new Error('백업 버튼 없음');
+});
+
 /* ★ v5.265 회귀: 주간·월간 의뢰 수령 배지 — 진행 완료 미수령 시 questClaimable true,
    미완료·수령 후·새 주(키 불일치) false. */
 step('의뢰 수령 배지 — weeklyClaimable·monthlyClaimable', ()=>{
