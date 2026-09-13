@@ -1257,6 +1257,32 @@ step('유료 상품 give 정합 전수 — 변화 0 상품 없음', ()=>{
   if(dead.length) throw new Error(dead.join(' | '));
 });
 
+/* ★ v5.255 회귀: 명패 미니 배지 — 가호(💠G50)·프리미엄(💎G·📘E·🔨C) 상시 표시.
+   refreshHUD 가 #premiumBadge 텍스트를 세팅하는 실물과 동일 경로다(브라우저 QA 대신). */
+step('명패 배지 — 가호·프리미엄 버프 상시 표시', ()=>{
+  const S=ev('S');
+  const badge=ev("document.querySelector('#premiumBadge')") || ev("$('#premiumBadge')");
+  if(!badge) throw new Error('#premiumBadge 노드 없음');
+  const keep={buffs:S.buffs?JSON.parse(JSON.stringify(S.buffs)):null, display:badge.style.display, txt:''};
+  S.buffs=S.buffs||{};
+  // 1) 전부 꺼짐 → 배지 비움(또는 숨김)
+  S.buffs.goldUntil=0; S.buffs.expUntil=0; S.buffs.craftUntil=0; delete S.buffs.goldPactUntil;
+  ev('refreshHUD')();
+  if((badge.textContent||'').includes('G50')) throw new Error('버프 0인데 G50 표시');
+  // 2) 가호만 → 💠G50
+  S.buffs.goldPactUntil=Date.now()+3600000;
+  ev('refreshHUD')();
+  if(!(badge.textContent||'').includes('💠G50')) throw new Error('가호 ON인데 💠G50 없음: '+(badge.textContent||''));
+  // 3) 프리미엄 골드+경험치 병립 → 💎G 📘E 🔨C도
+  S.buffs.goldUntil=Date.now()+86400000; S.buffs.expUntil=Date.now()+86400000; S.buffs.craftUntil=Date.now()+86400000;
+  ev('refreshHUD')();
+  const t=badge.textContent||'';
+  ['💎G','📘E','🔨C','💠G50'].forEach(k=>{ if(!t.includes(k)) throw new Error('배지 누락 '+k+': '+t); });
+  // 원복
+  if(keep.buffs) S.buffs=JSON.parse(JSON.stringify(keep.buffs)); else { delete S.buffs.goldPactUntil; }
+  ev('refreshHUD')();
+});
+
 /* ★ v5.236 회귀: 극한의 벼림 +21~25 — 성공 30% 표기 · 실패 시 단계 유지(파괴·하락 없음,
    재화만 소모) · +25 상한. 실패 분기 강제는 vm 안 Math.random 후킹(D5 패턴)으로. */
 step('극한의 벼림 +21~25 — 실패해도 유지, +25 상한', ()=>{
