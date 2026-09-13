@@ -673,7 +673,7 @@ log('\n[등급 도달] ', Object.entries(gradeReached).map(([g,h])=>`${g}:${h}h`
    공백. 구간 밀도가 급감하는 구간이 '썰렁한 구간' — 다음 재미 개선의 데이터 표적. */
 {
   const totalH=simSec/3600;
-  const bins=[[0,50],[50,200],[200,600],[600,3200],[3200,Infinity]];   // ★ v5.250: 12800h 측정용 세분화
+  const bins=[[0,50],[50,200],[200,600],[600,3200],[3200,12800],[12800,Infinity]];   // ★ v5.261: 25600h 측정용
   const per=()=> bins.map(([a,b])=>{ const n=funTimes.filter(t=>t>=a&&t<b).length;
       const h=Math.max(0,Math.min(b,totalH)-a); return h>0? a+'~'+(b===Infinity?'+':b)+'h '+n+'회('+(n/h).toFixed(2)+'/h='+(n/h*24).toFixed(1)+'/일)':null; }).filter(Boolean).join(' · ');
 log('[재미 지표] 액션 이벤트 '+funTimes.length+'회 · 평균 '+(funTimes.length/Math.max(1,totalH)).toFixed(2)+'회/h(='+((funTimes.length/Math.max(1,totalH))*24).toFixed(1)+'/일) · 최장 공백 '+(funGapMax/3600).toFixed(1)+'h(@'+funGapAt+'h) — /h는 24h 연속 가정, 체감은 /일(접속 세션당 몰아하기) 기준으로 볼 것');
