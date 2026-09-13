@@ -4557,14 +4557,17 @@ function getMonthKey(){ const d=new Date(); return d.getFullYear()+'-'+(d.getMon
 function monthlyState(){
   if(!S.monthly || typeof S.monthly!=='object') S.monthly={ key:'', base:null, claimed:{} };
   const k=getMonthKey();
-  if(S.monthly.key!==k){ S.monthly.key=k; S.monthly.base={ kills:S.stats.kills||0, crafts:S.stats.crafts||0, summons:S.stats.summons||0 }; S.monthly.claimed={}; save(); }
+  if(S.monthly.key!==k){ S.monthly.key=k; S.monthly.base={ kills:S.stats.kills||0, crafts:S.stats.crafts||0, summons:S.stats.summons||0, towerTries:S.stats.towerTries||0 }; S.monthly.claimed={}; save(); }
   return S.monthly;
 }
-const MONTHLY_REWARD_TXT={ m1:'영웅 기록서 X10', m2:'전설 망치 X30', m3:'골드 1억' };
+const MONTHLY_REWARD_TXT={ m1:'영웅 기록서 X10', m2:'전설 망치 X30', m3:'골드 1억', m4:'영웅 기록서 X5' };
 const MONTHLY_QUESTS=[
   { id:'m1', icon:'⚔️', txt:'몬스터 30,000마리 처치', stat:'kills',  goal:30000, give:()=>{ S.records=(S.records||0)+10; return '영웅 기록서 X10'; } },
   { id:'m2', icon:'⚒️', txt:'장비 60회 제작',        stat:'crafts', goal:60,   give:()=>{ S.hammers=(S.hammers||0)+30; return '전설 망치 X30'; } },
   { id:'m3', icon:'📜', txt:'영웅 소환 150회',       stat:'summons',goal:150,  give:()=>{ addGold(100000000,true); return '골드 1억'; } },
+  /* ★ v5.263: 월간 탑 의뢰 — 주간 w4(v5.262)와 대칭. 월 20회 = 매일 도전(일 1회 상한 30회
+     중 2/3). 보상 기록서 X5는 월간 배율 관행(주간 2의 2.5배) 안. */
+  { id:'m4', icon:'🗼', txt:'시련의 탑 20회 도전',    stat:'towerTries', goal:20, give:()=>{ S.records=(S.records||0)+5; return '영웅 기록서 X5'; } },
 ];
 const WEEKLY_REWARD_TXT={ w1:'영웅 기록서 X3', w2:'전설 망치 X10', w3:'골드 2,000만', w4:'영웅 기록서 X2' };
 const WEEKLY_QUESTS=[

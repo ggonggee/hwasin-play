@@ -1319,7 +1319,7 @@ step('월간 의뢰 — 렌더·진행·수령·렌더 무지급', ()=>{
   const errs=[];
   const b=new Node2('div'); M.quest.render(b);
   if(!collectText(b).includes('월간')) errs.push('퀘스트 탭에 월간 없음');
-  S.monthly={ key:ev('getMonthKey')(), base:{ kills:S.stats.kills, crafts:S.stats.crafts, summons:S.stats.summons }, claimed:{} };
+  S.monthly={ key:ev('getMonthKey')(), base:{ kills:S.stats.kills, crafts:S.stats.crafts, summons:S.stats.summons, towerTries:S.stats.towerTries||0 }, claimed:{} };
   S.stats.kills += 30000;
   const m=ev('monthlyState')();
   const q1=ev('MONTHLY_QUESTS')[0];
@@ -1330,6 +1330,12 @@ step('월간 의뢰 — 렌더·진행·수령·렌더 무지급', ()=>{
   // 수령 +10·1회성
   q1.give(); m.claimed[q1.id]=true;
   if((S.records||0)!==rec0+10) errs.push('m1 지급 +10 아님');
+  // ★ v5.263: m4 탑 도전 의뢰 — 존재·축·목표·스냅샷 키
+  const q4=ev('MONTHLY_QUESTS').find(q=>q.id==='m4');
+  if(!q4) errs.push('m4 탑 의뢰 없음');
+  else { if(q4.stat!=='towerTries') errs.push('m4 축 '+q4.stat);
+         if(q4.goal!==20) errs.push('m4 목표 '+q4.goal);
+         if(!(m.base && 'towerTries' in m.base)) errs.push('monthly 스냅샷에 towerTries 없음'); }
   // 원복
   S.stats.kills=keep.kills; S.records=keep.records;
   if(keep.monthly) S.monthly=JSON.parse(JSON.stringify(keep.monthly)); else S.monthly={key:'',base:null,claimed:{}};
