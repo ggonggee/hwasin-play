@@ -21,6 +21,25 @@ const lines=js.split('\n');
      경고(soft) — B2·G: 의도된 예외와 정규식 오탐이 섞인다. 실패로 올리면 게이트가 늑대소년이 된다. */
 const FAIL = [];
 const fail = (m)=>FAIL.push(m);
+/* ★ v5.258: 버프 키 이중 소유 검사 — v5.253에서 결정 가호가 프리미엄 구독 키
+   (goldUntil)를 그대로 써 유료 약속을 위반한 사고의 재발 방어. 상품 배열의
+   key 필드(BUFFSHOP)와 give 바디가 세팅하는 S.buffs.<키>(전 상품 배열)를
+   추출해, 하나의 버프 키를 서로 다른 두 상품이 소유하면 실패. */
+{
+  const owners={};   // buffKey -> Set(상품배열명)
+  const arrays=['GOLDSHOP','BUFFSHOP','RUBYPKG','STARTERPKG','ACCOUNT_PACKS'];
+  for(const aname of arrays){
+    const ai=js.indexOf('const '+aname+' =');
+    if(ai<0) continue;
+    const aj=js.indexOf('];',ai);
+    const body=js.slice(ai,aj>0?aj:ai+2000);
+    for(const m of body.matchAll(/key:'(\w+)'/g)){ (owners[m[1]] ||= new Set()).add(aname); }
+    for(const m of body.matchAll(/S\.buffs\.(\w+)\s*=/g)){ (owners[m[1]] ||= new Set()).add(aname+'(give)'); }
+  }
+  const dup=Object.entries(owners).filter(([k,v])=>v.size>1);
+  if(dup.length) fail('버프 키 이중 소유: '+dup.map(([k,v])=>k+' ← '+[...v].join(',')).join(' | '));
+}
+
 
 // ---- 1) MODALS 키 수집: `const MODALS = {` 블록의 최상위 키
 const mi=js.indexOf('const MODALS = {');
