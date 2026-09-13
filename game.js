@@ -8168,8 +8168,12 @@ function arenaResult(win, foeName, foeCP, foeTier){
     /* ★ v5.231: 튜토리얼 중엔 자동 연전을 끊는다 — 입장권이 40초 자동 충전(상한 30)이라
        연전이 사실상 무한히 이어지는데, 전투가 계속 걸려 있으면 tutPoll 이 미션 완료 보상
        팝업을 열 수 없어 STEP9 가 영원히 봉쇄된다(실브라우저 재현). 튜토리얼이 자동입장을
-       가르치는 단계도 없다 — 완료 전엔 수동 입장만 허용한다. */
-    if(!S.seenTutorial){ S.arenaAuto=false; openModal('arena'); return; }
+       가르치는 단계도 없다 — 완료 전엔 수동 입장만 허용한다.
+       ★ v5.246: 재오픈 대신 홈 복귀(closeModal) — 종전 openModal('arena') 가 튜토리얼
+       마지막 매치 뒤 투기장을 되열어, '모달이 전부 닫혀야 열리는' 미션 완료 보상
+       팝업(v5.114)과 자리다툼했다(실물: ✕를 여러 번 눌러야 미션 팝업이 떴음).
+       결과 화면은 이 콜백(결과 표시 3초 후)보다 먼저 보므로 결과 박탈도 없다. */
+    if(!S.seenTutorial){ S.arenaAuto=false; closeModal(); return; }
     if(S.arenaAuto && S.ticket>0){ S.ticket--; refreshHUD(); arenaFight(); }
     else { if(S.arenaAuto) toast('입장권 소진 · 자동 연전 종료'); openModal('arena'); } }, 3000);
 }
