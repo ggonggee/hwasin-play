@@ -6505,12 +6505,18 @@ const MODALS = {
       if(tier){ const gap=tier.k-c; if(!next||gap<next.gap) next={n:st.n,c,k:tier.k,gap}; }
     });
     const awakenMaxed=(S.awaken||0)>=50;
+    /* ★ v5.266: 접속 리듬 진행 — 일일/주간/월간 의뢰 완료 수 + 수령 힌트(v5.265 판정 재사용). */
+    const dailyDone=DAILY_QUESTS.filter((q,i)=>!q.noBtn&&q.cnt()>=q.goal).length;
+    const weeklyDone=(S.weekly&&S.weekly.key===getWeekKey())?WEEKLY_QUESTS.filter(q=>{const now=S.stats[q.stat]||0,base=(S.weekly.base&&S.weekly.base[q.stat])||0;return now-base>=q.goal;}).length:0;
+    const monthlyDone=(S.monthly&&S.monthly.key===getMonthKey())?MONTHLY_QUESTS.filter(q=>{const now=S.stats[q.stat]||0,base=(S.monthly.base&&S.monthly.base[q.stat])||0;return now-base>=q.goal;}).length:0;
+    const claimHint=weeklyClaimable()||monthlyClaimable();
     b.innerHTML=`<div class="hint" style="line-height:1.8">
     <b style="color:#f0cd82">■ 내 장기 목표 진행</b> <span class="mut small">(실시간)</span><br>
     · 세트: ${act.length? act.slice(0,3).map(x=>`${x.n} ${x.c}/${(SET_PIECES[x.n]||[]).length}`).join(' · ') : '3조각부터 발동'}${next?` — 다음: <b style="color:var(--g-legend)">${next.n} ${next.k}세트</b> (${next.gap}조각 남음)`:''}<br>
     · 강화: 홈 출격 영웅 평균 <b>+${enhAvg}</b> / 목표 +25 (+11부터 망치 필수)<br>
     · 각성: <b>+${S.awaken||0}</b> / 50${(S.awaken||0)>=12?` · 기록서 ${S.records||0}권 보유`:''}${awakenMaxed?' · 완료 🎉':''}<br>
-    · 시련의 탑: 최고 <b>${S._tower||0} Wave</b> (일 1회 도전·소탕)<br><br>
+    · 시련의 탑: 최고 <b>${S._tower||0} Wave</b> (일 1회 도전·소탕)<br>
+    · 접속 리듬: 일일미션 <b>${dailyDone}</b>/${DAILY_QUESTS.filter(q=>!q.noBtn).length} · 주간 의뢰 <b>${weeklyDone}</b>/${WEEKLY_QUESTS.length} · 월간 <b>${monthlyDone}</b>/${MONTHLY_QUESTS.length}${claimHint?' — <b style="color:var(--g-legend)">수령 가능!</b>':''}<br><br>
     <b style="color:#f0cd82">■ 성장 로드맵 (실측 곡선 기준)</b><br>
     1) 대장간 '지금 제작 가능' 표시를 따라 장비를 채운다 (일반 전 장비 약 2시간)<br>
     2) 소환과 길잡이로 영웅 9종을 모은다 — 합성은 레벨 100% 승계라 즉시 전력이 된다<br>

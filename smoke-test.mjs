@@ -1035,7 +1035,7 @@ step('공략 진행 카드 — 장기 목표 실시간 수치 반영', ()=>{
   M.strategy.render(b);
   const html=b.innerHTML;
   S.equips=keep.eq; S.awaken=keep.aw; S._tower=keep.tw; S.records=keep.rec;
-  const need=['내 장기 목표 진행','+4.0','+13','기록서 2권','12 Wave'];
+  const need=['내 장기 목표 진행','+4.0','+13','기록서 2권','12 Wave','주간 의뢰'];
   const miss=need.filter(t=>!html.includes(t));
   if(miss.length) throw new Error('공략 진행 카드 누락: '+miss.join(', '));
   if(!/다음: <b[^>]*>[가-힣]+ \d세트/.test(html)) throw new Error('다음 세트 목표 라인 없음');
