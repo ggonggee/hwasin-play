@@ -563,7 +563,7 @@ const gradeReached={};
    액션에서 제외한다 — 방치 수익과 능동 플레이를 구분해야 '썰렁한 구간'이 보인다.
    세트 변화도 액션으로 센다(장착 의사결정의 결과). 각성·결정은 did 에 텍스트가 붙는다. */
 const funTimes=[]; let funGapNow=0, funGapMax=0, funGapAt=0;
-while(simSec < MAX_HOURS*3600 && windows<25600){   // ★ v5.250: 창 상한 25600(=12800h 측정) — 결정 시대 초장기 검증용
+while(simSec < MAX_HOURS*3600 && windows<51200){   // ★ v5.257: 창 상한 51200(=25600h 측정 가능)
   // ① 사냥터 선택(합리적 플레이)
   const idx=pickHuntIdx();
   ev('S').huntTier=idx; ev('Battle').setHunt();
