@@ -1384,6 +1384,45 @@ step('의뢰 리셋 남은 일수 — 계산·렌더 정합', ()=>{
   if(errs.length) throw new Error(errs.join(' | '));
 });
 
+/* ★ v5.283 회귀: 의뢰 리듬 날짜 경계 — 위 스텝은 '실행일' 기준 산술만 본다. 달력 경계는
+   vm Date 를 고정 시각으로 교체해 실증한다: ①2월 말→3월 1일 ②12월 31일→1월 1일(연 교차)
+   ③연말 ISO 주 — 2027-01-01(금)의 주키는 아직 2026-W53(ISO 는 목요일 소속 연도 규칙),
+   월 키는 '2027-1'로 먼저 바뀌는 비대칭 경계 ④월요일 주 갱신. 경계에서 monthlyState/
+   weeklyState 가 claimed 를 초기화(리셋)하는 것까지 본다. 기대값은 Node 로 알고리즘
+   사전 검증(2026-09-13). finally 로 Date 원복 — 이후 스텝이 진짜 시간을 본다. */
+step('의뢰 리듬 날짜 경계(2월 말·연말 월·ISO 주 비대칭)', ()=>{
+  const errs=[];
+  const cases=[
+    { y:2026,m:1,d:28,h:23, month:'2026-2',  dm:1,  week:'2026-W9'  },
+    { y:2026,m:2,d:1, h:0,  month:'2026-3',  dm:31, week:'2026-W9'  },
+    { y:2026,m:11,d:31,h:12,month:'2026-12', dm:1,  week:'2026-W53' },
+    { y:2027,m:0,d:1, h:0,  month:'2027-1',  dm:31, week:'2026-W53', resetMonthly:true },
+    { y:2027,m:0,d:4, h:9,  month:'2027-1',  dm:28, week:'2027-W1',  resetWeekly:true  },
+  ];
+  const snap=ev('(JSON.stringify({weekly:S.weekly, monthly:S.monthly}))');
+  try{
+    for(const c of cases){
+      ev(`(function(){ const _D=Date; globalThis.__realDate=_D;
+        Date=class extends _D{ constructor(...a){ if(a.length===0) super(${c.y},${c.m},${c.d},${c.h},30,0); else super(...a); }
+          static now(){ return new _D(${c.y},${c.m},${c.d},${c.h},30,0).getTime(); } }; })()`);
+      const got=ev(`(function(){ const r={ month:getMonthKey(), dm:Math.ceil(daysToMonthlyReset()), week:getWeekKey() };`+
+        (c.resetMonthly?` S.monthly={key:'2026-12',base:{kills:0,crafts:0,summons:0,towerTries:0},claimed:{m1:true}}; const ms=monthlyState(); r.msKey=ms.key; r.msClaimed=JSON.stringify(ms.claimed);`:'')+
+        (c.resetWeekly?` S.weekly={key:'2026-W53',base:{kills:0,crafts:0,summons:0,towerTries:0},claimed:{w1:true}}; const ws=weeklyState(); r.wsKey=ws.key; r.wsClaimed=JSON.stringify(ws.claimed);`:'')+
+        ` return r; })()`);
+      const tag=`${c.y}-${c.m+1}-${c.d}`;
+      if(got.month!==c.month) errs.push(tag+' 월키 '+got.month+'≠'+c.month);
+      if(got.dm!==c.dm) errs.push(tag+' 월남음 '+got.dm+'≠'+c.dm);
+      if(got.week!==c.week) errs.push(tag+' 주키 '+got.week+'≠'+c.week);
+      if(c.resetMonthly && (got.msKey!==c.month || got.msClaimed!=='{}')) errs.push('연 교차 월 리셋 미동작 key='+got.msKey+' claimed='+got.msClaimed);
+      if(c.resetWeekly && (got.wsKey!==c.week || got.wsClaimed!=='{}')) errs.push('월요일 주 리셋 미동작 key='+got.wsKey+' claimed='+got.wsClaimed);
+    }
+  } finally {
+    ev('if(globalThis.__realDate){ Date=globalThis.__realDate; delete globalThis.__realDate; }');
+    ev('const _o=JSON.parse('+JSON.stringify(snap)+'); S.weekly=_o.weekly; S.monthly=_o.monthly;');
+  }
+  if(errs.length) throw new Error(errs.join(' | '));
+});
+
 /* ★ v5.265 회귀: 주간·월간 의뢰 수령 배지 — 진행 완료 미수령 시 questClaimable true,
    미완료·수령 후·새 주(키 불일치) false. */
 step('의뢰 수령 배지 — weeklyClaimable·monthlyClaimable', ()=>{
