@@ -2922,7 +2922,12 @@ const Battle = (()=>{
         /* ★ v5.195: 등급 완성 1회성 보상 — v5.172 은 '보상 설계 사고 전례'로 보상을
            유보했으나 대표 위임(2026-09-12: 캡처 근거 없으면 자체 설계, 크리티컬만 결제)으로
            추가. 안전장치: ①1회성(플래그) ②기존 재화 소량 ③전종 완성 별도 없음(등급 4회만).
-           수량 기준: N=주사위50(일일미션 1일치) · R=소환권5 · E=기록서2 · L=기록서5(약 이틀치). */
+           수량 기준: N=주사위50(일일미션 1일치) · R=소환권5 · E=기록서2 · L=기록서5(약 이틀치).
+           ★ v5.239: ③를 폐지하고 전종 완성 보상을 신설 — 전종(20종 조우)은 '수집 완성'
+           대업인데 축하 토스트만 있어 목표로서의 마력이 없었다. 등급 4회 합계의 상위 톤:
+           기록서10(심화 1스텝) + 전설망치10(보호 1묶음·4천만 상당) + 골드 5천만 + 강화석 200.
+           플래그는 S.codexReward.all 재활용(신규 필드 아님). 지급 로직은 함수로 추출해
+           smoke가 onKill 없이 직접 검증한다. */
         const RW={ N:()=>{S.dice=(S.dice||0)+50; return '주사위 X50';},
                    R:()=>{S.tickHero=(S.tickHero||0)+5; return '영웅 소환권 X5';},
                    E:()=>{S.records=(S.records||0)+2; return '영웅 기록서 X2';},
@@ -2933,6 +2938,7 @@ const Battle = (()=>{
           toast(`🎖️ 도감 완성 보상 — <b>${what}</b>`);
           sysLog(`도감 완성 보상 — ${GRADES[t.drop].name} 등급: ${what}`);
         }
+        if(!left) codexAllReward();
       }
     }
     /* ★ v5.30: 홈 AoE 다중 킬 골드 밸런스 — 마리당 골드가 실측 기준값(분당 18,885G)의
@@ -4468,6 +4474,27 @@ function subBody(title, opts){
 function saveSnapshot(){
   try{ return localStorage.getItem(SAVE_KEY) || JSON.stringify(S); }
   catch(e){ return JSON.stringify(S); }
+}
+/* ★ v5.239: 몬스터 도감 전종(20종) 완성 1회성 보상 — onKill 의 조우 카운터에서 마지막
+   몬스터가 밝혀지는 순간(!left) 호출된다. 전종(20종 조우)은 '수집 완성' 대업인데 축하
+   토스트만 있어 목표로서의 마력이 없었다(등급 완성 보상 v5.195의 ③ '전종 별도 없음' 폐지).
+   안전장치 계승: ①1회성(S.codexReward.all — 신규 상태 필드 아님) ②기존 재화 소량.
+   수량: 기록서10(심화 1스텝) + 전설망치10(4천만 상당) + 골드 5천만 + 강화석 200.
+   전역 함수로 추출한 이유는 smoke 가 onKill·전투 컨텍스트 없이 이 경로만 직접 검증하게
+   하기 위해서다. */
+function codexAllReward(){
+  if(!S.codexReward) S.codexReward={};
+  if(S.codexReward.all) return false;
+  S.codexReward.all=1;
+  S.records=(S.records||0)+10;
+  S.hammers=(S.hammers||0)+10;
+  addGold(50000000, true);   // raw — 고정 보상에 칭호·투기장 골드 배율(F2 관문)을 곱하지 않는다
+  S.stones=(S.stones||0)+200;
+  const what='영웅 기록서 X10 · 전설 망치 X10 · 골드 5000만 · 강화석 X200';
+  toast(`🏆🎖️ <b style="color:var(--g-legend)">전종 완성 보상</b> — ${what}`);
+  sysLog(`몬스터 도감 전종 완성 보상 — ${what}`);
+  sfx('legendary');
+  return true;
 }
 function looksLikeSave(o){
   if(!o || typeof o!=='object' || Array.isArray(o)) return false;
@@ -6344,7 +6371,7 @@ const MODALS = {
     <b style="color:#f0cd82">■ 장기 목표 (레전더리 완성 이후)</b><br>
     · 강화 +11~25: 망치로 파괴를 막으며 도전 — +20까지 부위당 약 3.2억 골드, +21~25 극한(성공 30%)<br>
     · 심화 각성 13~50단계: 영웅 기록서(탑 상자·회색코인)로 계정 스탯 상승<br>
-    · 시련의 탑 고층 도전 · 몬스터 도감 전종(20종) 완성</div>`;
+    · 시련의 탑 고층 도전 · 몬스터 도감 전종(20종) 완성 — 전종 완성 시 1회성 대보상(기록서 X10 · 전설 망치 X10 · 골드 5000만 · 강화석 X200)</div>`;
     }},
 
   /* ---------- 방치 수익 정산 ---------- */

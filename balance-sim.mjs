@@ -462,7 +462,7 @@ log(`\n[밸런스 시뮬] 시드 42 · 최대 ${MAX_HOURS}시뮬시간 · 창 ${
 let lastCP=myCP(), lastEventT=0, windows=0;
 let lastSetm=1;                    // ★ v5.228 세트 계측 — 창 사이 배율 변화 감지용
 const gradeReached={};
-while(simSec < MAX_HOURS*3600 && windows<3200){
+while(simSec < MAX_HOURS*3600 && windows<6400){   // v5.239: 창 상한 6400(=3200h 측정 가능)
   // ① 사냥터 선택(합리적 플레이)
   const idx=pickHuntIdx();
   ev('S').huntTier=idx; ev('Battle').setHunt();

@@ -1122,6 +1122,29 @@ step('골드상점 강화석→망치 교환 — stones 통화 결제 라인', (
   S.stones=keep.stones; S.hammers=keep.hammers;
   if(errs.length) throw new Error(errs.join(' | '));
 });
+
+/* ★ v5.239 회귀: 몬스터 도감 전종 완성 1회성 보상 — 최초 호출만 지급(플래그), 재호출 차단,
+   지급량 정확(기록서+10·전설망치+10·골드+5000만·강화석+200). onKill 경유 없이 함수 직접 검증. */
+step('도감 전종 완성 보상 — 1회성 지급·재호출 차단', ()=>{
+  const S=ev('S');
+  const keep={records:S.records||0, hammers:S.hammers||0, gold:S.gold, stones:S.stones||0, flag:S.codexReward && S.codexReward.all};
+  S.codexReward=S.codexReward||{}; delete S.codexReward.all;
+  const r1=ev('codexAllReward')();
+  const mid={records:S.records, hammers:S.hammers, gold:S.gold, stones:S.stones, flag:!!S.codexReward.all};
+  const r2=ev('codexAllReward')();
+  // 원복
+  S.records=keep.records; S.hammers=keep.hammers; S.gold=keep.gold; S.stones=keep.stones;
+  if(keep.flag) S.codexReward.all=1; else delete S.codexReward.all;
+  const errs=[];
+  if(r1!==true) errs.push('첫 호출이 true 아님');
+  if(r2!==false) errs.push('재호출이 false 아님(1회성 위반)');
+  if(mid.records!==keep.records+10) errs.push('기록서 '+(mid.records-keep.records)+'(기대 +10)');
+  if(mid.hammers!==keep.hammers+10) errs.push('전설망치 '+(mid.hammers-keep.hammers)+'(기대 +10)');
+  if(Math.round(mid.gold-keep.gold)!==50000000) errs.push('골드 '+Math.round(mid.gold-keep.gold)+'(기대 +5000만)');
+  if(mid.stones!==keep.stones+200) errs.push('강화석 '+(mid.stones-keep.stones)+'(기대 +200)');
+  if(!mid.flag) errs.push('플래그 미설정');
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 step('save→JSON 직렬화 왕복 무손실', ()=>{
   /* 바로 위 검사가 모달 클릭을 다시 전수 실행하면서 [데이터 초기화]·[가져오기]를 또 눌러
      저장을 재봉인한다(사유는 [7] 끝 주석 참조). 이 검사는 save() 가 실제로 써야 성립하므로
