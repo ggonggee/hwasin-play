@@ -1213,6 +1213,50 @@ step('레벨 상한 9,999 — 캡 해제·상한 경계 정합', ()=>{
   if(errs.length) throw new Error(errs.join(' | '));
 });
 
+/* ★ v5.254 회귀: 유료 상품 give 정합 전수 — '변화 0 상품'(미구현 사기 상품) 탐지.
+   v5.253에서 프리미엄 골드 +100%가 배율 구현 없이 팔리는 것을 발견한 계기로 자동화.
+   대상: give 함수를 가진 상품 전량(GOLDSHOP·RUBYPKG·STARTERPKG) — BUFFSHOP은
+   구매 로직이 렌더러 인라인이라 give가 없고, 골드 버프는 v5.253 회귀가 이미 커버.
+   판정: give 실행前后 재화 스냅샷(골드·루비·기록서·소환권·망치·강화석·주사위·
+   입장권·마을·버프 타임스탬프)이 전부 불변이면 약속 미이행 상품으로 간주. */
+step('유료 상품 give 정합 전수 — 변화 0 상품 없음', ()=>{
+  const S=ev('S');
+  /* 스냅샷은 '상품이 줄 수 있는 재화 전부'를 담는다 — 첫 실행에서 누락 필드가
+     미구현으로 오판(12건 false positive)됐다: craftScroll·goldTicket·곡식·나무·
+     재료(mats)·장비(equips)·곡괭이(picks)·칭호 소유(titleOwn)·영웅조각(heroShards). */
+  const snap=()=>({gold:S.gold, ruby:S.ruby, records:S.records||0, tickHero:S.tickHero||0, tickMat:S.tickMat||0,
+    hammerN:S.hammerN||0, hammers:S.hammers||0, stones:S.stones||0, dice:S.dice||0, ticket:S.ticket||0,
+    villHall:S.villHall||0, villTrain:S.villTrain||0, craftScroll:S.craftScroll||0, goldTicket:S.goldTicket||0,
+    grain:S.grain||0, wood:S.wood||0, villMat:S.villMat||0,
+    matsSum:Object.values(S.mats||{}).reduce((a,b)=>a+b,0), equipsLen:(S.equips||[]).length,
+    picks:JSON.stringify(S.picks||{}), titleOwn:JSON.stringify(S.titleOwn||{}),
+    heroShardsSum:Object.values(S.heroShards||{}).reduce((a,b)=>a+b,0),
+    buffKeys:S.buffs?Object.keys(S.buffs).map(k=>k+':'+S.buffs[k]).sort().join('|'):''});
+  const keep=snap();
+  const deep={mats:JSON.parse(JSON.stringify(S.mats||{})), equips:JSON.parse(JSON.stringify(S.equips||[])), picks:JSON.parse(JSON.stringify(S.picks||{})), titleOwn:JSON.parse(JSON.stringify(S.titleOwn||{})), heroShards:JSON.parse(JSON.stringify(S.heroShards||{}))};
+  const dead=[];
+  const shops=[['GOLDSHOP',ev('GOLDSHOP')],['RUBYPKG',ev('RUBYPKG')],['STARTERPKG',ev('STARTERPKG')]];
+  let ran=0;
+  for(const [name,arr] of shops){
+    (arr||[]).forEach((it,i)=>{
+      if(typeof it.give!=='function') return;
+      ran++;
+      const b=snap(); try{ it.give(); }catch(e){ dead.push(name+'['+i+'] '+it.t+' THROW '+e.message); return; }
+      const a=snap();
+      if(JSON.stringify(a)===JSON.stringify(b)) dead.push(name+'['+i+'] '+(it.t||it.id||'?')+' — 지급 변화 0');
+    });
+  }
+  // 원복
+  Object.assign(S,{ gold:keep.gold, ruby:keep.ruby, records:keep.records, tickHero:keep.tickHero, tickMat:keep.tickMat,
+    hammerN:keep.hammerN, hammers:keep.hammers, stones:keep.stones, dice:keep.dice, ticket:keep.ticket,
+    villHall:keep.villHall, villTrain:keep.villTrain, craftScroll:keep.craftScroll, goldTicket:keep.goldTicket,
+    grain:keep.grain, wood:keep.wood, villMat:keep.villMat,
+    villMatTrim:0 });
+  S.mats=deep.mats; S.equips=deep.equips; S.picks=deep.picks; S.titleOwn=deep.titleOwn; S.heroShards=deep.heroShards;
+  if(ran<25) dead.push('give 실행 '+ran+'건 — 상품 배열 구조 변형 의심');
+  if(dead.length) throw new Error(dead.join(' | '));
+});
+
 /* ★ v5.236 회귀: 극한의 벼림 +21~25 — 성공 30% 표기 · 실패 시 단계 유지(파괴·하락 없음,
    재화만 소모) · +25 상한. 실패 분기 강제는 vm 안 Math.random 후킹(D5 패턴)으로. */
 step('극한의 벼림 +21~25 — 실패해도 유지, +25 상한', ()=>{
