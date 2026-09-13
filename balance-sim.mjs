@@ -437,19 +437,23 @@ function awakenStep(){
     }
     S.records-=cost; S.awaken++; steps++;
   }
-  /* ★ v5.241: 각성의 결정 — 50 완료 후 무한 축(비용 20+5×단계권, 골드 라인 병행).
-     50 완료 후 기록서가 고아 재화가 되는 것을 막는다. 창당 상한은 완화(기록서·골드가
-     남는 한 이어감)하되 steps<20으로 루프 보호. */
+  /* ★ v5.241: 각성의 결정 — 50 완료 후 무한 축. ★ v5.243: 복합 비용(기록서 20+5×단계권
+     + 강화석 100+15×단계개) — 강화석 유입(탑 소탕 실측 공식)이 소모의 2배 이상이라
+     무한 축이 흡수하도록 했다. 골드 라인(3천만/권)은 기록서에만 적용. */
   if(S.awaken>=50){
     let csteps=0;
     while(csteps<20){
-      const cCost=20+5*(S.awakenCrystal||0);
-      if((S.records||0)>=cCost){ S.records-=cCost; S.awakenCrystal=(S.awakenCrystal||0)+1; csteps++; continue; }
-      const price=30000000;
-      if(S.gold >= 16000000 + 40000000 + cCost*price){
-        S.gold-=cCost*price; awakenTally.gold+=cCost*price;
-        S.records=(S.records||0)+cCost;
-      } else break;
+      const cCost=20+5*(S.awakenCrystal||0), cStones=300+40*(S.awakenCrystal||0);
+      if((S.records||0)>=cCost && (S.stones||0)>=cStones){
+        S.records-=cCost; S.stones-=cStones; S.awakenCrystal=(S.awakenCrystal||0)+1; csteps++; continue;
+      }
+      if((S.records||0)<cCost){
+        const price=30000000;
+        if(S.gold >= 16000000 + 40000000 + cCost*price){
+          S.gold-=cCost*price; awakenTally.gold+=cCost*price;
+          S.records=(S.records||0)+cCost;
+        } else break;
+      } else break;   // 강화석 부족 — 싱크가 유입을 따라잡은 지점
     }
     steps+=csteps;
   }

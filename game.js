@@ -5226,16 +5226,21 @@ const MODALS = {
          다시 늘리는 대신(연장마다 같은 문제가 재발) '낮은 효율·무한 심크'로 전환한다:
          비용 20+5×단계권, 효과 +0.5%/단계(기본 각성 1.5%의 1/3) — 골드 라인(3천만/권,
          v5.240)과 연결돼 엔드게임 골드·기록서 싱크가 영구히 유지된다. */
-      const clv=S.awakenCrystal||0, cCost=20+5*clv;
+      /* ★ v5.243: 결정 비용에 강화석 복합화 — 6400h 시뮬에서도 강화석 유입(탑 소탕
+         도달×3 ≈ 87/일, 실측 정본 공식)이 소모의 2배 이상이었다. 결정은 무한 축이라
+         비용에 100+15×단계개를 더하면 강화석 싱크도 영구히 흡수된다 — 기록서(탑 상자)·
+         강화석(탑 소탕)·골드 라인(3천만/권)이 한 축으로 수렴하는 구조. */
+      const clv=S.awakenCrystal||0, cCost=20+5*clv, cStones=300+40*clv;
       b.appendChild(el('div','awaken-lv','✦'+clv));
-      b.appendChild(el('div','warn',`*각성의 결정 — 영웅 기록서 ${cCost}권이 소모됩니다* (보유 ${recs}권)`));
+      b.appendChild(el('div','warn',`*각성의 결정 — 영웅 기록서 ${cCost}권 + 강화석 ${cStones}개가 소모됩니다* (보유 기록서 ${recs}권 · 강화석 ${fmt(S.stones||0)})`));
       b.appendChild(el('div','center mut small','단계당 계정 스탯 +0.5% · 상한 없음 — 심화 각성의 여정을 잇습니다'));
       const cbtn=el('button','btn gold wide','결정 각성');
       cbtn.style.marginTop='8px';
-      if(recs<cCost) cbtn.disabled=true;
+      if(recs<cCost||(S.stones||0)<cStones) cbtn.disabled=true;
       cbtn.onclick=()=>{
         if(S.records<cCost){ toast('영웅 기록서가 부족합니다.'); return; }
-        S.records-=cCost; S.awakenCrystal=(S.awakenCrystal||0)+1;
+        if((S.stones||0)<cStones){ toast('강화석이 부족합니다.'); return; }
+        S.records-=cCost; S.stones-=cStones; S.awakenCrystal=(S.awakenCrystal||0)+1;
         sfx('awaken'); Battle.refreshParty();
         toast(`각성의 결정 ✦${S.awakenCrystal}! 계정 전체 스탯 +0.5%`);
         sysLog(`<span class="lgd">각성의 결정</span> <span class="lgd">✦${S.awakenCrystal}단계</span> 달성`);

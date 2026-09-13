@@ -1055,7 +1055,8 @@ step('심화 각성 50단계 연장 — 30은 완료가 아니다', ()=>{
     return { maxed:h.includes('최대 단계 도달'),
              rec:(h.match(/영웅 기록서 (\d+)권이 소모/)||[])[1],
              cap50:h.includes('상한 50단계'),
-             crystal:h.includes('각성의 결정') };
+             crystal:h.includes('각성의 결정'),
+             mix:(h.match(/기록서 (\d+)권 \+ 강화석 (\d+)개/)||[])[0] };   // v5.243 결정 복합 비용
   };
   const at30=probe(30), at31=probe(31), at50=probe(50);
   S.awaken=keep;
@@ -1065,7 +1066,7 @@ step('심화 각성 50단계 연장 — 30은 완료가 아니다', ()=>{
   if(at31.rec!=='10') errs.push('31단계 기록서 '+at31.rec+'권(기대 10권)');
   if(!at50.maxed||!at50.cap50) errs.push('50 완료 표시/상한 문구 없음');
   if(!at50.crystal) errs.push('50에서 각성의 결정 섹션 없음(v5.241)');
-  if(at50.rec!=='20') errs.push('결정 0단계 비용 '+at50.rec+'권(기대 20 — maxed 화면의 기록서 비용은 결정의 것)');
+  if(!/기록서 20권 \+ 강화석 300개/.test(at50.mix||'')) errs.push('결정 0단계 복합 비용 문구 없음(v5.243): '+(at50.mix||''));
   if(errs.length) throw new Error(errs.join(' | '));
 });
 
@@ -1073,22 +1074,28 @@ step('심화 각성 50단계 연장 — 30은 완료가 아니다', ()=>{
    상승)과 awMul 정본 관문(기본 1.5%+결정 0.5%)의 수치를 직접 검증한다. */
 step('각성의 결정 — 50 완료 후 무한 축 실행·awMul 관문', ()=>{
   const S=ev('S');
-  const keep={aw:S.awaken, rec:S.records||0, cry:S.awakenCrystal||0};
-  S.awaken=50; S.records=20; S.awakenCrystal=0;
+  const keep={aw:S.awaken, rec:S.records||0, cry:S.awakenCrystal||0, st:S.stones||0};
+  /* ★ v5.243: 복합 비용(기록서 20 + 강화석 100) — 강화석 부족 시 disabled도 함께 검증 */
+  S.awaken=50; S.records=20; S.awakenCrystal=0; S.stones=299;
   const M=ev('MODALS');
-  const b=new Node2('div'); M.awaken.render(b);
-  const btn=findBtnByText(b,'결정 각성');
+  let b=new Node2('div'); M.awaken.render(b);
+  let btn=findBtnByText(b,'결정 각성');
   const errs=[];
   if(!btn) errs.push('결정 각성 버튼 없음');
-  if(btn&&btn.disabled) errs.push('기록서 20권 있는데 버튼 disabled');
+  if(btn&&!btn.disabled) errs.push('강화석 299개인데 disabled 아님(v5.243 복합 비용)');
+  S.stones=300;
+  b=new Node2('div'); M.awaken.render(b);
+  btn=findBtnByText(b,'결정 각성');
+  if(btn&&btn.disabled) errs.push('기록서 20권+강화석 300개인데 disabled');
   if(btn&&!btn.disabled){
     btn.click();
     if(S.awakenCrystal!==1) errs.push('실행 후 결정 '+S.awakenCrystal+'(기대 1)');
     if(S.records!==0) errs.push('실행 후 기록서 '+S.records+'(기대 0)');
+    if(S.stones!==0) errs.push('실행 후 강화석 '+S.stones+'(기대 0 — v5.243 차감)');
     const aw=ev('awMul')();
     if(Math.abs(aw-(1+50*0.015+1*0.005))>1e-9) errs.push('awMul='+aw+'(기대 1.755)');
   }
-  S.awaken=keep.aw; S.records=keep.rec; S.awakenCrystal=keep.cry;
+  S.awaken=keep.aw; S.records=keep.rec; S.awakenCrystal=keep.cry; S.stones=keep.st;
   if(errs.length) throw new Error(errs.join(' | '));
 });
 
