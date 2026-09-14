@@ -1563,6 +1563,24 @@ step('모험 팝업·아이콘 재배치 — 플로팅/레일/드로어/상점 �
   if(errs.length) throw new Error(errs.join(' | '));
 });
 
+/* ★ v5.292 회귀: 전투 연출 재구성(대표 요청) 소스 정합 — centerHold(일반 몹 던전: 중앙
+   배치+이동 금지+몹 중앙 선형 이동), 보스 중앙 즉시 배치(화면 밖 입장 중 처치 방지),
+   startDungeon 입장 시 layoutHeroes 재호출(이전 전투 이동 위치 리셋). 런타임 동작은
+   D 시나리오(kind:'mobs')가 centerHold 경로를 실제로 돌며 D1~D5 결정론으로 검증한다. */
+step('전투 연출 재구성 — centerHold·보스 중앙·입장 리셋 소스 정합', ()=>{
+  const src=fs.readFileSync('game.js','utf8');
+  const errs=[];
+  if(!src.includes("centerHold: (cfg.kind==='mobs')")) errs.push('centerHold 플래그(kind mobs) 없음');
+  if(!/x:W\*0\.62, y:H\*0\.45, vx:0/.test(src)) errs.push('보스 중앙 즉시 배치 없음');
+  if(!src.includes('!dg.centerHold')||!src.includes("(dg.centerHold || dg.kind==='boss')"))
+    errs.push('이동 게이트/반격 판정 분기 없음');
+  const sd=src.indexOf('function startDungeon(cfg)');
+  const ed=src.indexOf('function endDungeon', sd);
+  if(sd<0||ed<0||!src.slice(sd,ed).includes('layoutHeroes();')) errs.push('startDungeon 위치 리셋(layoutHeroes) 없음');
+  if(!/useCenter = solo \|\| survSolo \|\| !!\(dg && dg\.centerHold\)/.test(src)) errs.push('중앙 배치 조건 없음');
+  if(errs.length) throw new Error(errs.join(' | '));
+});
+
 /* ★ v5.265 회귀: 주간·월간 의뢰 수령 배지 — 진행 완료 미수령 시 questClaimable true,
    미완료·수령 후·새 주(키 불일치) false. */
 step('의뢰 수령 배지 — weeklyClaimable·monthlyClaimable', ()=>{

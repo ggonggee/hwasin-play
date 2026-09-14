@@ -2389,11 +2389,17 @@ const Battle = (()=>{
     const solo = isHuntSolo();
     /* ★ v5.107: 시련의 탑(soloSurvival)은 대표 영웅 1명을 중앙에 배치 */
     const survSolo = (dg && dg.soloSurvival);
+    /* ★ v5.292: centerHold(일반 몹 던전)도 중앙 배치 — 영웅이 멈춰 서고 몹이 밀려온다 */
     const src = (solo || survSolo) ? [p[0]] : p;
-    const useCenter = solo || survSolo;
+    const useCenter = solo || survSolo || !!(dg && dg.centerHold);
     heroes = src.map((h,i)=>{
-      const cx = useCenter ? W*HERO_CENTER_X : (W*0.17 + (i%2)*26);
-      const cy = useCenter ? H*HERO_CENTER_Y : (H*(BAND_TOP+0.20) + i*(H*0.14));
+      /* ★ v5.292: useCenter 배치 — 솔로/탑은 정중앙 1명, centerHold(3인)는 중앙 삼각
+         배치(고정 오프셋 — RNG 무소비로 결정론 보존). */
+      let cx, cy;
+      if(useCenter){
+        if(solo || survSolo){ cx=W*HERO_CENTER_X; cy=H*HERO_CENTER_Y; }
+        else { const off=[[-24,-12],[24,-12],[0,18]]; cx=W*HERO_CENTER_X+off[i%3][0]; cy=H*HERO_CENTER_Y+off[i%3][1]; }
+      } else { cx=W*0.17 + (i%2)*26; cy=H*(BAND_TOP+0.20) + i*(H*0.14); }
       return {
         hid:h.hero_id, job:h.job, cp:heroPower(h), dmgDone:0, lvl:h.level, grade:h.grade, name:h.name||h.job.name,
         x:cx, y:cy, baseX:cx, baseY:cy,
@@ -2429,6 +2435,10 @@ const Battle = (()=>{
     heroes.forEach(h=>{ h.dead=false; h.hp=1; h.respT=0; h.dmgDone=0; });
     dg={ name:cfg.name, col:cfg.col||'#e8843c', foeCP:Math.max(1,cfg.foeCP||1000), kind:cfg.kind||'mobs',
          total:cfg.count||10, spawned:0, killed:0, dur:cfg.dur||30, timeLeft:cfg.dur||30, onEnd:cfg.onEnd, done:false, bossSpawned:false,
+         /* ★ v5.292(대표 요청): centerHold — 일반 몹 던전(kind 'mobs': 요일·골드·점령·약탈)은
+            영웅이 중앙에 멈춰 서고 몬스터가 밀려오는 구조. 종전 사이드스크롤(영웅 전진)과
+            다르게 '지키는' 느낌을 준다. 투기장·보스·탑은 기존 동작 유지. */
+         centerHold: (cfg.kind==='mobs'),
          /* ★ v5.117: 서든데스 규칙(있으면). otMul 은 매 프레임 계산되는 현재 가중 배율. */
          overtime:(cfg.overtime ? (typeof cfg.overtime==='object' ? cfg.overtime : OVERTIME) : null), otMul:1,
          /* ★ N2: 던전별 데미지 배율(양방향). 투기장만 0.5 를 넘겨 안내문 '모든 데미지 50% 감소'를 재현한다.
@@ -2470,6 +2480,11 @@ const Battle = (()=>{
     //   기존 kind:'mobs' 처럼 처치 수를 웨이브로 환산하지 않는다.
     if(dg.kind==='wave'){ dg.waveDur=cfg.waveDur||60; dg.waveNo=1; dg.waveTimeLeft=dg.waveDur;
       dg.groupLeft=4; dg.baseCP=dg.foeCP; }
+    /* ★ v5.292(대표 요청): 입장 시점 영웅 위치 리셋 — 종전엔 startDungeon 이 좌표를
+       건드리지 않아, 직전 던전에서 이동해 두었던 위치(우측 깊숙이)에서 다음 전투가
+       시작됐다. layoutHeroes 재호출로 baseX/baseY 기준 재배치와 함께 centerHold(중앙)
+       배치도 여기서 확정된다. */
+    layoutHeroes();
   }
   function endDungeon(win){
     if(!dg || dg.done) return; dg.done=true;
@@ -2495,7 +2510,15 @@ const Battle = (()=>{
                      : ['희귀','R'].some(k=>dgName.includes(k)) ? 'R' : 'N';
       if(MON_WORDS[gradeKey] && MON_WORDS[gradeKey].imgs.length) img = pick(MON_WORDS[gradeKey].imgs);
     });
+    /* ★ v5.292: centerHold — 스폰 시 중앙(영웅)을 향한 고정 방향을 계산해 담는다.
+       순수 산술이라 스폰 RNG 소비는 불변(결정론 보존). 이동은 이동 블록의 centerHold
+       분기(선형 이동+중앙 정지선)가 맡는다 — flocking의 거리 의존 감속은 D1 을 깬다. */
     mobs.push({ name:dg.name, col:dg.col, shape:'skull', img, x:W+30, y:bRnd(H*(BAND_TOP+0.02),H*BAND_BOT), vx:-bRnd(16,26), hpMax:hp, hp:hp, r:bRi(13,18), flash:0, atkT:bRnd(0.8,1.4) });   /* ★ M1: 시드 RNG */
+    if(dg && dg.centerHold){
+      const m=mobs[mobs.length-1], cx=W*HERO_CENTER_X, cy=H*HERO_CENTER_Y;
+      const dx=cx-m.x, dy=cy-m.y, dl=Math.max(1,Math.hypot(dx,dy)), sp=20;
+      m.vx=dx/dl*sp; m.vy=dy/dl*sp;
+    }
   }
   function spawnDgBoss(){
     const hp=Math.max(300, dg.foeCP*0.5);
@@ -2503,7 +2526,13 @@ const Battle = (()=>{
     let img='undead_110';
     /* ★ M1: 스프라이트 선택은 연출용 — cosmetic 지대에서 전역 pick() 유지 */
     cosmetic(()=>{ const bossImgs = (MON_WORDS.L && MON_WORDS.L.imgs) || ['undead_110']; img = pick(bossImgs); });
-    mobs.push({ name:dg.name, col:dg.col, boss:true, shape:'boss', img, x:W+40, y:H*0.42, vx:-10, hpMax:hp, hp:hp, r:36, flash:0, atkT:bRnd(0.8,1.4) });   /* ★ M1: 시드 RNG */
+    /* ★ v5.292(대표 요청): 보스는 화면 중앙에 '이미 위치한' 상태로 시작 — 종전 x:W+40
+       (화면 밖)에서 vx:-10 으로 걸어 들어오는 동안 보이기도 전에 처치되곤 했다.
+       중앙 즉시 배치+정지(vx:0)하고 등장을 알린다(홈 군주와 같은 어휘 — 흔들림·음·토스트).
+       위치만 바꾸므로 스폰 RNG 소비 불변(결정론 보존). */
+    shake=Math.max(shake,0.35); sfx('legendary');
+    toast(`👑 <b style="color:${dg.col}">${dg.name}</b> 출현!`);
+    mobs.push({ name:dg.name, col:dg.col, boss:true, shape:'boss', img, x:W*0.62, y:H*0.45, vx:0, hpMax:hp, hp:hp, r:36, flash:0, atkT:bRnd(0.8,1.4) });   /* ★ M1: 시드 RNG */
   }
   function spawnMob(boss){
     const t=tierDef();
@@ -2710,8 +2739,10 @@ const Battle = (()=>{
       }
       /* ★ v5.91: 자연스러운 이동 시스템 — 홈(solo)은 제외, 던전/투기장에서 활성화.
          대상이 사거리 밖이면 다가가고, 없으면 baseX/baseY로 복귀.
-         이동 중에는 Run 애니메이션, 정지 시 Idle/Attack. */
-      if(!solo && dg && dg.moveEnabled){
+         이동 중에는 Run 애니메이션, 정지 시 Idle/Attack.
+         ★ v5.292: centerHold(일반 몹 던전)는 영웅이 멈춰 선다 — 몹이 밀려오는 구조에서
+         영웅이 돌진하면 '지키는' 연출이 깨진다. 사거리 내 몹만 타격(위 공격 로직). */
+      if(!solo && dg && dg.moveEnabled && !dg.centerHold){
         const allTargets = (dg.kind==='arena' && foes.length) ? foes.filter(f=>!f.dead) : mobs.filter(m=>!m.dead);
         const range = h.ranged ? RANGED_RANGE : MELEE_RANGE;
         if(allTargets.length){
@@ -2748,8 +2779,13 @@ const Battle = (()=>{
       const foeMul = (mode==='dungeon'&&dg) ? (dg.dmgMul||1)*(dg.otMul||1) : 1;
       const alive=heroes.filter(h=>!h.dead);
       if(alive.length) mobs.forEach(m=>{
-        /* ★ 홈: 영웅 중앙 기준 근접(거리<70) 시 반격 — stand-off(60) 밖 약간에서 때림. 던전: 전열 도달(W*0.26). */
-        const inRange = solo ? (Math.hypot(m.x-hcx, m.y-hcy) < 70) : (m.x<=W*0.26+2);
+        /* ★ 홈: 영웅 중앙 기준 근접(거리<70) 시 반격 — stand-off(60) 밖 앞에서 때림. 던전: 전열 도달(W*0.26).
+           ★ v5.292: centerHold·보스전은 '아군 근접 영움과의 거리' 판정 — centerHold 는 몹이
+           중앙까지 밀려와야, 보스전은 중앙 배치 보스에게 아군이 다가와 붙어야 때린다
+           (종전 전열 판정이면 중앙 보스가 영원히 반격 못 함). 보스는 리치 넉넉(95). */
+        const inRange = (solo || (dg && (dg.centerHold || dg.kind==='boss')))
+          ? alive.some(h=> Math.hypot(m.x-h.x, m.y-h.y) < (m.boss?95:70))
+          : (m.x<=W*0.26+2);
         if(inRange){ m.atkT-=dt;
           if(m.atkT<=0){ m.atkT=bRnd(1.1,1.7); const h=bPick(alive);   /* ★ M1: 시드 RNG — 반격 주기·대상 */
             const r=(cpRef+300)/(partyCP+300);
@@ -2776,7 +2812,11 @@ const Battle = (()=>{
          ① Arrival 감속 — 목표 거리(STANDOFF)에 가까워질수록 속도를 선형 줄여 급정거 방지.
          ② Separation — 다른 몹와 너무 가까우면 서로 밀어내 원형으로 퍼져 둘러싸기 유도.
          던전은 이 블록 전체를 안 타고 종전대로 x만 이동(좌측 정지선 W*0.25).
-         ★ v5.107: soloSurvival(시련의 탑)도 홈처럼 flocking 이동 사용. */
+         ★ v5.107: soloSurvival(시련의 탑)도 홈처럼 flocking 이동 사용.
+         ★ v5.292 주의: centerHold(일반 몹 던전)는 이 블록을 쓰면 안 된다 — arrival 감속이
+         '위치 의존 속도'라 프레임 분할 적분이 미세하게 갈라져 D1 결정론이 붕괴한다(실측:
+         100회 21종 해시). 대신 아래 else 의 선형 이동+중앙 정지선(종전 던전과 동일한
+         결정론 안전 구조)로 밀려오게 만든다. */
       if(solo || (dg && dg.soloSurvival)){
         /* ★ v5.42: STANDOFF/분리 로직 간소화 — 몬스터가 서로 겹칠 수 있게.
            종전엔 MON_SCALE 반영으로 분리 거리가 너무 커서(68px+) 몬스터가
@@ -2809,6 +2849,11 @@ const Battle = (()=>{
         }
         // 화면 밖으로 나가지 않게 클램프 (홈 필드 내 머무름)
         m.x = clamp(m.x, 6, W-6); m.y = clamp(m.y, H*0.28, H*0.95);
+      } else if(dg && dg.centerHold){
+        /* ★ v5.292: centerHold — 스폰 시점에 계산한 고정 방향(vx/vy)으로 선형 이동,
+           중앙 영웅 근접(55px)에서 정지. 속도가 위치 의존적이지 않으므로 프레임 분할과
+           무관하게 동일 궤적(D 결정론 안전 — flocking arrival 감속은 그렇지 못했다). */
+        if(Math.hypot(hcx-m.x, hcy-m.y) > 55){ m.x += m.vx*dt; m.y += m.vy*dt; }
       } else {
         m.x += m.vx*dt; if(m.x < W*0.25) m.x = W*0.25;
       }
