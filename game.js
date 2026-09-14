@@ -5819,7 +5819,7 @@ const MODALS = {
                     / 재료18(9종×2단가) / 루비8(4단계+프로모4) / 길드11 / 코스튬5 / 영웅5(§5-1 미결) */
   shop:{ title:'상점', render(b){
     let tab='ad';
-    const TABS=[['ad','추천','📢'],['buff','버프','💊'],['hero','영웅','🎭'],['pkg','기타','🎁'],
+    const TABS=[['ad','추천','📢'],['buff','버프','💊'],['hero','영웅','🎭'],['pkg','패키지','🎁'],
                 ['gold','골드','🪙'],['gray','재료','🧪'],['ruby','루비','💎'],['guild','길드','🛡️'],['costume','코스튬','👘']];
     // G-103: 텍스트 pill → 4열 그리드 + 아이콘 상단/라벨 하단 2단 정사각
     const tabs=el('div','tabrow icons');
@@ -5974,6 +5974,30 @@ const MODALS = {
         let rg='';
         RUBYPKG.forEach(it=>{ if(it.grp!==rg){ rg=it.grp; grpLabel(`${rg} 패키지`); }
           mkBuy(it.ic,it.t,`${it.d} · ${priceTxt('ruby',it.cost)}`,'ruby',it.cost,it.give); });
+        /* ★ v5.291(대표 요청): 한정 패키지(ACCOUNT_PACKS) — 종전 별도 '패키지' 모달에서
+           이 탭으로 이관. 구매 상태(claimed.mail)·계정당 1회·루비 차감 규칙은 그대로. */
+        grpLabel('[한정] 패키지 — 전 카드 계정당 1회');
+        ACCOUNT_PACKS.forEach(p=>{
+          const bought=!!S.claimed.mail[p.id];
+          const card=el('div','gframe'); card.style.cssText='padding:10px;margin-top:8px;border-color:'+(bought?'#4a3a22':'var(--g-legend)');
+          card.appendChild(el('div','',`<div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:26px">${eImg(p.ic,2.5)}</span>
+            <span style="font-weight:800;color:var(--txt-hi)">${p.t}</span>
+            ${bought?'<span class="small" style="color:var(--ok)">구매완료</span>':''}
+            <span style="margin-left:auto;font-weight:800;color:${p.cost?'#e05aa0':'var(--ok)'}">${p.cost?`${eImg("💎",2)} ${p.cost.toLocaleString('ko-KR')}`:'무료'}</span></div>`));
+          const g=el('div'); g.style.cssText='display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin:8px 0';
+          p.items.forEach(([ic,nm])=>{ const c=el('div','cell gframe'); c.style.padding='5px';
+            c.innerHTML=`<div class="ei" style="font-size:20px">${eImg(ic,2)}</div><div class="cn" style="font-size:9px;line-height:1.3">${nm}</div>`; g.appendChild(c); });
+          card.appendChild(g);
+          const ok = !bought && (S.ruby>=p.cost);
+          const btn=el('button','btn wide'+(ok?' gold':''), bought?'구매 완료':(p.cost?'구매':'받 기')); btn.style.marginTop='6px';
+          if(!ok) btn.disabled=true;
+          btn.onclick=()=>{ if(S.claimed.mail[p.id]) return;
+            if(p.cost && S.ruby<p.cost){ toast('루비가 부족합니다.'); return; }
+            if(p.cost) S.ruby-=p.cost;
+            p.give(); S.claimed.mail[p.id]=true; sfx('craft'); toast(`${p.t} 수령`); render(); refreshHUD(); };
+          card.appendChild(btn); body.appendChild(card);
+        });
 
       /* ── ⑤ 골드상점 (G-93): 골드 5 + 루비 환전 2 = 7항목 ── */
       } else if(tab==='gold'){
@@ -6518,6 +6542,23 @@ const MODALS = {
     b.appendChild(g);
     const close=el('button','btn wide','닫기'); close.style.marginTop='10px'; close.onclick=()=>closeModal(); b.appendChild(close);
   }},
+  /* ★ v5.291: 모험 팝업(대표 요청 — 중요도별 아이콘 정리) — 하단 레일의 전투·던전 6종을
+     '모험' 카테고리 하나로 묶는다. 우측 플로팅엔 모험만 남고(공략·소통은 ☰ 드로어에 이미
+     항목이 있어 외부 제거로 이동 완료), 코스튬은 드로어로, 패키지(한정 상품)는 상점 탭으로.
+     각 항목 클릭 시 openModal 로 바로 연결되고 입장 조건·잠금은 각 모달이 스스로 처리한다. */
+  adventure:{ title:'모험', render(b){
+    b.appendChild(el('div','hint','던전·보스·약탈 — 전투 콘텐츠를 한 곳에서.'));
+    const g=el('div','adv-grid');
+    [ ['dailydungeon','요일던전','ci_dailydungeon'], ['golddungeon','골드던전','ci_golddungeon'],
+      ['boss','보스','ci_boss'], ['worldboss','월드보스','ci_worldboss'],
+      ['tower','시련의탑','side_tower'], ['raid','약탈','ci_raid'] ].forEach(([k,n,ic])=>{
+      const c=el('div','cell gframe adv-item');
+      c.innerHTML=`<div class="ei"><img src="assets/icons/ui/${ic}.webp" style="width:34px;height:34px;object-fit:contain" alt="${n}"></div><div class="cn">${n}</div>`;
+      c.onclick=()=>{ sfx('tap'); openModal(k); };
+      g.appendChild(c);
+    });
+    b.appendChild(g);
+  }},
   /* ★ v5.229: '장기 목표'의 강화 기대 비용 3.2억은 시뮬 실측값. 종전 4.8억은 몬테카를로가
      '실패마다 망치 10개 소모'로 계산한 것 — 실제 규칙(openEnhance)은 실패 중 파괴 분기(50%)에서만
      망치가 소모된다. 실측(600h 시뮬, 상시 보호 정책): 부위당 기대 시도 약 26회 · 망치 약 41개. */
@@ -7031,32 +7072,8 @@ const MODALS = {
     drawHead(); drawList();
   }},
   /* ★ B7/G-104: 한정 패키지 5카드 — 전 카드 '계정당 1회 구매 가능' 라벨 + 구성품 그리드 */
-  package:{ title:'패키지', render(b){
-    b.appendChild(el('div','hint','한정 상품 · 전 카드 계정당 1회 구매 가능 (데모)'));
-    b.appendChild(el('div','center small',`보유 루비 <b style="color:#e05aa0">${(S.ruby||0).toLocaleString('ko-KR')}</b>`));
-    ACCOUNT_PACKS.forEach(p=>{
-      const bought=!!S.claimed.mail[p.id];
-      const card=el('div','gframe'); card.style.cssText='padding:10px;margin-top:8px;border-color:'+(bought?'#4a3a22':'var(--g-legend)');
-      card.appendChild(el('div','',`<div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:26px">${eImg(p.ic,2.5)}</span>
-        <span style="font-weight:800;color:var(--txt-hi)">${p.t}</span>
-        ${bought?'<span class="small" style="color:var(--ok)">구매완료</span>':''}
-        <span style="margin-left:auto;font-weight:800;color:${p.cost?'#e05aa0':'var(--ok)'}">${p.cost?`${eImg("💎",2)} ${p.cost.toLocaleString('ko-KR')}`:'무료'}</span></div>`));
-      const g=el('div'); g.style.cssText='display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin:8px 0';
-      p.items.forEach(([ic,nm])=>{ const c=el('div','cell gframe'); c.style.padding='5px';
-        c.innerHTML=`<div class="ei" style="font-size:20px">${eImg(ic,2)}</div><div class="cn" style="font-size:9px;line-height:1.3">${nm}</div>`; g.appendChild(c); });
-      card.appendChild(g);
-      card.appendChild(el('div','small mut','* 계정당 1회 구매 가능'));
-      const ok = !bought && (S.ruby>=p.cost);
-      const btn=el('button','btn wide'+(ok?' gold':''), bought?'구매 완료':(p.cost?'구매':'받 기')); btn.style.marginTop='6px';
-      if(!ok) btn.disabled=true;
-      btn.onclick=()=>{ if(S.claimed.mail[p.id]) return;
-        if(p.cost && S.ruby<p.cost){ toast('루비가 부족합니다.'); return; }
-        if(p.cost) S.ruby-=p.cost;
-        p.give(); S.claimed.mail[p.id]=true; sfx('craft'); toast(`${p.t} 수령`); openModal('package'); refreshHUD(); };
-      card.appendChild(btn); b.appendChild(card);
-    });
-  }},
+  /* ★ v5.291(대표 요청): 패키지 모달(한정 상품 ACCOUNT_PACKS)은 상점 '패키지' 탭으로
+     통합돼 삭제됐다 — 외부 아이콘 진입도 제거. 렌더·구매 로직은 shop 의 pkg 탭으로 이식. */
   /* ★ B4/G-61: 등급 탭 4개(일반 0-1 / 희귀 2-3 / 영웅 4-5 / 레전더리 6-7), 탭 헤더 `N마리`.
      각 행에 `레벨 : N` + 직업 라벨. 레전더리 탭 좌상단 `난이도 X1` 배지.
      ★ B4/G-62: 타이틀 '몬스터 소환' → '몬스터' */

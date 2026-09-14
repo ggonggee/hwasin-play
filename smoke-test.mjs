@@ -1516,6 +1516,53 @@ step('투기장 종료 즉시 미션 완료 팝업(튜토리얼) — 일반은 �
   if(errs.length) throw new Error(errs.join(' | '));
 });
 
+/* ★ v5.291 회귀: 모험 팝업 + 중요도별 아이콘 재배치(대표 요청) —
+   ① 우측 플로팅엔 '모험'만(공략·소통 부재) ② 모험 팝업 6종 렌더·클릭으로 각 모달 오픈
+   ③ 하단 레일은 퀘스트·길드·마을 3종만(전투류·코스튬·패키지 부재) ④ 드로어에 코스튬 존재
+   ⑤ package 모달 삭제(상점 패키지 탭 이관)·상점 탭에 한정 상품 노출. */
+step('모험 팝업·아이콘 재배치 — 플로팅/레일/드로어/상점 정합', ()=>{
+  const errs=[];
+  /* 스텁 DOM 은 id 레지스트리만 만들어 계층이 없다 — 레이아웃 구조는 index.html
+     소스 정합으로 검증한다(스텁이 html 문자열을 이미 읽는 관례와 동일). */
+  const slice=(a,b)=>{ const i=html.indexOf(a); if(i<0) return ''; const j=html.indexOf(b,i); return html.slice(i, j<0?html.length:j); };
+  const dmods=s=>[...s.matchAll(/data-modal="([^"]+)"/g)].map(m=>m[1]);
+  const floatSec=slice('<div id="side-float">','<div id="sidemenu"');
+  const floats=dmods(floatSec);
+  if(floats.length!==1 || floats[0]!=='adventure') errs.push('플로팅이 모험 단일 아님: '+JSON.stringify(floats));
+  const menuSec=slice('<div id="sidemenu"','<div id="content-rail"');
+  const menu=dmods(menuSec);
+  for(const k of ['costume','strategy','social']) if(!menu.includes(k)) errs.push('드로어 항목 누락: '+k);
+  if(menu.length!==14) errs.push('드로어 14개 아님: '+menu.length);
+  const railSec=slice('<div id="content-rail"','<!-- 채팅');
+  const rail=dmods(railSec);
+  if(JSON.stringify(rail)!==JSON.stringify(['quest','guild','village'])) errs.push('레일이 퀘스트·길드·마을 3종 아님: '+JSON.stringify(rail));
+  if(dmods(html).includes('package')) errs.push('package 진입점 잔존');
+  /* 모험 모달·상점 탭은 런타임 검증 — 스텁의 childNodes 더미 때문에 openModal 의
+     modalBody 는 비어 있으므로 모달 전수(관례)처럼 render(b) 직접 방식을 쓴다. */
+  const M=ev('MODALS');
+  const b=new Node2('div'); M.adventure.render(b);
+  const txt=collectText(b);
+  for(const n of ['요일던전','골드던전','보스','월드보스','시련의탑','약탈']) if(!txt.includes(n)) errs.push('모험 항목 누락: '+n);
+  const grid=(b.children||[]).find(c=>(c.children||[]).some(k=>String(k._html||'').includes('요일던전')));
+  if(!grid) errs.push('모험 그리드 미발견');
+  else { const card=(grid.children||[])[0];
+    if(card&&card.onclick){ card.onclick(); if(ev('currentModal')!=='dailydungeon') errs.push('모험 카드 클릭 미연결'); ev('closeModal')(); }
+    else errs.push('모험 카드에 onclick 없음'); }
+  if(M.package!==undefined) errs.push('package 모달 잔존');
+  if(!M.shop.render.toString().includes('패키지')) errs.push('상점 탭 라벨 미갱신');
+  const S=ev('S'); const rb=S.ruby; S.ruby=999999;
+  const sb=new Node2('div'); M.shop.render(sb);
+  if(!collectText(sb).includes('추천')) errs.push('상점 렌더 실패');
+  const shopTabs=(sb.children||[])[0]||null;
+  const pkgTab=shopTabs && [...(shopTabs.children||[])].find(t=>String(t._html||t._text||'').includes('패키지'));
+  if(!pkgTab) errs.push('패키지 탭 미발겤');
+  else { pkgTab.onclick();
+    const ptxt=collectText((sb.children||[])[1]||new Node2('div'));
+    const ap=ev('ACCOUNT_PACKS'); if(ap&&ap[0]&&!ptxt.includes(ap[0].t)) errs.push('한정 패키지 미노출'); }
+  S.ruby=rb;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
+
 /* ★ v5.265 회귀: 주간·월간 의뢰 수령 배지 — 진행 완료 미수령 시 questClaimable true,
    미완료·수령 후·새 주(키 불일치) false. */
 step('의뢰 수령 배지 — weeklyClaimable·monthlyClaimable', ()=>{

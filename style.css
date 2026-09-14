@@ -785,6 +785,10 @@ body{
 
 /* --- G-04: 미션 완료 보상 --- */
 .mr-grid{ display:grid; grid-template-columns:repeat(5,1fr); gap:5px; margin:10px 0; }
+/* ★ v5.291: 모험 팝업 그리드 — 전투·던전 6종(3열×2행). 카드는 도감 셀(cell gframe) 관행 재사용. */
+.adv-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin:10px 0; }
+.adv-item{ padding:10px 4px; cursor:pointer; text-align:center; }
+.adv-item:active{ filter:brightness(1.3); }
 .mr-cell{ padding:7px 2px; text-align:center; border:1px solid var(--frame); border-radius:8px;
   background:linear-gradient(180deg,#241a10,#120d09); }
 .mr-cell .mi{ font-size:var(--fs-xl); } .mr-cell .mn{ font-size:var(--fs-xs); color:#cdbf9f; margin-top:2px; line-height:1.3; }
