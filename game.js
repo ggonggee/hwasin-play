@@ -8764,9 +8764,10 @@ function wire(){
   $('#modalClose').onclick=closeModal;
   $('#scrim').onclick=closeModal;
   // ★ v4.9: 사이드메뉴와 콘텐츠 아이콘열을 함께 여닫는다(둘은 한 덩어리로 뜬다).
+  // ★ v5.293: content-rail 은 퀘스트·길드·마을이 드로어로 이동하며 제거됐다(대표 요청).
+  // 조회 코드조차 남기면 verify [E](없는 DOM id 조회 검사)에 걸린다 — 참조를 완전히 뗀다.
   $('#btnMenuToggle').onclick=()=>{
-    const on=$('#sidemenu').classList.toggle('hidden');
-    $('#content-rail').classList.toggle('hidden', on);
+    $('#sidemenu').classList.toggle('hidden');
   };
   $('#btnPlusRuby').onclick=()=>openModal('shop');
   const tp=$('.timepod'); if(tp) tp.addEventListener('click',()=>openModal('settle'));   // ★ B1/G-14: topbar → stage-wrap 이동

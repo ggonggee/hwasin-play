@@ -1529,13 +1529,16 @@ step('모험 팝업·아이콘 재배치 — 플로팅/레일/드로어/상점 �
   const floatSec=slice('<div id="side-float">','<div id="sidemenu"');
   const floats=dmods(floatSec);
   if(floats.length!==1 || floats[0]!=='adventure') errs.push('플로팅이 모험 단일 아님: '+JSON.stringify(floats));
-  const menuSec=slice('<div id="sidemenu"','<div id="content-rail"');
+  const menuSec=slice('<div id="sidemenu"','<!-- 채팅');
   const menu=dmods(menuSec);
   for(const k of ['costume','strategy','social']) if(!menu.includes(k)) errs.push('드로어 항목 누락: '+k);
-  if(menu.length!==14) errs.push('드로어 14개 아님: '+menu.length);
+  /* ★ v5.293: 퀘스트·길드·마을이 레일에서 드로어로 — 첫 6순위 '우편,출석,퀘스트,길드,마을,설정' */
+  const order6=['mail','attend','quest','guild','village','settings'];
+  const head6=menu.slice(0,6);
+  if(JSON.stringify(head6)!==JSON.stringify(order6)) errs.push('드로어 첫 6순위 불일치: '+JSON.stringify(head6));
+  if(menu.length!==17) errs.push('드로어 17개 아님: '+menu.length);
   const railSec=slice('<div id="content-rail"','<!-- 채팅');
-  const rail=dmods(railSec);
-  if(JSON.stringify(rail)!==JSON.stringify(['quest','guild','village'])) errs.push('레일이 퀘스트·길드·마을 3종 아님: '+JSON.stringify(rail));
+  if(railSec!=='') errs.push('content-rail 잔존(v5.293 제거)');
   if(dmods(html).includes('package')) errs.push('package 진입점 잔존');
   /* 모험 모달·상점 탭은 런타임 검증 — 스텁의 childNodes 더미 때문에 openModal 의
      modalBody 는 비어 있으므로 모달 전수(관례)처럼 render(b) 직접 방식을 쓴다. */
