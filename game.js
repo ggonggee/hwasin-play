@@ -8352,6 +8352,19 @@ function arenaResult(win, foeName, foeCP, foeTier){
   if(nt>S.arenaTier){ S.arenaTier=nt; toast(`${TIERS[S.arenaTier]} 승급!`); }
   else if(nt<S.arenaTier){ S.arenaTier=nt; toast(`${TIERS[S.arenaTier]}(으)로 강등…`); }
   sfx(win?'win':'fail');
+  /* ★ v5.290: 튜토리얼 8단계(투기장) 종료 즉시 미션 완료 팝업 — 종전엔 결과 카드 3초 →
+     홈 복귀 → tutPoll(0.5s 간격) 순으로 돌아, 전투가 끝나고도 최대 ~3.5초 뒤에야 팝업이
+     떴고 그 사이 홈 전투 화면이 그대로 노출됐다(대표 요청: 끝나면 팝업이 화면을 가리고
+     나타나게). missionReward 를 openModal 로 열면 modal-root 스크림이 배경을 잠그므로
+     즉시 전면 전환된다. 승패는 토스트로 남겨 결과 정보 박탈을 막고, 아래 결과 카드의
+     3초 타이머도 이 경로에선 걸지 않는다(타이머의 closeModal 이 미션 팝업을 닫는 사고
+     방지). 일반(튜토리얼 완료) 유저의 결과 카드는 변화 없음. */
+  if(!S.seenTutorial && S.tut && S.tut.missionPending){
+    S.tut.missionPending=false;
+    toast(win?'투기장 승리!':'투기장 패배…');
+    openModal('missionReward');
+    return;
+  }
   setModalTitle('투기장'); const b=$('#modalBody'); b.innerHTML='';
   // ★ G-91: 결과 카드 상단 세션 승패 배너
   b.appendChild(el('div','ar-session',`${S.arenaSession.w}승 ${S.arenaSession.l}패`));

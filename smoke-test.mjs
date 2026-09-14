@@ -1489,6 +1489,33 @@ step('설정 백업 행 — iOS 사파리 세이브 삭제 고지 존재', ()=>{
   if(!/내보내기/.test(txt)) throw new Error('백업 버튼 없음');
 });
 
+/* ★ v5.290 회귀: 투기장 종료 즉시 미션 완료 팝업 — 튜토리얼 8단계 전투가 끝나면
+   결과 카드 3초 대기를 건너뛰고 missionReward 가 바로 열린다(modal-root 스크림이
+   화면을 가림). 일반(튜토리얼 완료) 유저의 결과 카드 경로는 변화 없음을 함께 본다. */
+step('투기장 종료 즉시 미션 완료 팝업(튜토리얼) — 일반은 결과 카드 유지', ()=>{
+  const S=ev('S');
+  const bak=JSON.stringify({ seen:S.seenTutorial, tut:S.tut, ticket:S.ticket, arenaPts:S.arenaPts,
+    arenaStreak:S.arenaStreak, arenaTier:S.arenaTier, arenaRank:S.arenaRank, arenaSession:S.arenaSession,
+    dice:S.dice, missionPaid:S._missionPaid, classTrait:S.classTrait });
+  const errs=[];
+  try{
+    S.seenTutorial=false; S.tut=S.tut||{}; S.tut.missionPending=true;
+    ev('arenaResult')(true,'훈련 대장', 1000, 'Bronze');
+    if(ev('currentModal')!=='missionReward') errs.push('missionReward 미오픈: '+ev('currentModal'));
+    if(S.tut.missionPending!==false) errs.push('missionPending 미소진 — tutPoll 중복 오픈 위험');
+    S.seenTutorial=true;
+    ev('arenaResult')(false,'훈련 대장', 2000, 'Silver');
+    if(ev('currentModal')!=='arenaResult') errs.push('일반 결과 카드 깨짐: '+ev('currentModal'));
+    ev('closeModal')();   // 남은 3초 타이머 무력화(currentModal 가드)
+  } finally {
+    const o=JSON.parse(bak);
+    Object.assign(S, { seenTutorial:o.seen, tut:o.tut, ticket:o.ticket, arenaPts:o.arenaPts,
+      arenaStreak:o.arenaStreak, arenaTier:o.arenaTier, arenaRank:o.arenaRank,
+      arenaSession:o.arenaSession, dice:o.dice, _missionPaid:o.missionPaid, classTrait:o.classTrait });
+  }
+  if(errs.length) throw new Error(errs.join(' | '));
+});
+
 /* ★ v5.265 회귀: 주간·월간 의뢰 수령 배지 — 진행 완료 미수령 시 questClaimable true,
    미완료·수령 후·새 주(키 불일치) false. */
 step('의뢰 수령 배지 — weeklyClaimable·monthlyClaimable', ()=>{
