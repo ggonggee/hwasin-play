@@ -186,12 +186,26 @@ function upgradeCandidates(){
    그리디(가격순)는 600h 내내 세트가 3조각에 머물러 setm ×1.000 — 실측으로 확인했다.
    세트 완성 = 6set ×1.3~1.86 는 곡선 전체를 바꾸는 큰 축이므로 정책에 반영해야 실제와 같다. */
 function setAffinity(itemName){
-  const SP=ev('SET_PIECES'), S=ev('S'), leader=leaderId();
+  const SP=ev('SET_PIECES'), S=ev('S'), leader=leaderId(), SETS=ev('SETS');
+  /* ★ v5.298 정합(v5.300 루프 반영): 세트 배율 정보가 게임에 공개됐다(세트효과 도감
+     단계별 ×N — 공략 카드 현재 배율 포함). 합리적 플레이어는 이제 '진행 중인 세트끼리
+     비교할 때 배율이 높은 쪽을 우선 완성'한다. 정책: 착용 수(진행도)가 지배하고,
+     진행 중인 세트(1조각 이상)에만 최고 단계 배율 기여(×N−1)를 가산한다.
+     0조각 세트에 배율을 주지 않는 이유: 새 세트를 처음부터 만드는 비용은 재료가 지배
+     — 실제 플레이어는 4조각 모은 세트를 버리고 최고 배율 세트를 0부터 만들지 않는다.
+     배율 산식은 setDamageMul 단일 세트 계산과 동일(공격% × 방어[유효 체력] 환산). */
   let best=0;
   Object.entries(SP).forEach(([set,parts])=>{
     if(parts.indexOf(itemName)<0) return;
     const worn=S.equips.filter(e=>e.equipped&&(!e.heroId||e.heroId===leader)&&parts.indexOf(e.slot)>=0).length;
-    best=Math.max(best,worn);
+    let score=worn;
+    if(worn>0){
+      const st=SETS.find(s=>s.n===set);
+      const t=st.tiers[st.tiers.length-1];
+      const mul=(1+(t.dmg||0)/100) * (1/(1-Math.min(0.7,(t.def||0)/100)));
+      score=worn+(mul-1);
+    }
+    best=Math.max(best,score);
   });
   return best;
 }
