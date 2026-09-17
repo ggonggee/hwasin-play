@@ -6592,7 +6592,14 @@ const MODALS = {
   /* ★ A2: 세트효과 도감 — 세로 스크롤 카드 리스트로 설계한다(그리드 아님).
      카드 1장 = 세트명 명판 + 임계값별 효과 블록. 8종은 6세트 1단계, '작열'만 3/6/8 3단계. */
   setfx:{ title:'세트효과', render(b){
-    b.appendChild(el('div','hint','장비 세트 9종. 8종은 <b>6세트</b> 단일 임계값이며, ‘작열’ 1종만 <b>3 → 6 → 8세트</b> 3단계로 누적됩니다.'));
+    /* ★ v5.298: 세트 카드에 전투력 환산 배율(×N) 공개 — 정보 비대칭 해소.
+       10시드 시뮬 스윝에서 세트 조합에 따라 ×2.29(작열6+주술3) vs ×5.33(강철맹세6+작열3)
+       까지 전투력이 갈렸다(공격% × 유효 체력 환산의 곱 — setDamageMul 공식과 동일).
+       효과 문구만으론 '받는 피해 40% 감소'가 얼마나 강한지 체감이 안 돼 빌드 연구가
+       정보가 있는 소수의 몫이었다. 배율은 단계별 단독 기여이며 여러 세트는 합산된다
+       (dmg 합산 후 방어 환산 곱) — 헤더에 이 규칙을 명시해 최적해 강제가 아닌
+       '비교 가능한 정보'로만 제공한다. */
+    b.appendChild(el('div','hint','장비 세트 9종. 8종은 <b>6세트</b> 단일 임계값이며, ‘작열’ 1종만 <b>3 → 6 → 8세트</b> 3단계로 누적됩니다.<br><span class="mut">×N = 그 단계의 전투력 환산 기여(공격% × 방어[유효 체력] 환산 · setDamageMul 정본 공식). 여러 세트는 서로 합산됩니다.</span>'));
     /* ★ v5.7: 무엇을 모아야 하는지 보이게 한다 — 구성품과 보유 진행도.
        종전 카드는 효과 문구만 있어서 "그래서 뭘 모으라는 거지"에 답이 없었다. */
     SETS.forEach(s=>{
@@ -6603,7 +6610,9 @@ const MODALS = {
           + `<span class="sc-prog${own>0?' on':''}">${own} / ${max}</span></div>`;
       s.tiers.forEach(t=>{
         const hit = own>=t.k;
-        h+=`<div class="sc-tier${hit?' hit':''}"><div class="sc-k">${t.k}세트${hit?' ✓':''}</div>`+
+        /* v5.298: 단계별 단독 전투력 배율 — setDamageMul 의 단일 세트 계산과 동일 공식 */
+        const mul=((1+(t.dmg||0)/100) * (1/(1-Math.min(0.7,(t.def||0)/100)))).toFixed(2);
+        h+=`<div class="sc-tier${hit?' hit':''}"><div class="sc-k">${t.k}세트${hit?' ✓':''} <span style="color:#f0cd82">×${mul}</span></div>`+
            t.fx.map(x=>`<div class="sc-fx">${x}</div>`).join('')+`</div>`;
       });
       h+=`<div class="sc-pieces">`+list.map(nm=>{
@@ -6755,7 +6764,7 @@ const MODALS = {
     const claimHint=weeklyClaimable()||monthlyClaimable();
     b.innerHTML=`<div class="hint" style="line-height:1.8">
     <b style="color:#f0cd82">■ 내 장기 목표 진행</b> <span class="mut small">(실시간)</span><br>
-    · 세트: ${act.length? act.slice(0,3).map(x=>`${x.n} ${x.c}/${(SET_PIECES[x.n]||[]).length}`).join(' · ') : '3조각부터 발동'}${next?` — 다음: <b style="color:var(--g-legend)">${next.n} ${next.k}세트</b> (${next.gap}조각 남음)`:''}<br>
+    · 세트: ${act.length? act.slice(0,3).map(x=>`${x.n} ${x.c}/${(SET_PIECES[x.n]||[]).length}`).join(' · ') : '3조각부터 발동'}${next?` — 다음: <b style="color:var(--g-legend)">${next.n} ${next.k}세트</b> (${next.gap}조각 남음)`:''} · 현재 배율 <b>×${setDamageMul().toFixed(2)}</b><span class="mut small">(세트효과 도감에서 조합별 기여 비교)</span><br>
     · 강화: 홈 출격 영웅 평균 <b>+${enhAvg}</b> / 목표 +25 (+11부터 망치 필수)<br>
     · 각성: <b>+${S.awaken||0}</b> / 50${(S.awaken||0)>=12?` · 기록서 ${S.records||0}권 보유`:''}${awakenMaxed?' · 완료 🎉':''}<br>
     · 시련의 탑: 최고 <b>${S._tower||0} Wave</b> (일 1회 도전·소탕)<br>

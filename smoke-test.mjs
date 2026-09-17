@@ -1066,7 +1066,21 @@ step('공략 진행 카드 — 장기 목표 실시간 수치 반영', ()=>{
   const miss=need.filter(t=>!html.includes(t));
   if(miss.length) throw new Error('공략 진행 카드 누락: '+miss.join(', '));
   if(!/다음: <b[^>]*>[가-힣]+ \d세트/.test(html)) throw new Error('다음 세트 목표 라인 없음');
+  /* ★ v5.298: 세트 현재 배율 표시 — setDamageMul 정본 접근자와 동일 값(정보 공개·
+     세트 빌드 격차 ×2.29~×5.33 의 정보 비대칭 해소). 렌더 무지급(순수 계산). */
+  if(!/현재 배율 <b>×[0-9.]+<\/b>/.test(html)) throw new Error('세트 현재 배율 표시 없음');
+  const shown=+(html.match(/현재 배율 <b>×([0-9.]+)/)||[])[1];
+  const expect=+ev('setDamageMul')().toFixed(2);
+  if(Math.abs(shown-expect)>0.005) throw new Error('세트 배율 불일치: '+shown+' vs '+expect);
+  /* setfx 도감 — 단계별 전투력 환산 배지(단일 세트 setDamageMul 공식) 존재·개수 */
+  const sb=new Node2('div'); M.setfx.render(sb);
+  const stxt=collectText(sb);
+  const badges=(stxt.match(/×[0-9.]+/g)||[]).length;
+  if(badges<SETS_TIER_COUNT()) throw new Error('세트 배율 배지 부족: '+badges);
+  if(!stxt.includes('전투력 환산 기여')) throw new Error('배율 규칙 안내 없음');
 });
+/* 세트 총 임계 수(작열 3단계 + 나머지 8종 1단계 = 11) — setfx 배지 개수 기대치 */
+function SETS_TIER_COUNT(){ return 11; }
 
 /* ★ v5.236: Node2 스텁은 innerHTML/textContent 가 setter 전용 백텍스트라 appendChild 로
    쌓은 트리는 innerHTML 이 비어 있다. appendChild 방식 모달(awaken·openEnhance 서브화면)의
