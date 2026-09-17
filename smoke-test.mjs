@@ -1792,8 +1792,9 @@ step('주간 축제 — 3테마 순환 결정론·골드 관문 배율·배지·
     if(!chip||!String(chip._html||'').includes(ev('festival()').n)) errs.push('배지 미갱신');
     if(!/D-[1-7]/.test(String(chip._html||''))) errs.push('D-N 카운트다운 없음');
     if(S.gold!==gBefore) errs.push('렌더만으로 골드 변동');
-    /* 공지·도움말 진입점 — 축제 토픽 본문(셀 클릭 후 #modalBody 재렌더)의 잔여 일수까지 */
-    if(!ev('NOTICES')[0].t.includes('축제')) errs.push('축제 공지 없음');
+    /* 공지·도움말 진입점 — v5.303: [0]은 잔불·용광로 통합 공지, 축제 공지는 존재 검사(some) */
+    if(!ev('NOTICES')[0].t.includes('잔불의 미궁')) errs.push('신규 콘텐츠 공지 없음([0])');
+    if(!ev('NOTICES').some(n=>n.t.includes('축제'))) errs.push('축제 공지 없음');
     const hb=new Node2('div'); M.help.render(hb);
     if(!collectText(hb).includes('축제')) errs.push('도움말 축제 토픽 없음');
     const cell=(hb.children||[]).flatMap(c=>c.children||[]).find(c=>String(c._html||'').includes('축제'));
