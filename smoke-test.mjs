@@ -1714,6 +1714,64 @@ step('주간 축제 — 3테마 순환 결정론·골드 관문 배율·배지·
   if(errs.length) throw new Error(errs.join(' | '));
 });
 
+/* ★ v5.297 회귀: 축제 의뢰 — 주간 의뢰 5번째 슬롯(콘텐츠 확장-3).
+   ① 테마×축×목표 매핑: 3연속 ISO 주(Date 목)로 gold/exp/mat 각각 kills/6000·summons/20·crafts/25
+   ② 주간 탭 렌더: [테마명] 라벨 행·보상 '강화석 X50' 표시·렌더 무지급
+   ③ 수령: 지급 +50 강화석·weeklyClaimable 반영(fest 완료→true, 수령 후 다른 의뢰 미완료면 false). */
+step('축제 의뢰 — 테마×축 매핑·주간 탭 렌더·수령·배지 반영', ()=>{
+  const S=ev('S'), M=ev('MODALS');
+  const keep={ weekly:S.weekly?JSON.parse(JSON.stringify(S.weekly)):null,
+    kills:S.stats.kills, crafts:S.stats.crafts, summons:S.stats.summons, stones:S.stones||0 };
+  const errs=[];
+  const weeks=[[2026,8,14],[2026,8,21],[2026,8,28]];
+  try{
+    /* ① 테마×축×목표 매핑 */
+    const spec={ gold:['kills',6000], exp:['summons',20], mat:['crafts',25] };
+    const seen={};
+    for(let i=0;i<3;i++){
+      const [y,m,d]=weeks[i];
+      ev(`(function(){ const _D=Date; globalThis.__realDate=_D;
+        Date=class extends _D{ constructor(...a){ if(a.length===0) super(${y},${m},${d},12,0,0); else super(...a); }
+          static now(){ return new _D(${y},${m},${d},12,0,0).getTime(); } }; })()`);
+      const fq=ev('festivalQuest')();
+      const th=ev('festival()').id;
+      if(fq.id!=='fest') errs.push('id 불일치: '+fq.id);
+      if(!fq.txt.includes('['+ev('festival()').n+']')) errs.push(th+' 라벨 미포함: '+fq.txt);
+      const [st,gl]=spec[th];
+      if(fq.stat!==st||fq.goal!==gl) errs.push(th+' 매핑 불일치: '+fq.stat+'/'+fq.goal+'(기대 '+st+'/'+gl+')');
+      seen[th]=1;
+    }
+    if(Object.keys(seen).length!==3) errs.push('3테마 미순회: '+Object.keys(seen).join(','));
+    /* ② 주간 탭 렌더 — 탭 onclick 후 내용 판독 (탭 라벨은 el() 3번째 인자=innerHTML) */
+    S.weekly={ key:ev('getWeekKey')(), base:{ kills:S.stats.kills, crafts:S.stats.crafts, summons:S.stats.summons, towerTries:0 }, claimed:{} };
+    const b=new Node2('div'); M.quest.render(b);
+    const tabNode=((b.children[0]||{}).children||[]).find(c=>String(c._text||c._html||'').trim()==='주간');
+    if(!tabNode||!tabNode.onclick) errs.push('주간 탭 미발겤');
+    else tabNode.onclick();
+    const txt=collectText(b);
+    if(!txt.includes('축제 기간')) errs.push('축제 의뢰 행 없음');
+    if(!(txt.includes('강화석 X50')||txt.includes('수령 완료'))) errs.push('축제 보상 텍스트 미표시');
+    const st0=S.stones||0, g0=S.gold;
+    const b2=new Node2('div'); M.quest.render(b2);
+    if((S.stones||0)!==st0||Math.round(S.gold)!==Math.round(g0)) errs.push('렌더만으로 지급');
+    /* ③ 수령 — 지급 +50·claimable 반영 (진행 100% = base를 목표만큼 과거로) */
+    const fq2=ev('festivalQuest')();
+    const w=ev('weeklyState')();
+    w.base[fq2.stat]-=fq2.goal;                 // now-base = goal → 완료
+    if(ev('weeklyClaimable')()!==true) errs.push('fest 완료인데 claimable false');
+    const before=S.stones||0; fq2.give(); w.claimed.fest=true;
+    if((S.stones||0)!==before+50) errs.push('지급 +50 아님: '+((S.stones||0)-before));
+    const others=ev('WEEKLY_QUESTS').every(q=>{ const now=S.stats[q.stat]||0, base=(w.base&&w.base[q.stat])||0; return (now-base)<q.goal; });
+    if(others && ev('weeklyClaimable')()) errs.push('fest 수령 후에도 claimable true');
+  } finally {
+    ev('if(globalThis.__realDate){ Date=globalThis.__realDate; delete globalThis.__realDate; }');
+    S.stats.kills=keep.kills; S.stats.crafts=keep.crafts; S.stats.summons=keep.summons;
+    S.stones=keep.stones;
+    if(keep.weekly) S.weekly=JSON.parse(JSON.stringify(keep.weekly)); else S.weekly={key:'',base:null,claimed:{}};
+  }
+  if(errs.length) throw new Error(errs.join(' | '));
+});
+
 /* ★ v5.292 회귀: 전투 연출 재구성(대표 요청) 소스 정합 — centerHold(일반 몹 던전: 중앙
    배치+이동 금지+몹 중앙 선형 이동), 보스 중앙 즉시 배치(화면 밖 입장 중 처치 방지),
    startDungeon 입장 시 layoutHeroes 재호출(이전 전투 이동 위치 리셋). 런타임 동작은

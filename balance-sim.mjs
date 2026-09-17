@@ -340,13 +340,15 @@ function dailyStep(){
   while(S.gold>=16000000 && (ev('ownedHeroes')().length<9 || (S.awaken||0)<12)){ S.gold-=15000000; S.tickHero+=10; }
 
   /* ★ v5.249: 주간 의뢰 수령 정책 — weeklyState()가 새 주(ISO 키)면 스냅샷·수령을
-     리셋한다(FakeDate라 시뮬 시간 기준 동작). 진행 충족 의뢰를 일 1회 체크해 수령. */
+     리셋한다(FakeDate라 시뮬 시간 기준 동작). 진행 충족 의뢰를 일 1회 체크해 수령.
+     ★ v5.297: 축제 의뢰(festivalQuest) 포함 — 테마별 축(kills/summons/crafts) 진행이
+     스냅샷 base에 전부 있어 같은 루프로 처리된다. */
   {
     const w=ev('weeklyState')();
-    ev('WEEKLY_QUESTS').forEach(q=>{
+    ev('WEEKLY_QUESTS').concat([ev('festivalQuest')()]).forEach(q=>{
       if(w.claimed[q.id]) return;
       const st=ev('S').stats||{}, now=st[q.stat]||0, base=(w.base&&w.base[q.stat])||0;
-      if(now-base>=q.goal){ w.claimed[q.id]=true; q.give(); acts+='주간의뢴 '; }
+      if(now-base>=q.goal){ w.claimed[q.id]=true; q.give(); acts+=q.id==='fest'?'축제의뢴 ':'주간의뢴 '; }
     });
   }
   /* ★ v5.256: 월간 의뢰 수령 — 주간(v5.249)과 동일 패턴. */

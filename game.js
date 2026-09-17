@@ -1721,7 +1721,9 @@ function questClaimable(){
 function weeklyClaimable(){
   if(!S || !S.weekly || !S.weekly.key || S.weekly.key!==getWeekKey()) return false;
   const w=S.weekly;
-  return WEEKLY_QUESTS.some(q=>{ const now=S.stats[q.stat]||0, base=(w.base&&w.base[q.stat])||0;
+  /* ★ v5.297: 축제 의뢰(fest)도 수령 가능 배지에 포함 — 같은 claimed/base 패턴. */
+  const list=WEEKLY_QUESTS.concat([festivalQuest()]);
+  return list.some(q=>{ const now=S.stats[q.stat]||0, base=(w.base&&w.base[q.stat])||0;
     return !w.claimed[q.id] && (now-base)>=q.goal; });
 }
 function monthlyClaimable(){
@@ -4735,6 +4737,30 @@ const WEEKLY_QUESTS=[
      도전은 일 1회라 주 7회가 최대 — 목표 5회는 매일 도전한 주(여유 2일). */
   { id:'w4', icon:'🗼', txt:'시련의 탑 5회 도전',     stat:'towerTries', goal:5, give:()=>{ S.records=(S.records||0)+2; return '영웅 기록서 X2'; } },
 ];
+/* ★ v5.297: 축제 의뢰 — 주간 의뢰의 5번째 슬롯(콘텐츠 확장 루프-3 '이벤트 심화').
+   설계 근거:
+   ① 주간 축제(v5.295)가 배지·버프만으로 끝나 '축제 동안 뭘 해야 하는지' 행동 지시가
+     없었다. 축제 테마에 상응하는 행동을 유도하는 의뢰를 붙여 버프+목표가 한 세트가
+     되게 한다(골드 축제=사냥 · 성장 축제=소환 · 채굴 축제=제작 — 각 축제의 버프가
+     목표 달성을 돕는 자기 완결 구조).
+   ② 목표는 기존 주간 의뢰(w1 5,000킬·w2 15제작·w3 30소환) 대비 차등 — 채굴 25제작은
+     재료가 +20% 풍부한 주의 달성 가능성을, 성장 20소환은 소환 재화 경제를 반영.
+   ③ 보상 강화석 50(주 1회) — 기존 4종의 보상 위상(기록서3·망치10·골드 2,000만·기록서2)
+     와 대등. 잔불의 미궁 3문(180/일) 대비 보수적이라 강화석 경제 봉쇄 유지.
+   ④ 상태 추가 없음 — 진행 축(kills/summons/crafts)은 weeklyState 스냅샷 base에 이미
+     전부 있고, 수령 플래그는 w.claimed['fest'] 동적 키(daily counts 관례). 주 경계가
+     축제 교체와 같은 ISO 월요일이라 테마-의뢰 정합이 자동 보장된다. */
+const FEST_REWARD_TXT='강화석 X50';
+function festivalQuest(){
+  const f=festival();
+  const spec={
+    gold:{ stat:'kills',  goal:6000, txt:'몬스터 6,000마리 처치' },
+    exp: { stat:'summons',goal:20,   txt:'영웅 소환 20회' },
+    mat: { stat:'crafts', goal:25,   txt:'장비 25회 제작' },
+  }[f.id] || { stat:'kills', goal:6000, txt:'몬스터 6,000마리 처치' };
+  return { id:'fest', icon:f.ic, txt:`[${f.n}] 축제 기간 ${spec.txt}`, stat:spec.stat, goal:spec.goal,
+    give:()=>{ S.stones=(S.stones||0)+50; return FEST_REWARD_TXT; } };
+}
 function saveSnapshot(){
   try{ return localStorage.getItem(SAVE_KEY) || JSON.stringify(S); }
   catch(e){ return JSON.stringify(S); }
@@ -6721,9 +6747,10 @@ const MODALS = {
       if(tier){ const gap=tier.k-c; if(!next||gap<next.gap) next={n:st.n,c,k:tier.k,gap}; }
     });
     const awakenMaxed=(S.awaken||0)>=50;
-    /* ★ v5.266: 접속 리듬 진행 — 일일/주간/월간 의뢰 완료 수 + 수령 힌트(v5.265 판정 재사용). */
+    /* ★ v5.266: 접속 리듬 진행 — 일일/주간/월간 의뢰 완료 수 + 수령 힌트(v5.265 판정 재사용).
+       ★ v5.297: 주간은 축제 의뢰 포함 5종(festivalQuest concat — 분모도 같이 5). */
     const dailyDone=DAILY_QUESTS.filter((q,i)=>!q.noBtn&&q.cnt()>=q.goal).length;
-    const weeklyDone=(S.weekly&&S.weekly.key===getWeekKey())?WEEKLY_QUESTS.filter(q=>{const now=S.stats[q.stat]||0,base=(S.weekly.base&&S.weekly.base[q.stat])||0;return now-base>=q.goal;}).length:0;
+    const weeklyDone=(S.weekly&&S.weekly.key===getWeekKey())?WEEKLY_QUESTS.concat([festivalQuest()]).filter(q=>{const now=S.stats[q.stat]||0,base=(S.weekly.base&&S.weekly.base[q.stat])||0;return now-base>=q.goal;}).length:0;
     const monthlyDone=(S.monthly&&S.monthly.key===getMonthKey())?MONTHLY_QUESTS.filter(q=>{const now=S.stats[q.stat]||0,base=(S.monthly.base&&S.monthly.base[q.stat])||0;return now-base>=q.goal;}).length:0;
     const claimHint=weeklyClaimable()||monthlyClaimable();
     b.innerHTML=`<div class="hint" style="line-height:1.8">
@@ -6732,7 +6759,7 @@ const MODALS = {
     · 강화: 홈 출격 영웅 평균 <b>+${enhAvg}</b> / 목표 +25 (+11부터 망치 필수)<br>
     · 각성: <b>+${S.awaken||0}</b> / 50${(S.awaken||0)>=12?` · 기록서 ${S.records||0}권 보유`:''}${awakenMaxed?' · 완료 🎉':''}<br>
     · 시련의 탑: 최고 <b>${S._tower||0} Wave</b> (일 1회 도전·소탕)<br>
-    · 접속 리듬: 일일미션 <b>${dailyDone}</b>/${DAILY_QUESTS.filter(q=>!q.noBtn).length} · 주간 의뢰 <b>${weeklyDone}</b>/${WEEKLY_QUESTS.length} · 월간 <b>${monthlyDone}</b>/${MONTHLY_QUESTS.length}${claimHint?' — <b style="color:var(--g-legend)">수령 가능!</b>':''}<br><br>
+    · 접속 리듬: 일일미션 <b>${dailyDone}</b>/${DAILY_QUESTS.filter(q=>!q.noBtn).length} · 주간 의뢰 <b>${weeklyDone}</b>/${WEEKLY_QUESTS.length+1} · 월간 <b>${monthlyDone}</b>/${MONTHLY_QUESTS.length}${claimHint?' — <b style="color:var(--g-legend)">수령 가능!</b>':''}<br><br>
     <b style="color:#f0cd82">■ 성장 로드맵 (실측 곡선 기준)</b><br>
     1) 대장간 '지금 제작 가능' 표시를 따라 장비를 채운다 (일반 전 장비 약 2시간)<br>
     2) 소환과 길잡이로 영웅 9종을 모은다 — 합성은 레벨 100% 승계라 즉시 전력이 된다<br>
@@ -6841,16 +6868,18 @@ const MODALS = {
         /* ★ v5.249: 주간 의뢰 — 매주 월요일 리셋(weeklyState가 새 주면 스냅샷·수령 초기화).
            진행 = 현재 stats − 주 시작 스냅샷. 수령은 의뢰별 1회성.
            ⚠ 렌더에서 q.give() 를 절대 부르지 마라 — 지급 부수효과가 있다. 표시는
-           WEEKLY_REWARD_TXT 로만 한다. */
+           WEEKLY_REWARD_TXT 로만 한다.
+           ★ v5.297: 5번째 슬롯은 이번 주 축제 의뢰(festivalQuest) — 주 경계가 축제
+           교체와 같은 ISO 월요일이라 렌더 시점 테마=이번 주 테마로 정합 보장. */
         const w=weeklyState();
         body.appendChild(el('div','datehead', '주간 의뢰 · ' + w.key));
         body.appendChild(el('div','small mut','매주 월요일 리셋 · 진행은 실제 행동으로 자동 반영됩니다 · <b>다음 리셋 '+Math.ceil(daysToWeeklyReset())+'일 남음</b>'));
-        WEEKLY_QUESTS.forEach(q=>{
+        WEEKLY_QUESTS.concat([festivalQuest()]).forEach(q=>{
           const now=S.stats[q.stat]||0, base=(w.base&&w.base[q.stat])||0;
           const prog=Math.min(q.goal, Math.max(0, now-base));
           const done=prog>=q.goal, claimed=!!w.claimed[q.id];
           const row=el('div','pack'); row.style.opacity=claimed?'.5':'1';
-          row.innerHTML=`<div class="pic">${q.icon}</div><div class="info"><div class="t">${q.txt}</div><div class="d">진행 ${prog}/${q.goal} · 보상 ${claimed?'수령 완료 ✓':WEEKLY_REWARD_TXT[q.id]}</div></div>`;
+          row.innerHTML=`<div class="pic">${q.icon}</div><div class="info"><div class="t">${q.txt}</div><div class="d">진행 ${prog}/${q.goal} · 보상 ${claimed?'수령 완료 ✓':(WEEKLY_REWARD_TXT[q.id]||FEST_REWARD_TXT)}</div></div>`;
           const btn=el('button','btn sm'+(done&&!claimed?' gold':''), claimed?'완료':'받기');
           if(!done||claimed) btn.disabled=true;
           btn.onclick=()=>{ if(claimed||prog<q.goal) return;
