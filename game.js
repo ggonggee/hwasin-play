@@ -6712,6 +6712,11 @@ const MODALS = {
          문구가 코드와 어긋날 수 없게 한다(도움말 수치 파생 관례).
          ★ v5.299: 다음 교체까지 남은 일수(daysToWeeklyReset 정본)도 함께. */
       '축제':`매주 월요일 <b>주간 축제</b>가 교체되어 일요일까지 이어집니다 — ${FESTIVALS.map(f=>`${f.ic} ${f.n}(${f.fx})`).join(' · ')}.<br><br>이번 주는 <b>${festival().ic} ${festival().n}</b>입니다 (${festival().fx}) · <b>다음 축제까지 ${daysToWeeklyReset()}일</b>. 전장 왼쪽 위 배지로 확인하세요. 의뢰·미션의 고정 보상은 축제의 영향을 받지 않습니다.`,
+      /* ★ v5.304: 시련 토픽 — 신규 던전 2종(잔불 v5.294·용광로 v5.300)이 도움말에 없었다.
+         수치는 정본 상수(EMBER_MAZE·FORGE_TRIAL)에서 파생해 코드와 어긋날 수 없게 한다. */
+      '시련':`<b>🕯️ 잔불의 미궁</b> — 일 1회 무료 진입([모험] → 잔불의 미궁). ${EMBER_MAZE.map(d=>`${d.n}(적 ${fmt(d.foe)})`).join(' · ')} 중에서 골라 들어갑니다. 실패해도 재화 손실은 없고 오늘의 기회만 끝나며, 보상은 클리어 시에만 지급됩니다.<br><br>`+
+        `<b>⚒️ 용광로 시련</b> — 매월 1회 도전([모험] → 용광로 시련). 적 전투력 ${fmt(FORGE_TRIAL.foe)}의 장기전(HP 3배)이며 패배하면 <b>다음 달 1일까지 재도전할 수 없습니다</b>. 클리어 시 ${FORGE_REWARD_TXT}.<br><br>`+
+        `이번 주 축제 의뢰는 [퀘스트] 주간 탭에 있습니다 — 축제 테마에 맞는 목표(${festival().n} 기간 ${festivalQuest().txt.replace(/^\[[^\]]+\] 축제 기간 /,'')}) · 보상 ${FEST_REWARD_TXT}.`,
     };
     b.appendChild(el('div','small mut','도움말 · 토픽을 선택하세요'));
     const g=el('div','grid c2'); g.style.marginTop='6px';

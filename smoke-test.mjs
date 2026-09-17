@@ -1802,6 +1802,8 @@ step('주간 축제 — 3테마 순환 결정론·골드 관문 배율·배지·
       const mb=ev("document.getElementById('modalBody')");
       /* 토픽 본문은 appendChild 방식 — collectText 로 자식 _html 까지 본다 */
       if(!collectText(mb).includes('다음 축제까지')) errs.push('도움말 잔여 일수 없음'); }
+    /* ★ v5.304: 시련 토픽 — 잔불 3문·용광로 정본 수치 파생 포함 */
+    if(!collectText(hb).includes('시련')) errs.push('도움말 시련 토픽 없음');
   } finally {
     ev('if(globalThis.__realDate){ Date=globalThis.__realDate; delete globalThis.__realDate; }');
     ev('if(globalThis.__oToast){ toast=globalThis.__oToast; delete globalThis.__oToast; }');
