@@ -1712,12 +1712,14 @@ step('용광로 시련 — 구조·렌더 무지급·월 1회 게이트·보상 
         if(S.gold!==1000+t.gold) errs.push('골드 raw 지급 오류');
       }
       if(!ev('monthlyState')().claimed.forgeTrial) errs.push('[예] 후에도 미소진');
-      /* 소진 렌더 — '이번 달 완료'·disabled */
+      /* 소진 렌더 — '이번 달 완료'·disabled + 다음 재도전 D-N(v5.302) */
       const b2=new Node2('div'); M.forgetrial.render(b2);
       const done=findBtnByText(b2,'이번 달 완료');
       if(!done) errs.push('소진 라벨 갱신 안 됨');
       else if(!done.disabled) errs.push('소진 후 disabled 아님');
-      if(!collectText(b2).includes('이번 달 도전 완료')) errs.push('소진 안내 없음');
+      const t2=collectText(b2);
+      if(!t2.includes('이번 달 도전 완료')) errs.push('소진 안내 없음');
+      if(!/다음 재도전까지 D-\d/.test(t2)) errs.push('D-N 카운트다운 없음');
     }
   } finally {
     ev('enterDungeonFight=globalThis.__oEDF2');

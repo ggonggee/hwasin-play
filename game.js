@@ -6753,7 +6753,10 @@ const MODALS = {
     /* ★ v5.300: 월 1회 이벤트 보스전 — 설계 근거는 FORGE_TRIAL 상수 주석.
        렌더 무지급: 표시는 FORGE_REWARD_TXT 로만(지급은 승리 시 reward 콜백). */
     const m=monthlyState(), used=!!m.claimed.forgeTrial;
-    b.appendChild(el('div','center small mut',`대장간의 심장, 용광로를 지키는 수호자 · 매월 1회 도전${used?' — 이번 달 도전 완료':' (다음 달 1일 초기화)'}`));
+    /* ★ v5.302: 소진/패배 후 '다음 재도전까지 D-N'(daysToMonthlyReset 정본 — 월간 의뢰와
+       같은 경계) — 월 1회 콘텐츠의 대기가 공백이 아니라 기대로 남게. 축제 배지 D-N(v5.299)과
+       같은 어휘로 통일. */
+    b.appendChild(el('div','center small mut',`대장간의 심장, 용광로를 지키는 수호자 · 매월 1회 도전${used?` — 이번 달 도전 완료 · <b style="color:#f0cd82">다음 재도전까지 D-${Math.ceil(daysToMonthlyReset())}</b>`:' (다음 달 1일 초기화)'}`));
     b.appendChild(el('div','hint','이기지 못해도 이번 달의 기회는 끝납니다. 다음 달에 더 강해져서 돌아오세요.'));
     const c=el('div','cell gframe adv-item'); c.style.marginTop='8px';
     c.innerHTML=`<div class="ei"><img src="assets/icons/ui/nav_forge.webp" style="width:34px;height:34px;object-fit:contain" alt="${FORGE_TRIAL.n}"></div><div class="cn">${FORGE_TRIAL.n}</div>`+
