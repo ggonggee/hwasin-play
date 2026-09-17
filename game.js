@@ -3841,10 +3841,13 @@ function refreshHUD(){
   if(S.craft){ const left=Math.max(0,Math.ceil((S.craft.endAt-Date.now())/1000)); ct.textContent = left>0? mmss(left) : '완성!'; }
   else ct.textContent='00:00';
   /* ★ v5.295: 주간 축제 배지 — 이번 주 테마 상시 표시(전장 좌상단). 클릭 시 공지판.
-     주 경계를 지난 뒤 5초 주기 이 타이머가 자동으로 다음 축제로 갈아끼운다. */
+     주 경계를 지난 뒤 5초 주기 이 타이머가 자동으로 다음 축제로 갈아끼운다.
+     ★ v5.299: 끝에 D-N(다음 교체까지 남은 일수) — '다음 주는 무엇의 주인가'를
+     기다리게 하는 카운트다운. daysToWeeklyReset 정본(주간 의뢰와 같은 경계). */
   const _fc=$('#festChip');
   if(_fc){ const _f=festival();
-    _fc.innerHTML=`${eImg(_f.ic,1)} ${_f.n} <span style="color:#cdbf9f;font-weight:400">${_f.fx}</span>`;
+    _fc.innerHTML=`${eImg(_f.ic,1)} ${_f.n} <span style="color:#cdbf9f;font-weight:400">${_f.fx}</span> <span style="color:#8a7a5c;font-weight:400">D-${daysToWeeklyReset()}</span>`;
+    _fc.title=`다음 축제까지 ${daysToWeeklyReset()}일 (매주 월요일 교체)`;
     _fc.onclick=()=>{ sfx('tap'); openModal('notice'); }; }
   tutPoll();   // ★ B1/G-01: 튜토리얼 실제 완료 이벤트 폴링
   refreshClaimBadges();   // ★ v5.162: 수령 가능 배지 — 수령 직후 즉시 꺼지게(5초 타이머와 별개)
@@ -6675,8 +6678,9 @@ const MODALS = {
       // G-129: 길드 랭킹 리셋 규칙
       '길드':'정원 30명. 길드 레이드·점령전으로 상시 버프를 얻습니다. 창설비 루비 600 또는 골드 3억(할인 시 루비 100 · 골드 1억).<br><br>길드 랭킹은 매주 월요일 오전 11시에 초기화됩니다.',
       /* ★ v5.295: 주간 축제 — 테마 목록과 '이번 주'를 정본(FESTIVALS/festival)에서 파생시켜
-         문구가 코드와 어긋날 수 없게 한다(도움말 수치 파생 관례). */
-      '축제':`매주 월요일 <b>주간 축제</b>가 교체되어 일요일까지 이어집니다 — ${FESTIVALS.map(f=>`${f.ic} ${f.n}(${f.fx})`).join(' · ')}.<br><br>이번 주는 <b>${festival().ic} ${festival().n}</b>입니다 (${festival().fx}). 전장 왼쪽 위 배지로 확인하세요. 의뢰·미션의 고정 보상은 축제의 영향을 받지 않습니다.`,
+         문구가 코드와 어긋날 수 없게 한다(도움말 수치 파생 관례).
+         ★ v5.299: 다음 교체까지 남은 일수(daysToWeeklyReset 정본)도 함께. */
+      '축제':`매주 월요일 <b>주간 축제</b>가 교체되어 일요일까지 이어집니다 — ${FESTIVALS.map(f=>`${f.ic} ${f.n}(${f.fx})`).join(' · ')}.<br><br>이번 주는 <b>${festival().ic} ${festival().n}</b>입니다 (${festival().fx}) · <b>다음 축제까지 ${daysToWeeklyReset()}일</b>. 전장 왼쪽 위 배지로 확인하세요. 의뢰·미션의 고정 보상은 축제의 영향을 받지 않습니다.`,
     };
     b.appendChild(el('div','small mut','도움말 · 토픽을 선택하세요'));
     const g=el('div','grid c2'); g.style.marginTop='6px';
@@ -6694,7 +6698,10 @@ const MODALS = {
     /* ★ v5.294: 일 1회 위험 선택 던전 — 설계 근거는 EMBER_MAZE 상수 주석.
        렌더 무지급: 표시는 EMBER_REWARD_TXT 로만(지급은 승리 시 reward 콜백). */
     const left=dailyLeft('ember',1);
-    b.appendChild(el('div','center small mut',`대장간 깊은 곳, 잔불이 살아 숨쉬는 미궁 · 일 1회 무료 진입 (오늘 남은 ${left}/1)`));
+    /* ★ v5.299: 최고 문 기록(stats.emberBest) 표시 — 1~3문 어디까지 깼는지가 도감·통계에
+       갇혀 있었다. 위험 선택 던전의 '최고 기록'은 반복 도전 욕구의 핵심 자극이다. */
+    const best=S.stats.emberBest||0;
+    b.appendChild(el('div','center small mut',`대장간 깊은 곳, 잔불이 살아 숨쉬는 미궁 · 일 1회 무료 진입 (오늘 남은 ${left}/1)${best?` · 최고: <b style="color:#f0cd82">${EMBER_MAZE[best-1].n} 완주</b>`:''}`));
     b.appendChild(el('div','hint','문마다 위험이 다릅니다 — 실패하면 보상 없이 오늘의 기회만 끝납니다. 적 전투력과 내 전투력을 비교해 고르세요.'));
     const g=el('div','adv-grid');
     EMBER_MAZE.forEach((d,i)=>{

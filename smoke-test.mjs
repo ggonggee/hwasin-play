@@ -1645,6 +1645,14 @@ step('잔불의 미궁 — 3문 구조·렌더 무지급·일 1회 게이트·�
       const doneBtn=findBtnByText(b2,'오늘 완료');
       if(!doneBtn) errs.push('소진 후 라벨 갱신 안 됨');
       else if(!doneBtn.disabled) errs.push('소진 후 disabled 아님');
+      /* ★ v5.299: 최고 문 기록(stats.emberBest) 표시 — 0이면 미표시, 3이면 문 이름 완주 */
+      S.stats.emberBest=3;
+      const b3=new Node2('div'); M.embermaze.render(b3);
+      const t3=collectText(b3);
+      if(!t3.includes('굶주린 불꽃의 문 완주')) errs.push('최고 문 기록 미표시(3문)');
+      S.stats.emberBest=0;
+      const b4=new Node2('div'); M.embermaze.render(b4);
+      if(collectText(b4).includes('완주')) errs.push('기록 0인데 완주 표시');
     }
   } finally {
     ev('enterDungeonFight=globalThis.__oEDF');
@@ -1709,17 +1717,23 @@ step('주간 축제 — 3테마 순환 결정론·골드 관문 배율·배지·
     S.weekly.key='1999-W1'; ev('weeklyState')();
     if(ev('globalThis.__toastN')!==1) errs.push('주 롤오버 토스트 미발화/중복: '+ev('globalThis.__toastN'));
     ev('toast=globalThis.__oToast');
-    /* ④ 배지 — DOM 존재 + refreshHUD 가 이번 주 테마로 갱신 + 렌더 무지급 */
+    /* ④ 배지 — DOM 존재 + refreshHUD 가 이번 주 테마로 갱신 + D-N 카운트다운 + 렌더 무지급 */
     if(!html.includes('id="festChip"')) errs.push('#festChip 없음(index.html)');
     const chip=ev("document.getElementById('festChip')");
     const gBefore=S.gold;
     ev('refreshHUD')(); ev('refreshHUD')();
     if(!chip||!String(chip._html||'').includes(ev('festival()').n)) errs.push('배지 미갱신');
+    if(!/D-[1-7]/.test(String(chip._html||''))) errs.push('D-N 카운트다운 없음');
     if(S.gold!==gBefore) errs.push('렌더만으로 골드 변동');
-    /* 공지·도움말 진입점 */
+    /* 공지·도움말 진입점 — 축제 토픽 본문(셀 클릭 후 #modalBody 재렌더)의 잔여 일수까지 */
     if(!ev('NOTICES')[0].t.includes('축제')) errs.push('축제 공지 없음');
     const hb=new Node2('div'); M.help.render(hb);
     if(!collectText(hb).includes('축제')) errs.push('도움말 축제 토픽 없음');
+    const cell=(hb.children||[]).flatMap(c=>c.children||[]).find(c=>String(c._html||'').includes('축제'));
+    if(cell&&cell.onclick){ cell.onclick();
+      const mb=ev("document.getElementById('modalBody')");
+      /* 토픽 본문은 appendChild 방식 — collectText 로 자식 _html 까지 본다 */
+      if(!collectText(mb).includes('다음 축제까지')) errs.push('도움말 잔여 일수 없음'); }
   } finally {
     ev('if(globalThis.__realDate){ Date=globalThis.__realDate; delete globalThis.__realDate; }');
     ev('if(globalThis.__oToast){ toast=globalThis.__oToast; delete globalThis.__oToast; }');
