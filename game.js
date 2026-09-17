@@ -1041,6 +1041,25 @@ const GOLD_DUNGEON = [
   { lv:4, gold:10000000,  foe:4800, mat:'심연광석', need:4 },
   { lv:5, gold:15000000,  foe:9000, mat:'금강석',   need:5 },
 ];
+/* ★ v5.294 콘텐츠 확장(자체 설계 — ⚠비전미확인 해소, 대표 승인 2026-09-17): 잔불의 미궁
+   — 일일 던전에 '위험 수준 선택' 축을 더한다. 근거(전부 게임 내부 정합성에서 도출):
+   ① 이 게임의 위험-보상 언어는 강화(+11~25, 실패 유지·성공 30%)에서 이미 성립하는데
+     일일 던전은 종류 선택(요일)·단계 선택(골드)만 있고 위험 '수준' 선택이 없었다.
+   ② foe 밴드는 실측 등급 CP 구간(MON_WORDS N0-900·R1.2-3.6k·E4.2-9k·L11-24k)에서
+     도출 — 8000(E 성숙)·16000(L 중반)·26000(L 완성 이상)으로 도전 가능 시점이 세 구간에 분산.
+     고정 foe 는 요일(800~5200)·골드(350~9000)의 기존 관행을 따른다(플레이어 스케일링 아님).
+   ③ 보상은 강화석+골드 복합. 골드는 골드던전 5단계(1500만) 이하로 봉쇄(100만/300만/1000만),
+     강화석은 위험당 약 2.2배(40/90/180) — 위험-보상 정비례 관행. 진입은 일 1회 무료로
+     경제 봉쇄(요일던전의 입장권 5회와 차별화).
+   ④ 보상은 승리 시에만 지급(showDungeonResult rewarded 게이트) — 패배 시 재화만 소모 없이
+     기회만 사라진다. */
+const EMBER_MAZE = [
+  { n:'잔불의 문',       ic:'🕯️', foe:8000,  stones:40,  gold:1000000  },
+  { n:'타오르는 문',     ic:'🔥', foe:16000, stones:90,  gold:3000000  },
+  { n:'굶주린 불꽃의 문', ic:'💫', foe:26000, stones:180, gold:10000000 },
+];
+/* 렌더 무지급 원칙(v5.249 사고) — 렌더에서는 이 표시 상수만 쓴다. give 로직은 입장 승리 시에만. */
+const EMBER_REWARD_TXT = EMBER_MAZE.map(d=>`강화석 ${d.stones} + 골드 ${fmt(d.gold)}`);
 /* ★ B5/G-70: 월드보스 서버 랭킹 — 스크롤되는 대형 랭킹표(길드태그 컬럼 포함)로 설계.
    29명 고정 데이터 + 내 기록 1행 = 30행. */
 const WB_RANK = [
@@ -1442,6 +1461,7 @@ function freshState(){
             craftWin:0,  craftWinBest:0,    // 영웅등급 이상 장비 제작 연속 성공
             poorClick:0, poorBest:0,        // 골드 부족 상태에서의 제작 연속 시도
             ddStage:0,                      // 요일던전 최고 클리어 단계
+            emberBest:0,                    // ★ v5.294: 잔불의 미궁 최고 클리어 문(1~3) — ddStage 와 같은 '최고 기록' 축
             salvages:0,                     // ★ v5.219: 장비 분해 누적 (업적 축)
             legendCrafts:0,                 // ★ v5.219: 레전더리 등급 제작 성공 누적 (업적 축)
             bossTop:0,                      // 레전더리 보스 처치 횟수
@@ -6591,12 +6611,44 @@ const MODALS = {
      '모험' 카테고리 하나로 묶는다. 우측 플로팅엔 모험만 남고(공략·소통은 ☰ 드로어에 이미
      항목이 있어 외부 제거로 이동 완료), 코스튬은 드로어로, 패키지(한정 상품)는 상점 탭으로.
      각 항목 클릭 시 openModal 로 바로 연결되고 입장 조건·잠금은 각 모달이 스스로 처리한다. */
+  embermaze:{ title:'잔불의 미궁', render(b){
+    /* ★ v5.294: 일 1회 위험 선택 던전 — 설계 근거는 EMBER_MAZE 상수 주석.
+       렌더 무지급: 표시는 EMBER_REWARD_TXT 로만(지급은 승리 시 reward 콜백). */
+    const left=dailyLeft('ember',1);
+    b.appendChild(el('div','center small mut',`대장간 깊은 곳, 잔불이 살아 숨쉬는 미궁 · 일 1회 무료 진입 (오늘 남은 ${left}/1)`));
+    b.appendChild(el('div','hint','문마다 위험이 다릅니다 — 실패하면 보상 없이 오늘의 기회만 끝납니다. 적 전투력과 내 전투력을 비교해 고르세요.'));
+    const g=el('div','adv-grid');
+    EMBER_MAZE.forEach((d,i)=>{
+      const c=el('div','cell gframe adv-item');
+      c.innerHTML=`<div class="ei">${eImg(d.ic,2)}</div><div class="cn">${d.n}</div>`+
+        `<div class="small mut" style="margin-top:2px">적 전투력 ${fmt(d.foe)}</div>`+
+        `<div class="small" style="margin-top:2px;color:#f0cd82">${EMBER_REWARD_TXT[i]}</div>`;
+      const btn=el('button','btn sm'+(left>0?' gold':''), left>0?'입장':'오늘 완료');
+      btn.disabled=left<=0;
+      btn.onclick=()=>{ if(busyFight())return;
+        if(dailyLeft('ember',1)<=0){ toast('오늘 입장 소진'); return; }
+        styledConfirm(`${d.n}으로 들어갈까요?`, ()=>{
+          if(dailyLeft('ember',1)<=0){ toast('오늘 입장 소진'); return; }
+          dailyUse('ember');
+          enterDungeonFight({ name:`잔불의 미궁 · ${d.n}`, col:'#e8843c', foeCP:d.foe,
+            kind:'mobs', count:12, dur:24,
+            rewardText:EMBER_REWARD_TXT[i],
+            reward:()=>{ S.stones+=d.stones; addGold(d.gold,true);
+              S.stats.emberBest=Math.max(S.stats.emberBest||0, i+1);
+              sysLog(`잔불의 미궁 ${d.n} 클리어 — 강화석 +${d.stones} · 골드 +${fmt(d.gold)}`); } });
+        }, { title:d.n, sub:`적 전투력 ${fmt(d.foe)} · ${EMBER_REWARD_TXT[i]}` });
+      };
+      c.appendChild(btn); g.appendChild(c);
+    });
+    b.appendChild(g);
+  }},
   adventure:{ title:'모험', render(b){
     b.appendChild(el('div','hint','던전·보스·약탈 — 전투 콘텐츠를 한 곳에서.'));
     const g=el('div','adv-grid');
     [ ['dailydungeon','요일던전','ci_dailydungeon'], ['golddungeon','골드던전','ci_golddungeon'],
       ['boss','보스','ci_boss'], ['worldboss','월드보스','ci_worldboss'],
-      ['tower','시련의탑','side_tower'], ['raid','약탈','ci_raid'] ].forEach(([k,n,ic])=>{
+      ['tower','시련의탑','side_tower'], ['raid','약탈','ci_raid'],
+      ['embermaze','잔불의 미궁','skill_flame'] ].forEach(([k,n,ic])=>{
       const c=el('div','cell gframe adv-item');
       c.innerHTML=`<div class="ei"><img src="assets/icons/ui/${ic}.webp" style="width:34px;height:34px;object-fit:contain" alt="${n}"></div><div class="cn">${n}</div>`;
       c.onclick=()=>{ sfx('tap'); openModal(k); };

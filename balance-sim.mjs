@@ -285,6 +285,22 @@ function dailyStep(){
     const foe=[800,2200,5200][st-1];
     if(foe<=cp*1.5&&dl>0){ const n=Math.min(dl,5); for(let k=0;k<n;k++) ev('matGainGrade')(rg,qty); dl=0; acts+='요일던전 '; }
   }
+  /* ★ v5.294: 잔불의 미궁 — 일 1회 위험 선택 던전(콘텐츠 확장-1). 클리어 판정은
+     골드·요일던전과 같은 파티(kind:'mobs') 관례 foe ≤ CP×1.5, 그 안에서 최고 문.
+     지급은 게임 reward 콜백과 동일하게 강화석 + raw 골드(addGold(g,true) — 가호·
+     칭호 배제). dailyStep 자체가 일 1회라 별도 카운터 불필요(탑 관례와 동일). */
+  {
+    const em=ev('EMBER_MAZE');
+    for(let i=em.length-1;i>=0;i--){
+      if(em[i].foe<=cp*1.5){
+        S.stones=(S.stones||0)+em[i].stones;
+        ev('addGold')(em[i].gold, true);
+        S.stats.emberBest=Math.max(S.stats.emberBest||0, i+1);
+        acts+=('잔불미궁'+(i+1)+'문 ');
+        break;
+      }
+    }
+  }
   /* 시련의 탑 (v5.230 정본 공식 통합) — 도전(일 1회)·소탕(일 1회)·상자→기록서 교환.
      · 도전: 시작 baseCP = 600+최고기록×450, 웨이브당 ×1.18 지수 상승(Battle 2814),
        몹 HP = foeCP×0.08. 도달 = 1+floor(ln(리더전투력/base)/ln1.18) — 1:1 전투력
@@ -692,7 +708,7 @@ while(simSec < MAX_HOURS*3600 && windows<51200){   // ★ v5.257: 창 상한 512
     if(/영웅 합성/.test(did)) funKinds['합성']++;
     if(/상급재료/.test(did)) funKinds['상급재료']++;
     if(/세트/.test(did)) funKinds['세트']++;
-    if(/탑|소탕|기록서|골드던전|요일던전/.test(did)) funKinds['일일콘텐츠']++;
+    if(/탑|소탕|기록서|골드던전|요일던전|잔불미궁/.test(did)) funKinds['일일콘텐츠']++;
     if(/각성|결정가호|✦/.test(did)) funKinds['각성·결정']++; }
   else { funGapNow+=WINDOW; if(funGapNow>funGapMax){ funGapMax=funGapNow; funGapAt=+(simSec/3600).toFixed(1); } }
 

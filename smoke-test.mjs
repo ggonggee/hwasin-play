@@ -1545,7 +1545,7 @@ step('모험 팝업·아이콘 재배치 — 플로팅/레일/드로어/상점 �
   const M=ev('MODALS');
   const b=new Node2('div'); M.adventure.render(b);
   const txt=collectText(b);
-  for(const n of ['요일던전','골드던전','보스','월드보스','시련의탑','약탈']) if(!txt.includes(n)) errs.push('모험 항목 누락: '+n);
+  for(const n of ['요일던전','골드던전','보스','월드보스','시련의탑','약탈','잔불의 미궁']) if(!txt.includes(n)) errs.push('모험 항목 누락: '+n);
   const grid=(b.children||[]).find(c=>(c.children||[]).some(k=>String(k._html||'').includes('요일던전')));
   if(!grid) errs.push('모험 그리드 미발견');
   else { const card=(grid.children||[])[0];
@@ -1563,6 +1563,80 @@ step('모험 팝업·아이콘 재배치 — 플로팅/레일/드로어/상점 �
     const ptxt=collectText((sb.children||[])[1]||new Node2('div'));
     const ap=ev('ACCOUNT_PACKS'); if(ap&&ap[0]&&!ptxt.includes(ap[0].t)) errs.push('한정 패키지 미노출'); }
   S.ruby=rb;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
+
+/* ★ v5.294 회귀: 잔불의 미궁 — 콘텐츠 확장-1 신규 던전(자체 설계·대표 승인).
+   ① 상수 구조: 3문, foe·강화석 단조 증가, 골드는 골드던전 5단계(1500만) 이하 봉쇄
+   ② 렌더 무지급(v5.249 사고 방지): 렌더를 반복해도 stones/gold 불변
+   ③ 일 1회 소진은 입장 [예] 확정 시에만(dailyUse) — 렌더·입장 버튼 클릭만으로 안 줄어든다
+   ④ 보상은 reward 콜백에만 존재(승리 지급 분리) + emberBest 최고 문 기록(freshState 정합)
+   전투 개시는 enterDungeonFight 을 가로채 cfg 만 검증한다 — kind:'mobs' 실전투 결정론은
+   D 시나리오가, showDungeonResult 승리 게이트는 기존 던전 관례가 각각 지킨다. */
+step('잔불의 미궁 — 3문 구조·렌더 무지급·일 1회 게이트·보상 콜백', ()=>{
+  const S=ev('S'), M=ev('MODALS');
+  const keep={ gold:S.gold, stones:S.stones, emberBest:S.stats.emberBest||0,
+    daily:JSON.parse(JSON.stringify(S.daily)) };
+  const errs=[];
+  try{
+    delete S.daily.counts.ember;   // 고립 보장(신규 키라 오염 없음이 정상)
+    /* ① 상수 구조 */
+    const maze=ev('EMBER_MAZE');
+    if(!Array.isArray(maze)||maze.length!==3) throw new Error('문 3개 아님: '+(maze&&maze.length));
+    if(!(maze[0].foe<maze[1].foe&&maze[1].foe<maze[2].foe)) errs.push('적 전투력 비단조');
+    if(!(maze[0].stones<maze[1].stones&&maze[1].stones<maze[2].stones)) errs.push('강화석 비단조');
+    if(maze.some(d=>d.gold>15000000)) errs.push('골드 봉쇄(1500만 이하) 위반');
+    /* ② 렌더 — 문 이름·보상 텍스트·일 1회 안내 + 무지급 */
+    const rt=ev('EMBER_REWARD_TXT');
+    const b=new Node2('div'); M.embermaze.render(b);
+    const txt=collectText(b);
+    maze.forEach((d,i)=>{ if(!txt.includes(d.n)) errs.push('문 이름 미표시: '+d.n);
+      if(!txt.includes(rt[i])) errs.push('보상 텍스트 미표시: '+rt[i]); });
+    if(!txt.includes('일 1회')) errs.push('일 1회 안내 없음');
+    const st0=S.stones, g0=S.gold;
+    M.embermaze.render(new Node2('div')); M.embermaze.render(new Node2('div'));
+    if(S.stones!==st0||Math.round(S.gold)!==Math.round(g0)) errs.push('렌더만으로 지급 발생');
+    /* ③ 입장 버튼 → styledConfirm [예] 에서만 dailyUse — enterDungeonFight 가로채 cfg 검증 */
+    if(ev('dailyLeft')('ember',1)!==1) errs.push('초기 잔여 1 아님');
+    ev('globalThis.__oEDF=enterDungeonFight; globalThis.__capEDF=null; '+
+       'enterDungeonFight=function(cfg){ globalThis.__capEDF=cfg; }');
+    const third=maze[2];
+    const grid=(b.children||[]).find(c=>(c.children||[]).some(k=>String(k._html||'').includes(third.n)));
+    const card=grid&&(grid.children||[]).find(k=>String(k._html||'').includes(third.n));
+    const enter=card&&findBtnByText(card,'입장');
+    if(!enter) errs.push('입장 버튼 미발겤');
+    else{
+      enter.onclick();                                  // confirm 오버레이만 생성 — 아직 미소진
+      if(ev('dailyLeft')('ember',1)!==1) errs.push('버튼 클릭만으로 일 1회 소진');
+      const root=ev("document.getElementById('modal-root')");
+      const yes=findBtnByText(root,'예');               // 트리 순회상 마지막 = 방금 생긴 오버레이
+      if(!yes) errs.push('confirm [예] 버튼 미발겤');
+      else yes.onclick();
+      const cfg=ev('globalThis.__capEDF');
+      if(!cfg) errs.push('[예] 확정 후 전투 개시 없음');
+      else{
+        if(cfg.name!=='잔불의 미궁 · '+third.n) errs.push('전투명 불일치: '+cfg.name);
+        if(cfg.foeCP!==third.foe||cfg.kind!=='mobs') errs.push('foeCP/kind 불일치');
+        if(cfg.rewardText!==rt[2]) errs.push('rewardText 불일치');
+        /* ④ reward 콜백 — raw 골드 지급(가호·칭호 배제) + emberBest 최고 문 유지 */
+        S.gold=1000; S.stones=10; S.stats.emberBest=0;
+        cfg.reward(); cfg.reward();
+        if(S.stones!==10+third.stones*2) errs.push('강화석 지급량 오류: '+S.stones);
+        if(S.gold!==1000+third.gold*2) errs.push('골드 raw 지급량 오류: '+S.gold);
+        if(S.stats.emberBest!==3) errs.push('emberBest 3 아님: '+S.stats.emberBest);
+      }
+      if(ev('dailyLeft')('ember',1)!==0) errs.push('[예] 확정 후에도 잔여 1');
+      /* 소진 렌더 — 라벨 '오늘 완료'·disabled */
+      const b2=new Node2('div'); M.embermaze.render(b2);
+      const doneBtn=findBtnByText(b2,'오늘 완료');
+      if(!doneBtn) errs.push('소진 후 라벨 갱신 안 됨');
+      else if(!doneBtn.disabled) errs.push('소진 후 disabled 아님');
+    }
+  } finally {
+    ev('enterDungeonFight=globalThis.__oEDF');
+    S.gold=keep.gold; S.stones=keep.stones; S.stats.emberBest=keep.emberBest;
+    S.daily=keep.daily;
+  }
   if(errs.length) throw new Error(errs.join(' | '));
 });
 
