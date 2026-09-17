@@ -2479,6 +2479,11 @@ const Battle = (()=>{
     heroes.forEach(h=>{ h.dead=false; h.hp=1; h.respT=0; h.dmgDone=0; });
     dg={ name:cfg.name, col:cfg.col||'#e8843c', foeCP:Math.max(1,cfg.foeCP||1000), kind:cfg.kind||'mobs',
          total:cfg.count||10, spawned:0, killed:0, dur:cfg.dur||30, timeLeft:cfg.dur||30, onEnd:cfg.onEnd, done:false, bossSpawned:false,
+         /* ★ v5.301: hpMul — 보스 HP 배율(cfg 미지정 1 = 기존 공식 불변). 실물 QA 실측에서
+            보스 HP(foeCP×0.5)가 파티 DPS에 2.5초 컷으로 순삭돼 '월간 시련의 긴장감'이
+            체감에 안 나왔다(0156395 기록). 용광로 시련만 ×3(HP 45,000)으로 장기전화 —
+            기존 던전은 미지정이라 수치 불변(D 시나리오 해시도 무영향). */
+         hpMul: cfg.hpMul||1,
          /* ★ v5.292(대표 요청): centerHold — 일반 몹 던전(kind 'mobs': 요일·골드·점령·약탈)은
             영웅이 중앙에 멈춰 서고 몬스터가 밀려오는 구조. 종전 사이드스크롤(영웅 전진)과
             다르게 '지키는' 느낌을 준다. 투기장·보스·탑은 기존 동작 유지. */
@@ -2565,7 +2570,8 @@ const Battle = (()=>{
     }
   }
   function spawnDgBoss(){
-    const hp=Math.max(300, dg.foeCP*0.5);
+    /* ★ v5.301: dg.hpMul(기본 1) — 용광로 시련의 장기전화. 미지정 던전은 종전 공식 그대로. */
+    const hp=Math.max(300, dg.foeCP*0.5*(dg.hpMul||1));
     /* ★ v5.85: 보스도 스프라이트 사용 */
     let img='undead_110';
     /* ★ M1: 스프라이트 선택은 연출용 — cosmetic 지대에서 전역 pick() 유지 */
@@ -6751,7 +6757,7 @@ const MODALS = {
     b.appendChild(el('div','hint','이기지 못해도 이번 달의 기회는 끝납니다. 다음 달에 더 강해져서 돌아오세요.'));
     const c=el('div','cell gframe adv-item'); c.style.marginTop='8px';
     c.innerHTML=`<div class="ei"><img src="assets/icons/ui/nav_forge.webp" style="width:34px;height:34px;object-fit:contain" alt="${FORGE_TRIAL.n}"></div><div class="cn">${FORGE_TRIAL.n}</div>`+
-      `<div class="small mut" style="margin-top:2px">적 전투력 ${fmt(FORGE_TRIAL.foe)} · 보스전</div>`+
+      `<div class="small mut" style="margin-top:2px">적 전투력 ${fmt(FORGE_TRIAL.foe)} · 보스전 · 장기전(HP 3배)</div>`+
       `<div class="small" style="margin-top:2px;color:#f0cd82">${FORGE_REWARD_TXT}</div>`;
     const btn=el('button','btn sm'+(!used?' gold':' wide'), !used?'도전':'이번 달 완료');
     btn.disabled=used;
@@ -6761,11 +6767,11 @@ const MODALS = {
         if(monthlyState().claimed.forgeTrial){ toast('이번 달 도전 완료'); return; }
         monthlyState().claimed.forgeTrial=true;
         enterDungeonFight({ name:`용광로 시련 · ${FORGE_TRIAL.n}`, col:'#c9a04a', foeCP:FORGE_TRIAL.foe,
-          kind:'boss', dur:45,
+          kind:'boss', dur:45, hpMul:3,
           rewardText:FORGE_REWARD_TXT,
           reward:()=>{ S.stones+=FORGE_TRIAL.stones; addGold(FORGE_TRIAL.gold,true);
             sysLog(`용광로 시련 클리어 — 강화석 +${FORGE_TRIAL.stones} · 골드 +${fmt(FORGE_TRIAL.gold)}`); } });
-      }, { title:FORGE_TRIAL.n, sub:`적 전투력 ${fmt(FORGE_TRIAL.foe)} · ${FORGE_REWARD_TXT} · 실패 시 이번 달 기회 소진`, warn:'매월 1회 도전 — 패배해도 재도전할 수 없습니다.' });
+      }, { title:FORGE_TRIAL.n, sub:`적 전투력 ${fmt(FORGE_TRIAL.foe)} · 장기전(45초 안에 처치) · ${FORGE_REWARD_TXT} · 실패 시 이번 달 기회 소진`, warn:'매월 1회 도전 — 패배해도 재도전할 수 없습니다.' });
     };
     c.appendChild(btn); b.appendChild(c);
   }},

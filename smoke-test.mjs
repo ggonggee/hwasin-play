@@ -1704,6 +1704,7 @@ step('용광로 시련 — 구조·렌더 무지급·월 1회 게이트·보상 
       if(!cfg) errs.push('[예] 후 전투 미개시');
       else{
         if(cfg.kind!=='boss'||cfg.foeCP!==t.foe) errs.push('kind/foeCP 불일치');
+        if(cfg.hpMul!==3) errs.push('hpMul≠3(장기전 미적용)');
         if(cfg.rewardText!==rt) errs.push('rewardText 불일치');
         S.gold=1000; S.stones=10;
         cfg.reward();
