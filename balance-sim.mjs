@@ -359,6 +359,18 @@ function dailyStep(){
       const st=ev('S').stats||{}, now=st[q.stat]||0, base=(m.base&&m.base[q.stat])||0;
       if(now-base>=q.goal){ m.claimed[q.id]=true; q.give(); acts+='월간의뢴 '; }
     });
+    /* ★ v5.300: 용광로 시련 — 월 1회 이벤트 보스전. 클리어 판정은 잔불·골드던전과 같은
+       파티 관례 foe ≤ CP×1.5. 지급은 게임 reward 콜백과 동일(강화석+raw 골드).
+       monthlyState 의 claimed 맵이 새 달에 자동 리셋 — 별도 카운터 불필요. */
+    if(!m.claimed.forgeTrial){
+      const ft=ev('FORGE_TRIAL');
+      if(ft.foe<=cp*1.5){
+        m.claimed.forgeTrial=true;
+        S.stones=(S.stones||0)+ft.stones;
+        ev('addGold')(ft.gold, true);
+        acts+='용광로시련 ';
+      }
+    }
   }
   return acts.trim();   // ★ v5.245: 일일 콘텐츠 수행 요약(액션 집계용)
 }
@@ -723,7 +735,7 @@ while(simSec < MAX_HOURS*3600 && windows<51200){   // ★ v5.257: 창 상한 512
     if(/영웅 합성/.test(did)) funKinds['합성']++;
     if(/상급재료/.test(did)) funKinds['상급재료']++;
     if(/세트/.test(did)) funKinds['세트']++;
-    if(/탑|소탕|기록서|골드던전|요일던전|잔불미궁/.test(did)) funKinds['일일콘텐츠']++;
+    if(/탑|소탕|기록서|골드던전|요일던전|잔불미궁|용광로시련/.test(did)) funKinds['일일콘텐츠']++;
     if(/각성|결정가호|✦/.test(did)) funKinds['각성·결정']++; }
   else { funGapNow+=WINDOW; if(funGapNow>funGapMax){ funGapMax=funGapNow; funGapAt=+(simSec/3600).toFixed(1); } }
 

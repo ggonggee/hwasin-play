@@ -1060,6 +1060,21 @@ const EMBER_MAZE = [
 ];
 /* 렌더 무지급 원칙(v5.249 사고) — 렌더에서는 이 표시 상수만 쓴다. give 로직은 입장 승리 시에만. */
 const EMBER_REWARD_TXT = EMBER_MAZE.map(d=>`강화석 ${d.stones} + 골드 ${fmt(d.gold)}`);
+/* ★ v5.300: 용광로 시련 — 월간 이벤트 보스전(콘텐츠 확장 루프-4 '이벤트' 축 완결).
+   설계 근거:
+   ① 리듬 3층위 중 월간 레이어에 '도전형 이벤트'가 없었다(월간 의뢰 4종은 전부 수령형).
+     매월 1회 대형 보스전으로 월 초 접속 이유를 만든다.
+   ② 잔불의 미궁(일 1회 위험 선택)의 월간 상위판 — 고정 foe 30,000(잔불 3문 26,000의 위)
+     단일 보스, kind:'boss' 중앙 배치 연출(v5.292 대표 요청 경로). 못 이기면 그 달 기회는
+     사라지고 다음 달 재도전 — 월간 리듬의 긴장감. 고정 foe 는 기존 관행(플레이어
+     스케일링 아님)을 따른다.
+   ③ 진입 게이트는 monthlyState().claimed 동적 키(daily counts 관례) — 새 달에
+     monthlyState 가 claimed 를 통째로 리셋하므로 별도 상태·마이그레이션 불필요.
+   ④ 보상 강화석 300 + 골드 1,200만 raw — 강화석은 잔불 3문 일 180(월 ~5,400) 대비 월 300
+     (≈5.5%)으로 보수적, 골드는 골드던전 5단계(1,500만) 이하 봉쇄 유지. 승리 시에만
+     지급(showDungeonResult rewarded 게이트) — 렌더 무지급 원칙(EMBER_REWARD_TXT 주석 참조). */
+const FORGE_TRIAL = { n:'용광로의 수호자', foe:30000, stones:300, gold:12000000 };
+const FORGE_REWARD_TXT = '강화석 X300 + 골드 1,200만';
 /* ★ B5/G-70: 월드보스 서버 랭킹 — 스크롤되는 대형 랭킹표(길드태그 컬럼 포함)로 설계.
    29명 고정 데이터 + 내 기록 1행 = 30행. */
 const WB_RANK = [
@@ -6728,13 +6743,40 @@ const MODALS = {
     });
     b.appendChild(g);
   }},
+  forgetrial:{ title:'용광로 시련', render(b){
+    /* ★ v5.300: 월 1회 이벤트 보스전 — 설계 근거는 FORGE_TRIAL 상수 주석.
+       렌더 무지급: 표시는 FORGE_REWARD_TXT 로만(지급은 승리 시 reward 콜백). */
+    const m=monthlyState(), used=!!m.claimed.forgeTrial;
+    b.appendChild(el('div','center small mut',`대장간의 심장, 용광로를 지키는 수호자 · 매월 1회 도전${used?' — 이번 달 도전 완료':' (다음 달 1일 초기화)'}`));
+    b.appendChild(el('div','hint','이기지 못해도 이번 달의 기회는 끝납니다. 다음 달에 더 강해져서 돌아오세요.'));
+    const c=el('div','cell gframe adv-item'); c.style.marginTop='8px';
+    c.innerHTML=`<div class="ei"><img src="assets/icons/ui/nav_forge.webp" style="width:34px;height:34px;object-fit:contain" alt="${FORGE_TRIAL.n}"></div><div class="cn">${FORGE_TRIAL.n}</div>`+
+      `<div class="small mut" style="margin-top:2px">적 전투력 ${fmt(FORGE_TRIAL.foe)} · 보스전</div>`+
+      `<div class="small" style="margin-top:2px;color:#f0cd82">${FORGE_REWARD_TXT}</div>`;
+    const btn=el('button','btn sm'+(!used?' gold':' wide'), !used?'도전':'이번 달 완료');
+    btn.disabled=used;
+    btn.onclick=()=>{ if(busyFight())return;
+      if(monthlyState().claimed.forgeTrial){ toast('이번 달 도전 완료'); return; }
+      styledConfirm(`${FORGE_TRIAL.n}에게 도전할까요?`, ()=>{
+        if(monthlyState().claimed.forgeTrial){ toast('이번 달 도전 완료'); return; }
+        monthlyState().claimed.forgeTrial=true;
+        enterDungeonFight({ name:`용광로 시련 · ${FORGE_TRIAL.n}`, col:'#c9a04a', foeCP:FORGE_TRIAL.foe,
+          kind:'boss', dur:45,
+          rewardText:FORGE_REWARD_TXT,
+          reward:()=>{ S.stones+=FORGE_TRIAL.stones; addGold(FORGE_TRIAL.gold,true);
+            sysLog(`용광로 시련 클리어 — 강화석 +${FORGE_TRIAL.stones} · 골드 +${fmt(FORGE_TRIAL.gold)}`); } });
+      }, { title:FORGE_TRIAL.n, sub:`적 전투력 ${fmt(FORGE_TRIAL.foe)} · ${FORGE_REWARD_TXT} · 실패 시 이번 달 기회 소진`, warn:'매월 1회 도전 — 패배해도 재도전할 수 없습니다.' });
+    };
+    c.appendChild(btn); b.appendChild(c);
+  }},
   adventure:{ title:'모험', render(b){
     b.appendChild(el('div','hint','던전·보스·약탈 — 전투 콘텐츠를 한 곳에서.'));
     const g=el('div','adv-grid');
     [ ['dailydungeon','요일던전','ci_dailydungeon'], ['golddungeon','골드던전','ci_golddungeon'],
       ['boss','보스','ci_boss'], ['worldboss','월드보스','ci_worldboss'],
       ['tower','시련의탑','side_tower'], ['raid','약탈','ci_raid'],
-      ['embermaze','잔불의 미궁','skill_flame'] ].forEach(([k,n,ic])=>{
+      ['embermaze','잔불의 미궁','skill_flame'],
+      ['forgetrial','용광로 시련','nav_forge'] ].forEach(([k,n,ic])=>{
       const c=el('div','cell gframe adv-item');
       c.innerHTML=`<div class="ei"><img src="assets/icons/ui/${ic}.webp" style="width:34px;height:34px;object-fit:contain" alt="${n}"></div><div class="cn">${n}</div>`;
       c.onclick=()=>{ sfx('tap'); openModal(k); };

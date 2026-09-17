@@ -51,7 +51,7 @@ index.html · style.css · game.js  +  assets/ (아이콘·몬스터·이펙트 
 > `npm run build` / `build:check` 는 지금 실패하는 게 정상이고, 게이트는 `npm run check` 하나다.
 
 - **`game.js` 가 사실상 전부다.** 약 5,300줄 한 파일. 모듈 시스템·번들러 없음. 브라우저가 그냥 로드한다.
-- 구조는 크게 **① 상수 테이블 → ② 헬퍼 함수 → ③ `MODALS` 객체(화면 46종) → ④ `Battle` 모듈(캔버스 전투) → ⑤ 메인 루프·초기화** 순.
+- 구조는 크게 **① 상수 테이블 → ② 헬퍼 함수 → ③ `MODALS` 객체(화면 47종) → ④ `Battle` 모듈(캔버스 전투) → ⑤ 메인 루프·초기화** 순.
 - 화면 하나 = `MODALS` 의 키 하나. `MODALS.shop.render(container)` 식으로 그린다.
 - 상태는 전역 `S` 객체 하나. `localStorage` 에 통째로 직렬화한다.
 
@@ -168,7 +168,7 @@ const OVERTIME = { at:30, stepSec:5, stepMul:0.6 };   // 30초 이후 5초마다
 | 명령 | 하는 일 |
 |---|---|
 | `npm run verify` | 정적 무결성 — `MODALS` 키 ↔ `data-modal` ↔ `openModal` 인자 정합, `freshState` 필드 대조, 중복 선언, DOM id 존재 여부, **버전 일치** |
-| `npm run smoke` | 런타임 — 최소 DOM 스텁 위에서 `game.js` 를 실제 실행. 모달 46종 전수 render/open, **구세이브·빈세이브·손상세이브 마이그레이션**, 클릭 핸들러 400여 건 전수 실행, 재화 음수/NaN 검사 |
+| `npm run smoke` | 런타임 — 최소 DOM 스텁 위에서 `game.js` 를 실제 실행. 모달 47종 전수 render/open, **구세이브·빈세이브·손상세이브 마이그레이션**, 클릭 핸들러 400여 건 전수 실행, 재화 음수/NaN 검사 |
 | ~~`npm run build:check`~~ | ~~미러 동기화~~ — **폐기(v5.82). 지금은 실패하는 게 정상** |
 | **`npm run check`** | **문법 검사 + verify + smoke. 커밋 전 이것만 돌리면 된다.** |
 | `npm run setup` | push 전 검사 훅 설치(`core.hooksPath=.githooks`). **클론 후 1회.** |
@@ -1639,3 +1639,21 @@ sh36>ch30·settle '06:01' sh52>ch48·arena 'ⓘ'/'1,088' 1~4px 세로 초과는 
 
 신규 요소(embermaze·adventure·setfx 배율 배지·strategy 확장·quest 주간 5행·notice 신규
 공지·help 축제 토픽) 전부 ok. 게임 무변경 — 기록만.
+
+### 2026-09-17 v5.300 — 콘텐츠 확장 루프-4: 용광로 시련(월 1회 이벤트 보스전 · 자체 설계)
+
+**설계(근거는 game.js FORGE_TRIAL 주석 ①~④)**: 리듬 3층위 중 월간 레이어에 '도전형 이벤트'가
+없었다(월간 의뢰 4종은 전부 수령형). 잔불의 미궁(일 1회)의 월간 상위판 — 고정 foe 30,000
+(잔불 3문 26,000의 위) 단일 보스, kind:'boss' 중앙 배치 연출(v5.292 경로). 패배하면 그 달
+기회 소진, 다음 달 재도전. 진입 게이트는 monthlyState().claimed 동적 키 — 새 달 claimed
+통째 리셋으로 별도 상태·마이그레이션 불필요. 보상 강화석 300+골드 1,200만 raw(잔불 월
+5,400 대비 5.5%·골드던전 5단계 이하 봉쇄 유지), 승리 시에만 지급·렌더 무지급.
+
+**구현**: FORGE_TRIAL/FORGE_REWARD_TXT 상수 · forgetrial 모달(47번째 — 모험 팝업 8번째,
+nav_forge 아이콘) · monthlyState 리셋 재사용.
+
+**검증**: smoke 신규 스텝(구조·렌더 무지급·버튼 클릭만으로 미소진·[예] 확정 시에만 소진·
+kind:'boss'·reward raw·소진 라벨) + 모험 회귀 8종 갱신 — 전체 통과. 시뮬(시드 42·600h):
+첫 클리어 96h(CP 25,016 ≥ foe/1.5 시점) · CP 454,000→539,359(+18.8% — 경제 기여는 설계상
+미미[월 강화석 300]이라 대부분 궤적 변화: 새 액션이 RNG 소비를 바꿔 세트 수렴 등이 갈림.
+시드 분산 454k~1,093k 범위 내) · 세이브 4.8KB. 12800h 장기 수치는 커밋 메시지 참조.

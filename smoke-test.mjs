@@ -1559,7 +1559,7 @@ step('모험 팝업·아이콘 재배치 — 플로팅/레일/드로어/상점 �
   const M=ev('MODALS');
   const b=new Node2('div'); M.adventure.render(b);
   const txt=collectText(b);
-  for(const n of ['요일던전','골드던전','보스','월드보스','시련의탑','약탈','잔불의 미궁']) if(!txt.includes(n)) errs.push('모험 항목 누락: '+n);
+  for(const n of ['요일던전','골드던전','보스','월드보스','시련의탑','약탈','잔불의 미궁','용광로 시련']) if(!txt.includes(n)) errs.push('모험 항목 누락: '+n);
   const grid=(b.children||[]).find(c=>(c.children||[]).some(k=>String(k._html||'').includes('요일던전')));
   if(!grid) errs.push('모험 그리드 미발견');
   else { const card=(grid.children||[])[0];
@@ -1658,6 +1658,70 @@ step('잔불의 미궁 — 3문 구조·렌더 무지급·일 1회 게이트·�
     ev('enterDungeonFight=globalThis.__oEDF');
     S.gold=keep.gold; S.stones=keep.stones; S.stats.emberBest=keep.emberBest;
     S.daily=keep.daily;
+  }
+  if(errs.length) throw new Error(errs.join(' | '));
+});
+
+/* ★ v5.300 회귀: 용광로 시련 — 월 1회 이벤트 보스전(콘텐츠 확장-4).
+   ① 상수 구조: foe 30000(잔불 3문 위)·강화석 300·골드 1200만(골드던전 5단계 이하 봉쇄)
+   ② 렌더 무지급 + 월 1회 게이트: claimed.forgeTrial 은 monthlyState 리셋(새 달)에 자동 초기화
+   ③ 도전 [예] 확정 시에만 소진·전투 개시(kind:'boss')·reward raw 지급. */
+step('용광로 시련 — 구조·렌더 무지급·월 1회 게이트·보상 콜백', ()=>{
+  const S=ev('S'), M=ev('MODALS');
+  const keep={ gold:S.gold, stones:S.stones, monthly:S.monthly?JSON.parse(JSON.stringify(S.monthly)):null };
+  const errs=[];
+  try{
+    const t=ev('FORGE_TRIAL'), rt=ev('FORGE_REWARD_TXT');
+    if(!t||t.foe<=ev('EMBER_MAZE')[2].foe) errs.push('foe가 잔불 3문 이하');
+    if(t.gold>15000000) errs.push('골드 봉쇄(1500만 이하) 위반');
+    if(!ev('EMBER_MAZE')||t.foe!==30000) errs.push('FORGE_TRIAL 상수 이상');
+    /* 렌더 — 보스 정보·보상 텍스트·매월 1회 안내 + 무지급 */
+    S.monthly={ key:ev('getMonthKey')(), base:{kills:S.stats.kills,crafts:S.stats.crafts,summons:S.stats.summons,towerTries:0}, claimed:{} };
+    const b=new Node2('div'); M.forgetrial.render(b);
+    const txt=collectText(b);
+    if(!txt.includes(t.n)) errs.push('보스 이름 미표시');
+    if(!txt.includes(rt)) errs.push('보상 텍스트 미표시');
+    if(!txt.includes('매월 1회')) errs.push('월 1회 안내 없음');
+    const st0=S.stones, g0=S.gold;
+    M.forgetrial.render(new Node2('div'));
+    if(S.stones!==st0||Math.round(S.gold)!==Math.round(g0)) errs.push('렌더만으로 지급 발생');
+    /* 도전 버튼 → confirm [예] 에서만 소진 — enterDungeonFight 가로채 cfg 검증 */
+    const m0=ev('monthlyState')();
+    if(m0.claimed.forgeTrial) errs.push('초기 claimed=true');
+    ev('globalThis.__oEDF2=enterDungeonFight; globalThis.__capEDF2=null; '+
+       'enterDungeonFight=function(cfg){ globalThis.__capEDF2=cfg; }');
+    const card=(b.children||[]).find(c=>String(c._html||'').includes(t.n));
+    const btn=card&&findBtnByText(card,'도전');
+    if(!btn) errs.push('도전 버튼 미발겤');
+    else{
+      btn.onclick();
+      if(ev('monthlyState')().claimed.forgeTrial) errs.push('버튼 클릭만으로 소진');
+      const root=ev("document.getElementById('modal-root')");
+      const yes=findBtnByText(root,'예');
+      if(!yes) errs.push('confirm [예] 미발겤');
+      else yes.onclick();
+      const cfg=ev('globalThis.__capEDF2');
+      if(!cfg) errs.push('[예] 후 전투 미개시');
+      else{
+        if(cfg.kind!=='boss'||cfg.foeCP!==t.foe) errs.push('kind/foeCP 불일치');
+        if(cfg.rewardText!==rt) errs.push('rewardText 불일치');
+        S.gold=1000; S.stones=10;
+        cfg.reward();
+        if(S.stones!==10+t.stones) errs.push('강화석 지급 오류');
+        if(S.gold!==1000+t.gold) errs.push('골드 raw 지급 오류');
+      }
+      if(!ev('monthlyState')().claimed.forgeTrial) errs.push('[예] 후에도 미소진');
+      /* 소진 렌더 — '이번 달 완료'·disabled */
+      const b2=new Node2('div'); M.forgetrial.render(b2);
+      const done=findBtnByText(b2,'이번 달 완료');
+      if(!done) errs.push('소진 라벨 갱신 안 됨');
+      else if(!done.disabled) errs.push('소진 후 disabled 아님');
+      if(!collectText(b2).includes('이번 달 도전 완료')) errs.push('소진 안내 없음');
+    }
+  } finally {
+    ev('enterDungeonFight=globalThis.__oEDF2');
+    S.gold=keep.gold; S.stones=keep.stones;
+    if(keep.monthly) S.monthly=JSON.parse(JSON.stringify(keep.monthly)); else S.monthly={key:'',base:null,claimed:{}};
   }
   if(errs.length) throw new Error(errs.join(' | '));
 });
