@@ -799,6 +799,13 @@ const GOLDSHOP = [
   { t:'결정 가호 1시간 (+50% 골드)', ic:'💠', cur:'gold', cost:5000000,
     /* ★ v5.253: 전용 키 goldPactUntil — 프리미엄 goldUntil(30일 +100%)과 분리. */
     give:()=>{ const now=Date.now(); S.buffs=S.buffs||{}; S.buffs.goldPactUntil=Math.max(now,S.buffs.goldPactUntil||0)+3600000; } },
+  /* ★ v5.305: 주사위 → 소환서 교환(자체 설계) — 재화 사슬 감사(대표 요청 2026-09-18)에서
+     발견한 단선: 주사위 획득처는 다양(일일 미션·투기장 승 +3·가이드·출석)한데 소비처가
+     옵션 리롤 하나뿐(N5~L50/부위) — 리롤은 옵션 장비가 생기는 중반부터라 초중반엔 주사위가
+     쌓이기만 하는 '못 쓰는 재화'(나쁜 막힘)였다. 교환 라인으로 잉여를 성장 축(소환→조각→합성)
+     으로 흘려보낸다. 환율 근거: 소환서 골드 정본가 150만/장 → X3=450만 상당 = 주사위 90개
+     (L리롤 1.8회분) — '리롤 2회 포기 = 소환 3장'의 직관적 트레이드오프. */
+  { t:'영웅 소환서 X3 (주사위)', ic:'📜', cur:'dice', cost:90, give:()=>{ S.tickHero+=3; } },
   { t:'투기장 입장권 X1',  ic:'🎫', cur:'gold', cost:5000000,  give:()=>{ S.ticket=Math.min(30,S.ticket+1); } },
   { t:'골드 10,000,000',   ic:'🪙', cur:'ruby', cost:300,  give:()=>{ addGold(10000000); } },
   { t:'골드 200,000,000 + 전설 망치 20', ic:'🪙', cur:'ruby', cost:2800, give:()=>{ addGold(200000000); S.hammers=(S.hammers||0)+20; } },
@@ -5995,10 +6002,11 @@ const MODALS = {
     const body=el('div'); b.appendChild(body);
 
     /* --- 결제 공용 헬퍼 (차감 전 보유량 재확인 = 재화 안전장치) --- */
-    const CURN={ gold:'골드', ruby:'루비', guild:'길드 코인', gray:'회색코인', stones:'강화석' };   // stones: v5.238 망치 교환
-    const have=cur=> cur==='gold'? S.gold : cur==='ruby'? S.ruby : cur==='gray'? (S.gray||0) : cur==='stones'? (S.stones||0) : (S.guildCoin||0);
+    const CURN={ gold:'골드', ruby:'루비', guild:'길드 코인', gray:'회색코인', stones:'강화석', dice:'주사위' };   // stones: v5.238 망치 교환 · dice: v5.305 소환서 교환
+    const have=cur=> cur==='gold'? S.gold : cur==='ruby'? S.ruby : cur==='gray'? (S.gray||0) : cur==='stones'? (S.stones||0) : cur==='dice'? (S.dice||0) : (S.guildCoin||0);
     const payCur=(cur,n)=>{ if(cur==='gold') S.gold-=n; else if(cur==='ruby') S.ruby-=n;
-      else if(cur==='gray') S.gray=Math.max(0,(S.gray||0)-n); else if(cur==='stones') S.stones=Math.max(0,(S.stones||0)-n); else S.guildCoin=(S.guildCoin||0)-n; };
+      else if(cur==='gray') S.gray=Math.max(0,(S.gray||0)-n); else if(cur==='stones') S.stones=Math.max(0,(S.stones||0)-n);
+      else if(cur==='dice') S.dice=Math.max(0,(S.dice||0)-n); else S.guildCoin=(S.guildCoin||0)-n; };
     const priceTxt=(cur,n)=> `${CURN[cur]} ${cur==='gold'?fmt(n):n.toLocaleString('ko-KR')}`;
     /* ★ v5.0: 자체 렌더러 탭(광고·버프·루비·코스튬·스타터)도 같은 카드 골격을 쓰도록 하는 공용 빌더.
        mkBuy 와 달리 결제 로직이 제각각이라 카드 껍데기만 만들어 주고 버튼은 호출부가 붙인다. */

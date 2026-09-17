@@ -2025,12 +2025,21 @@ step('골드상점 강화석→망치 교환 — stones 통화 결제 라인', (
   S.stones=600; S.hammers=0;
   if(S.stones<led.cost) errs.push('사전 조건 실패');
   if(!errs.length){
-    led.give();                       // 상품 지급 로직 자체(구매 헬퍼의 pay는 아래 별도)
+    led.give();                       // 상품 지급 로직 자체(구매 헬퍼의 pay는 아래 별가)
     if(S.hammers!==10) errs.push('지급 후 전설망치 '+S.hammers+'(기대 10)');
     if(S.stones!==600) errs.push('give가 stones를 깎으면 안 됨(차감은 payCur 담당): '+S.stones);
     S.hammers=0; S.stones=600;   // payCur는 shop 클로저 내부라 직접 검증 불가 — 데이터 정합으로 대체
   }
   S.stones=keep.stones; S.hammers=keep.hammers;
+  /* ★ v5.305: 주사위 → 소환서 교환 — 재화 사슬 감사의 나쁜 막힘(소비처 단일) 해소.
+     데이터 정합: dice 통화 상품 1개·90개·지급 +3장(give는 순수 지급, 차감은 payCur 담당). */
+  const diceItems=GS.filter(it=>it.cur==='dice');
+  if(diceItems.length!==1) errs.push('dice 결제 상품 '+(diceItems.length)+'개(기대 1)');
+  else{ const d=diceItems[0];
+    if(d.cost!==90) errs.push('주사위 교환가 '+d.cost+'(기대 90)');
+    const tk=ev('S').tickHero||0; d.give();
+    if((ev('S').tickHero||0)!==tk+3) errs.push('소환서 지급 오류');
+    ev('S').tickHero=tk; }
   if(errs.length) throw new Error(errs.join(' | '));
 });
 
