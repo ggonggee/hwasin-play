@@ -532,14 +532,27 @@ function awakenStep(){
 function synthStep(){
   const GORDER=['N','R','E','L'], S=ev('S');
   const MAT_BY_GRADE=ev('MAT_BY_GRADE'), MAT_BY_KEY=ev('MAT_BY_KEY');
+  /* ★ v5.297 도구 정확도 수정: 저확률 합성은 '원재료 포화(상한 90%)일 때만' — 재화 재활용.
+     종전 정책은 R→E(0.8%)·E→L(0.08%)을 무조건 돌려 E 재료(대장장이의 눈물 등)가 30개를
+     채우는 족족 태웠다. 600h 실측: 눈물 보유 0(E탐침 '부족=[눈물 0/20]' 상시) — 요일던전
+     matGainGrade 균등 실체화(6000회 직접 검증: 6종 각 ~1000회)로 눈물도 수급되는데도 0이라는
+     것은 수급이 아니라 소비(합성 소각)가 원인이었다는 증거.
+     합리적 플레이어 판정: 재료 30개 → 성공 1개 기대값이 R→E 0.008개, E→L 0.0008개.
+     평시(재료 부족 상태)엔 게임 UI가 확률을 보여주므로 이 손해를 회피한다. 단 원재료가
+     보유 상한(2000/900)의 90%를 넘으면 초과분은 어차피 버려지는 재화 — 그때만 소각이
+     이득(기회비용 0). 첫 수정본(N→R만 남김)의 실측에서 R 재료 전종 2000 포화 '댐'이
+     생겨 상급재료 액션이 381→228창, 최장 공백 10.0→23.5h로 행동 다양성이 붕괴했다 —
+     포화 재활용 분기를 함께 둬야 근사가 성립한다. 게임의 합성 확률(G-31 실측)은 불변. */
   const rateOf=g=>g==='R'?50:g==='E'?0.8:0.08;
+  const MAT_CAP=ev('MAT_CAP');
   let did=0;
-  for(const g of ['N','R','E']){                       // L→ 없음
+  for(const g of ['N','R','E']){
     const to=GORDER[GORDER.indexOf(g)+1];
-    const avail=i=>S.mats[MAT_BY_GRADE[g][i].k]||0;
     for(let i=0;i<6;i++){
-      const src=MAT_BY_GRADE[g][i].k, dst=MAT_BY_GRADE[to][i].k;
-      let batches=Math.floor((S.mats[src]||0)/30);
+      const m=MAT_BY_GRADE[g][i], src=m.k, dst=MAT_BY_GRADE[to][i].k;
+      const cap=MAT_CAP[m.g]||Infinity, held=S.mats[src]||0;
+      if(g!=='N' && held < cap*0.9) continue;         // 상위 합성은 포화 재활용일 때만
+      let batches=Math.floor(held/30);
       if(batches<=0) continue;
       batches=Math.min(batches, 200);
       let ok=0;
