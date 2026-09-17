@@ -1319,6 +1319,13 @@ const ATTEND_DAYS = [
 ];
 /* ★ B9/G-134: 공지 — 제목 밴드 + 양피지 서술형 본문 (목록 → 상세 2단) */
 const NOTICES = [
+  /* ★ v5.295: 주간 축제 시스템 안내 — 새 공지 추가로 미열람 점이 자동으로 켜진다
+     (NOTICES.length vs noticeSeen 관례). 이번 주 테마 자체는 전장 배지가 실시간 보여준다. */
+  { cat:'[이벤트]', ic:'🔥', t:'대장간 축제 — 매주 바뀌는 주간 축제가 시작됩니다', d:'2026-09-17',
+    body:'군주들에게 알립니다.<br><br>지금부터 <b>매주 월요일</b>마다 축제가 열리고 그 주의 축제는 일요일까지 이어집니다.<br><br>'+
+      '· <b>💰 골드 축제</b> — 골드 획득량 +20%<br>· <b>📈 성장 축제</b> — 처치 경험치 +20%<br>· <b>⛏️ 채굴 축제</b> — 사냥터 재료 드랍률 +20%<br><br>'+
+      '세 축제가 돌아가며 열리며, 이번 주 축제는 <b>전장 왼쪽 위 배지</b>에서 언제든 확인할 수 있습니다.<br>'+
+      '의뢰·미션의 고정 보상은 축제의 영향을 받지 않습니다.' },
   /* ★ v5.167: 공지판이 7월의 '데모 v0.1.0' 공지에 얼어 있었다 — v5 시즌의 변화를 알리는
      공지를 최상단에 추가한다(오리지널 문구). NOTICES.length 를 noticeSeen 과 비교해
      미열람 점이 켜지므로, 공지를 새로 추가하면 점이 자동으로 살아난다. */
@@ -3095,19 +3102,22 @@ const Battle = (()=>{
       // ★ 몬스터별 고정 드랍 — 이 몬스터가 떨구는 재료 등급은 정해져 있다
       const dropBuff = holdOwn('nest') ? 1.15 : 1; // 점령전: 잿불 군락 드랍률 +15% (★ B8/G-109 holds 스키마 객체화)
       // ★ F2: 칭호 효과 축에 '드랍률'은 없다 → 칭호(badhand) 분기를 제거하고 기본 확률로 되돌렸다.
-      const p = (boss?1:0.35) * dropBuff;
+      /* ★ v5.295: 주간 축제 '채굴 축제'도 드랍률 곱셈 레이어(dropBuff 관행)로 — 수량이 아니라
+         확률을 올리는 이유는 일반 처치 드랍이 1개라 ×1.2 반올림이 효과를 지우기 때문(FESTIVALS 주석 ③).
+         아래 10%·25% 랜덤 드랍도 같은 축의 드랍률이라 함께 오른다. */
+      const p = (boss?1:0.35) * dropBuff * festivalMul('mat');
       /* ★ v4.3: 등급 공용풀 폐지 → 사냥터마다 '여기서만 나오는 대표 재료'(t.mat)를 떨군다.
          다음 티어로 올라갈 이유가 골드 배율뿐이 아니라 "그 재료가 여기서만 나온다"가 되도록. */
       if(Math.random()<p){ matGain(t.mat, boss?ri(2,4):1); drop(mx-8,my,'mat'); }
       /* ★ v5.111: 보조 고정 드랍 — 등급당 6번째 재료의 유일한 '지정 파밍' 경로(HUNT_TIERS 주석 참조).
          대표 재료의 절반 확률로 둔다. 아래 10% 랜덤 드랍은 그대로 유지(다른 재료 보완용). */
       if(t.mat2 && Math.random()<p*0.5){ matGain(t.mat2, boss?ri(1,2):1); drop(mx-8,my,'mat'); }
-      if(t.sub && Math.random()<0.25){ matGainGrade(t.sub, 1); }   // 하위 등급은 아무 재료나 소량
+      if(t.sub && Math.random()<0.25*festivalMul('mat')){ matGainGrade(t.sub, 1); }   // 하위 등급은 아무 재료나 소량
       /* ★ v5.29: 같은 등급 랜덤 추가 드랍 (10%) — 몬스터가 5종이라 고정 드랍이 5개 재료만
          커버한다. 6번째 재료(잿가루/서리결정/천공수정/금강석)는 전투로 얻을 수 없었는데,
          같은 등급 풀에서 랜덤 드랍을 추가해 제작 교착을 방지한다.
          설계 기준도 전투 드랍 + 재료 소환(랜덤) + 합성으로 전 재료를 커버한다. */
-      if(Math.random()<0.10){ matGainGrade(t.drop, 1); }
+      if(Math.random()<0.10*festivalMul('mat')){ matGainGrade(t.drop, 1); }
       /* ★ A3-1: 회색코인(S.gray)은 전투 드랍으로 충전되지 않는다.
          근거 — UI재현카탈로그 '길드 상점 — 회색코인(길드코인) 전용 교환소' 절:
          "코인은 길드 레이드/약탈/기여로만 충전(상점 구매 불가)".
@@ -3121,8 +3131,9 @@ const Battle = (()=>{
        보스는 5배 경험치. 칭호·상점 경험치 버프 배수 적용.
        S.heroes[hid].exp 에 누적 (정수), 초과분은 다음 레벨로 이월. */
     /* ★ v5.29.1: 경험치 버프(expUntil) + 칭호 경험치 효과 모두 반영.
-       종전엔 titleExpMul()만 써서 상점 '경험치+100%' 버프가 안 먹었음. */
-    const expMul = titleExpMul() * ((S.buffs && S.buffs.expUntil > Date.now()) ? 2 : 1);
+       종전엔 titleExpMul()만 써서 상점 '경험치+100%' 버프가 안 먹었었음.
+       ★ v5.295: 주간 축제 '성장 축제'(×1.2)도 같은 관문 — 벤치 분배(×0.5)는 이 배수를 상속한다. */
+    const expMul = titleExpMul() * ((S.buffs && S.buffs.expUntil > Date.now()) ? 2 : 1) * festivalMul('exp');
     /* ★ v5.183: 처치 경험치가 사냥터 등급에 비례(N1 · R2 · E4 · L8, 보스는 5배).
        종전엔 킬당 1 고정이라 필요량(레벨×250) 대비 성장이 이차적으로 느려졌고(시뮬 200h
        Lv49 정체 실측), 상위 사냥터로 옮겨도 레벨링이 빨라지지 않아 '더 강한 몬스터를
@@ -3761,7 +3772,8 @@ function goldBuffMul(){
 function addGold(n, raw){
   // ★ F2: 칭호의 '몬스터 골드 획득량 +X%' 는 골드 획득 단일 관문인 여기서 한 번만 곱한다.
   // ★ v5.247: 결정 가호(골드 +50%·1시간)도 같은 관문 — raw(고정 보상)에는 적용하지 않는다.
-  if(!raw) n = n * (1 + arenaGoldBuffPct()/100) * titleGoldMul() * goldBuffMul();
+  // ★ v5.295: 주간 축제 '골드 축제'도 같은 관문(×1.2) — raw 계약 보상은 여전히 제외.
+  if(!raw) n = n * (1 + arenaGoldBuffPct()/100) * titleGoldMul() * goldBuffMul() * festivalMul('gold');
   S.gold = Math.min(GOLD_CAP, S.gold + n);
 }
 // ★ B7/G-100: '제작 시간 -50%' 구독 버프 배율 (상점 버프탭에서 구매, 30일)
@@ -3826,6 +3838,12 @@ function refreshHUD(){
   const ct=$('#craftTimer');
   if(S.craft){ const left=Math.max(0,Math.ceil((S.craft.endAt-Date.now())/1000)); ct.textContent = left>0? mmss(left) : '완성!'; }
   else ct.textContent='00:00';
+  /* ★ v5.295: 주간 축제 배지 — 이번 주 테마 상시 표시(전장 좌상단). 클릭 시 공지판.
+     주 경계를 지난 뒤 5초 주기 이 타이머가 자동으로 다음 축제로 갈아끼운다. */
+  const _fc=$('#festChip');
+  if(_fc){ const _f=festival();
+    _fc.innerHTML=`${eImg(_f.ic,1)} ${_f.n} <span style="color:#cdbf9f;font-weight:400">${_f.fx}</span>`;
+    _fc.onclick=()=>{ sfx('tap'); openModal('notice'); }; }
   tutPoll();   // ★ B1/G-01: 튜토리얼 실제 완료 이벤트 폴링
   refreshClaimBadges();   // ★ v5.162: 수령 가능 배지 — 수령 직후 즉시 꺼지게(5초 타이머와 별개)
 }
@@ -4660,9 +4678,32 @@ function getWeekKey(){ const d=new Date(); const t=new Date(d.getFullYear(),d.ge
   const day=(t.getDay()+6)%7; t.setDate(t.getDate()-day+3); const firstThu=new Date(t.getFullYear(),0,4);
   const fday=(firstThu.getDay()+6)%7; firstThu.setDate(firstThu.getDate()-fday+3);
   const wk=1+Math.round((t-firstThu)/(7*86400000)); return t.getFullYear()+'-W'+wk; }
+/* ★ v5.295: 주간 축제(대장간 축제) — 콘텐츠 확장 루프-2 '이벤트' 축. 설계 근거:
+   ① 리듬 3층위(일일→주간→월간)에 '주간 변주'가 없어 주 내내 동일한 하루가 이어졌다.
+     주간 의뢰와 같은 경계(ISO 주 · 월요일)로 테마가 교체되면 "이번 주는 무엇의 주인가"를
+     확인하러 들어오는 이유가 매주 생긴다(기대 변동성).
+   ② 로테이션은 주 번호 % 3 — 결정론적이라 저장·상태 추가가 없고(마이그레이션 무관),
+     시뮬(FakeDate 1970 에폭)에서도 재현성이 유지된다. '쉬는 주' 없는 상시 순환:
+     축제가 없는 주는 부재로 읽히므로 3테마가 돌아간다.
+   ③ +20%는 기존 승수 관문 관행(addGold 의 goldBuffMul·expMul 의 titleExpMul·드랍률의
+     점령전 dropBuff×1.15)과 같은 곱셈 레이어다 — 기본 수치·확률 테이블은 불변
+     (실측 경제 수치 보존 규칙). 재료 축제가 수량이 아니라 '드랍률'인 이유: 일반 처치
+     드랍은 1개(matGain(t.mat,1))라 ×1.2의 반올림이 효과를 지워버린다.
+   ④ 골드 축제는 addGold 의 raw(고정 보상) 경로를 제외 — 의뢰·미션 등 계약 보상은
+     축제와 무관하게 표기 그대로 지급된다. */
+const FESTIVALS=[
+  { id:'gold', n:'골드 축제', ic:'💰', fx:'골드 획득량 +20%' },
+  { id:'exp',  n:'성장 축제', ic:'📈', fx:'처치 경험치 +20%' },
+  { id:'mat',  n:'채굴 축제', ic:'⛏️', fx:'사냥터 재료 드랍률 +20%' },
+];
+function festival(){ const p=getWeekKey().split('-W'); return FESTIVALS[(parseInt(p[0])*53+parseInt(p[1]))%FESTIVALS.length]; }
+function festivalMul(id){ return festival().id===id ? 1.2 : 1; }
 function weeklyState(){
   if(!S.weekly || typeof S.weekly!=='object') S.weekly={ key:'', base:null, claimed:{} };
   const k=getWeekKey();
+  /* ★ v5.295: 실제 주 롤오버(신규 세이브 최초 초기화가 아닐 때)에만 이번 주 축제를 알린다 —
+     최초 부팅(키 '')에 토스트를 뿌리면 튜토리얼 흐름을 침범한다. */
+  if(S.weekly.key && S.weekly.key!==k){ const f=festival(); toast(`${f.ic} 이번 주는 ${f.n}입니다 — ${f.fx}`); }
   if(S.weekly.key!==k){ S.weekly.key=k; S.weekly.base={ kills:S.stats.kills||0, crafts:S.stats.crafts||0, summons:S.stats.summons||0, towerTries:S.stats.towerTries||0 }; S.weekly.claimed={}; save(); }
   return S.weekly;
 }
@@ -6598,6 +6639,9 @@ const MODALS = {
         + '<div class="hr"></div><span class="mut small">※ 빙결술사만 마법 공격력을 사용하며, 나머지 4직업은 공격력을 사용합니다.</span>',
       // G-129: 길드 랭킹 리셋 규칙
       '길드':'정원 30명. 길드 레이드·점령전으로 상시 버프를 얻습니다. 창설비 루비 600 또는 골드 3억(할인 시 루비 100 · 골드 1억).<br><br>길드 랭킹은 매주 월요일 오전 11시에 초기화됩니다.',
+      /* ★ v5.295: 주간 축제 — 테마 목록과 '이번 주'를 정본(FESTIVALS/festival)에서 파생시켜
+         문구가 코드와 어긋날 수 없게 한다(도움말 수치 파생 관례). */
+      '축제':`매주 월요일 <b>주간 축제</b>가 교체되어 일요일까지 이어집니다 — ${FESTIVALS.map(f=>`${f.ic} ${f.n}(${f.fx})`).join(' · ')}.<br><br>이번 주는 <b>${festival().ic} ${festival().n}</b>입니다 (${festival().fx}). 전장 왼쪽 위 배지로 확인하세요. 의뢰·미션의 고정 보상은 축제의 영향을 받지 않습니다.`,
     };
     b.appendChild(el('div','small mut','도움말 · 토픽을 선택하세요'));
     const g=el('div','grid c2'); g.style.marginTop='6px';

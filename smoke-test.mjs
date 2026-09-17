@@ -1640,6 +1640,80 @@ step('잔불의 미궁 — 3문 구조·렌더 무지급·일 1회 게이트·�
   if(errs.length) throw new Error(errs.join(' | '));
 });
 
+/* ★ v5.295 회귀: 주간 축제(콘텐츠 확장-2 '이벤트') —
+   ① 로테이션 결정론: Date 목으로 3연속 ISO 주를 만들면 festival() 이 3테마를 전부 순회
+   ② 골드 관문: 골드 축제 주와 아닌 주의 addGold(1000) 차이가 정확히 ×1.2 —
+      공통 승수(티어·칭호·가호)는 비율로 상쇄. raw(고정 보상)는 양쪽 모두 정확히 1000
+   ③ XP·재료 관문·롤오버 토스트 가드는 소스 정합 + 토스트 스파이(신규 키 ''엔 미발화)
+   ④ 배지: index.html 의 #festChip 을 refreshHUD 가 이번 주 테마로 채운다 — 렌더 무지급. */
+step('주간 축제 — 3테마 순환 결정론·골드 관문 배율·배지·렌더 무지급', ()=>{
+  const errs=[];
+  const S=ev('S'), M=ev('MODALS');
+  const weeks=[[2026,8,14],[2026,8,21],[2026,8,28]];   // 3연속 ISO 주의 월요일(2026-W38/39/40)
+  const snap=ev('(JSON.stringify({weekly:S.weekly}))');
+  try{
+    const mockWeek=(i)=>{ const [y,m,d]=weeks[i];
+      ev(`(function(){ const _D=Date; globalThis.__realDate=_D;
+        Date=class extends _D{ constructor(...a){ if(a.length===0) super(${y},${m},${d},12,0,0); else super(...a); }
+          static now(){ return new _D(${y},${m},${d},12,0,0).getTime(); } }; })()`); };
+    /* ① 3주 순환 — 테마 3종 전부 등장 */
+    const themes=[];
+    for(let i=0;i<3;i++){ mockWeek(i); const f=ev('festival()');
+      themes.push(f.id);
+      if(ev('festival()').id!==f.id) errs.push('같은 주内 테마 불안정');
+      if(f.n===undefined||f.fx===undefined||f.ic===undefined) errs.push('테마 필드 누락: '+f.id);
+    }
+    if(new Set(themes).size!==3) errs.push('3주 순환 아님: '+themes.join(','));
+    /* ② 골드 관문 배율 — 축제 주/평상 주 addGold 비율 1.2 · raw 불변.
+       ★ S.buffs(프리미엄·결정 가호)는 Date.now() 와 비교되는 잔여 시각이라 목 주차 사이
+         걸렸다 안 걸렸다 하며 비율을 오염시킨다(실측 1.32/1.65=가호 잔여). 측정 구간만
+         중립화한다 — 티어·칭호 승수는 양쪽에 공통이라 비율로 상쇄된다. */
+    const buffsSnap=JSON.stringify(S.buffs||{});
+    S.buffs=Object.assign({},S.buffs,{goldUntil:0,goldPactUntil:0,expUntil:0,craftUntil:0});
+    const goldIdx=themes.indexOf('gold'), otherIdx=(goldIdx+1)%3;
+    const goldDelta=(wk)=>{ mockWeek(wk); const g0=S.gold; ev('addGold')(1000); return S.gold-g0; };
+    const dFest=goldDelta(goldIdx), dNorm=goldDelta(otherIdx);
+    if(!(dFest>0&&dNorm>0)||Math.abs(dFest/dNorm-1.2)>1e-9) errs.push('골드 축제 배율 ≠1.2: '+dFest+'/'+dNorm);
+    mockWeek(goldIdx);
+    if(ev("festivalMul('gold')")!==1.2||ev("festivalMul('exp')")!==1) errs.push('festivalMul 판정 오류');
+    const g0=S.gold; ev('addGold')(1000,true);
+    if(S.gold-g0!==1000) errs.push('raw 고정 보상이 축제 영향: '+(S.gold-g0));
+    S.buffs=JSON.parse(buffsSnap);
+    /* ③ 관문 3곳 + 롤오버 토스트 가드 소스 정합 */
+    const src=fs.readFileSync('game.js','utf8');
+    if(!src.includes("* goldBuffMul() * festivalMul('gold')")) errs.push('골드 관문 미연결');
+    if(!src.includes("* festivalMul('exp')")) errs.push('경험치 관문 미연결');
+    if(!src.includes("* dropBuff * festivalMul('mat')")
+      ||!src.includes("0.25*festivalMul('mat')")||!src.includes("0.10*festivalMul('mat')"))
+      errs.push('재료 드랍률 관문 미연결(3곳)');
+    if(!/if\(S\.weekly\.key && S\.weekly\.key!==k\)\{ const f=festival\(\); toast/.test(src))
+      errs.push('주 롤오버 축제 토스트 없음');
+    /* 롤오버 토스트 스파이 — 신규 키 ''엔 미발화, 실제 롤오버에만 1회 */
+    ev('globalThis.__oToast=toast; globalThis.__toastN=0; toast=function(){globalThis.__toastN++;}');
+    S.weekly={ key:'', base:null, claimed:{} }; ev('weeklyState')();
+    if(ev('globalThis.__toastN')!==0) errs.push('최초 초기화에 토스트 발화');
+    S.weekly.key='1999-W1'; ev('weeklyState')();
+    if(ev('globalThis.__toastN')!==1) errs.push('주 롤오버 토스트 미발화/중복: '+ev('globalThis.__toastN'));
+    ev('toast=globalThis.__oToast');
+    /* ④ 배지 — DOM 존재 + refreshHUD 가 이번 주 테마로 갱신 + 렌더 무지급 */
+    if(!html.includes('id="festChip"')) errs.push('#festChip 없음(index.html)');
+    const chip=ev("document.getElementById('festChip')");
+    const gBefore=S.gold;
+    ev('refreshHUD')(); ev('refreshHUD')();
+    if(!chip||!String(chip._html||'').includes(ev('festival()').n)) errs.push('배지 미갱신');
+    if(S.gold!==gBefore) errs.push('렌더만으로 골드 변동');
+    /* 공지·도움말 진입점 */
+    if(!ev('NOTICES')[0].t.includes('축제')) errs.push('축제 공지 없음');
+    const hb=new Node2('div'); M.help.render(hb);
+    if(!collectText(hb).includes('축제')) errs.push('도움말 축제 토픽 없음');
+  } finally {
+    ev('if(globalThis.__realDate){ Date=globalThis.__realDate; delete globalThis.__realDate; }');
+    ev('if(globalThis.__oToast){ toast=globalThis.__oToast; delete globalThis.__oToast; }');
+    ev('const _o=JSON.parse('+JSON.stringify(snap)+'); S.weekly=_o.weekly;');
+  }
+  if(errs.length) throw new Error(errs.join(' | '));
+});
+
 /* ★ v5.292 회귀: 전투 연출 재구성(대표 요청) 소스 정합 — centerHold(일반 몹 던전: 중앙
    배치+이동 금지+몹 중앙 선형 이동), 보스 중앙 즉시 배치(화면 밖 입장 중 처치 방지),
    startDungeon 입장 시 layoutHeroes 재호출(이전 전투 이동 위치 리셋). 런타임 동작은
