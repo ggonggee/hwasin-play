@@ -677,6 +677,39 @@ step('오프라인 정산 수령 — 지급·소진·즉시 저장', ()=>{
   }
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ v5.308 회귀: 소진·수령 확정 즉시 저장 — '상태만 바꾸고 저장 안 함' 유형이 v5.306
+   (투기장 롤오버)·v5.307(오프라인 수령)에 이어 전수 스캔에서 15곳 더 발견됐다(차감 직후
+   5초 내 새로고침 = 상한 우회/무한 수령 창). 소진 게이트 9곳은 전부 dailyUse 를 지나므로
+   관문에서 일괄 저장하고, claimed·루비 확정 6곳은 각 onclick 에서 저장한다.
+   ①dailyUse 즉시 save 실행 스파이 ②6곳 앵커 라인 save 소스 정합. */
+step('소진·수령 즉시 저장 — dailyUse 관문 + 수령·구매 6곳', ()=>{
+  const errs=[];
+  ev('globalThis.__v3o=save; globalThis.__v3n=0; save=function(){globalThis.__v3n++;};');
+  try{
+    const S=ev('S'); const k=S.daily.counts.__qa||0;
+    ev('dailyUse')('__qa');
+    if((S.daily.counts.__qa||0)!==k+1) errs.push('dailyUse 카운트 미증가');
+    if(ev('globalThis.__v3n')<1) errs.push('dailyUse 즉시 save 미호출');
+    delete S.daily.counts.__qa;
+  } finally { ev('save=globalThis.__v3o'); }
+  const src=fs.readFileSync('game.js','utf8');
+  const anchors=[
+    'MISSION_REWARDS.forEach(r=>{ try{ r.act(); }catch(e){} }); save();',
+    'S.ruby-=it.cost; it.give(); S.claimed.mail[it.id]=true',
+    'p.give(); S.claimed.mail[p.id]=true',
+    'S.claimed.attend[i]=true; S.attendLastDate=today(); save();',
+    '우편 ${n}건 일괄 수령',
+    'give(); S.claimed.mail[id]=true; toast(`${t}`)',
+  ];
+  for(const a of anchors){
+    const line=src.split('\n').find(l=>l.includes(a));
+    if(!line){ errs.push('앵커 미발견: '+a.slice(0,36)); continue; }
+    if(!/save\(\)/.test(line)) errs.push('save 없음: '+a.slice(0,36));
+  }
+  if(!/function dailyUse\(key\)\{ rollDaily\(\); S\.daily\.counts\[key\]=\(S\.daily\.counts\[key\]\|\|0\)\+1; save\(\); \}/.test(src))
+    errs.push('dailyUse 관문 save 미연결');
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ v5.9: 몬스터 종 수 검증 — 등급당 5종, 총 20종(설계 기준). 마릿수 선택기 기본값 30.
    종전 120종(등급당 30종)은 "30마리" 마릿수 선택기를 도감 종 수로 오독한 것이었다. */
 step('몬스터 종 수 = 20 (등급당 5종) + 마릿수 기본 30', ()=>{

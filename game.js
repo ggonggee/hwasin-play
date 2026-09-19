@@ -1731,7 +1731,10 @@ function rollDaily(){
   }
 }
 function dailyLeft(key, max){ rollDaily(); return max-(S.daily.counts[key]||0); }
-function dailyUse(key){ rollDaily(); S.daily.counts[key]=(S.daily.counts[key]||0)+1; }
+/* ★ v5.308: 소진 카운트 확정과 동시에 즉시 저장 — 일일 게이트(광고·던전 입장·소탕·환전·
+   일일 퀘스트 등)는 전부 이 함수를 지나며 입장권·재료 차감도 같은 줄에서 일어난다. 주기
+   저장(5초)만 기다리면 '차감 직후 새로고침'으로 카운트를 롤백해 상한을 우회할 수 있었다. */
+function dailyUse(key){ rollDaily(); S.daily.counts[key]=(S.daily.counts[key]||0)+1; save(); }
 /* ★ v5.161: 일일 '진행' 카운터 — 일일 미션의 진행도용. 종전엔 평생 누적 스탯(S.stats.kills 등)을
    그대로 보고 있어 화면 문구('매일 0시 리셋')와 어긋나고, 2일차부터 로그인 즉시 전 미션이
    완료 상태로 떠 놀 필요 없이 주사위 60개를 매일 수령하던 상태였다(2026-09-12 판정).
@@ -5094,7 +5097,7 @@ const MODALS = {
     b.appendChild(g);
     b.appendChild(el('div','center small mut','튜토리얼 8단계를 완료했습니다. 마지막으로 클래스를 선택하세요.'));
     const btn=el('button','btn gold wide','확인'); btn.style.marginTop='10px';
-    btn.onclick=()=>{ if(!S._missionPaid){ S._missionPaid=true; MISSION_REWARDS.forEach(r=>{ try{ r.act(); }catch(e){} }); }
+    btn.onclick=()=>{ if(!S._missionPaid){ S._missionPaid=true; MISSION_REWARDS.forEach(r=>{ try{ r.act(); }catch(e){} }); save(); }
       sysLog('미션 완료 보상을 수령했습니다.'); refreshHUD();
       if(S.classTrait){ closeModal(); tutPoll(); } else chooseClassTrait(); };
     b.appendChild(btn);
@@ -6143,7 +6146,7 @@ const MODALS = {
           const ok=!bought&&S.ruby>=it.cost;
           const btn=el('button','btn sm'+(ok?' gold':''), bought?'완료':'구매'); if(!ok) btn.disabled=true;
           btn.onclick=()=>{ if(S.claimed.mail[it.id]) return; if(S.ruby<it.cost){ toast('루비가 부족합니다.'); return; }
-            S.ruby-=it.cost; it.give(); S.claimed.mail[it.id]=true; sfx('craft'); toast(`${it.t} 구매`); render(); refreshHUD(); };
+            S.ruby-=it.cost; it.give(); S.claimed.mail[it.id]=true; sfx('craft'); toast(`${it.t} 구매`); render(); refreshHUD(); save(); };   /* ★ v5.308: 루비 차감+지급 확정 즉시 저장 */
           card.mount(btn); });
         let rg='';
         RUBYPKG.forEach(it=>{ if(it.grp!==rg){ rg=it.grp; grpLabel(`${rg} 패키지`); }
@@ -6169,7 +6172,7 @@ const MODALS = {
           btn.onclick=()=>{ if(S.claimed.mail[p.id]) return;
             if(p.cost && S.ruby<p.cost){ toast('루비가 부족합니다.'); return; }
             if(p.cost) S.ruby-=p.cost;
-            p.give(); S.claimed.mail[p.id]=true; sfx('craft'); toast(`${p.t} 수령`); render(); refreshHUD(); };
+            p.give(); S.claimed.mail[p.id]=true; sfx('craft'); toast(`${p.t} 수령`); render(); refreshHUD(); save(); };   /* ★ v5.308: 확정 즉시 저장 */
           card.appendChild(btn); body.appendChild(card);
         });
 
@@ -6681,7 +6684,7 @@ const MODALS = {
         if(S.claimed.attend[i]){ toast('이미 수령한 날짜입니다'); return; }
         if(S.attendLastDate===today()){ toast('출석 체크는 1일 1회만 가능합니다'); return; }
         if(i!==next){ toast(`${next+1}일차부터 순서대로 수령됩니다`); return; }
-        give(); S.claimed.attend[i]=true; S.attendLastDate=today();
+        give(); S.claimed.attend[i]=true; S.attendLastDate=today(); save();   /* ★ v5.308: 출석 확정 즉시 저장 — 롤백 재수령 차단 */
         toast(`${t} 수령`); sysLog(`7일 출석 ${i+1}일차 — ${t}`); openModal('attend'); refreshHUD(); };
       g.appendChild(c); });
     b.appendChild(g);
@@ -7921,11 +7924,11 @@ function giftBox(b, items){
   if(pending.length){
     const all=el('button','btn gold wide',`모두 받기 (${pending.length})`); all.style.marginBottom='8px';
     all.onclick=()=>{ let n=0; pending.forEach(([id,t,ic,give])=>{ if(S.claimed.mail[id]) return; give(); S.claimed.mail[id]=true; n++; });
-      toast(`우편 ${n}건 일괄 수령`); sysLog(`우편 ${n}건을 모두 수령했습니다.`); openModal('mail'); refreshHUD(); };
+      toast(`우편 ${n}건 일괄 수령`); sysLog(`우편 ${n}건을 모두 수령했습니다.`); openModal('mail'); refreshHUD(); save(); };   /* ★ v5.308: 확정 즉시 저장 */
     b.appendChild(all);
   }
   items.forEach(([id,t,ic,give])=>{ const done=S.claimed.mail[id]; const row=el('div','pack'); row.innerHTML=`<div class="pic">${ic}</div><div class="info"><div class="t">${t}${done?' ✓':''}</div></div>`;
-    const btn=el('button','btn sm'+(done?'':' gold'),done?'수령완료':'받기'); btn.disabled=!!done; btn.onclick=()=>{ if(S.claimed.mail[id])return; give(); S.claimed.mail[id]=true; toast(`${t}`); openModal('mail'); refreshHUD(); }; row.appendChild(btn); b.appendChild(row); });
+    const btn=el('button','btn sm'+(done?'':' gold'),done?'수령완료':'받기'); btn.disabled=!!done; btn.onclick=()=>{ if(S.claimed.mail[id])return; give(); S.claimed.mail[id]=true; toast(`${t}`); openModal('mail'); refreshHUD(); save(); }; row.appendChild(btn); b.appendChild(row); });   /* ★ v5.308: 확정 즉시 저장 */
   if(!pending.length) b.appendChild(el('div','center small mut','새 우편이 없습니다.'));
 }
 /* ★ v5.114 제거: questList() — 호출부가 없는 죽은 함수인데, 본문에 참고 자료의
