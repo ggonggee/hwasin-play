@@ -4134,7 +4134,7 @@ function guildCreate(name, cur, cost){
     S.guildJoined=true; S.guildMaster=true; S.guildRank='master'; S.guildName=name; S.guild=name;
     toast(`${name} 창설 완료 · 길드장 버프 적용`);
     sysLog(`<b>${name}</b> 길드를 창설했습니다 · 길드장 버프 — 골드, 경험치 획득량 35% 증가`);
-    refreshHUD(); guildTabNotice(); openModal('guild');
+    refreshHUD(); guildTabNotice(); openModal('guild'); save();   /* ★ v5.309: 창설 비용·길드 상태 확정 즉시 저장 */
   }, { title:'길드 창설', sub:'*길드장 버프* 골드, 경험치 획득량 35% 증가',
        warn:(cur==='ruby'?'루비':'골드')+' '+fmtFull(cost)+' 소모', yes:'창설' });
 }
@@ -4966,7 +4966,7 @@ function craftStart(grade, catKey, item){
   item.recipe.forEach(r=>matSpend(r.k,r.need)); S.gold-=cp.gold;
   S.craft={ grade, slot:item.n, cat:catKey, ic:item.ic, endAt:Date.now()+cp.sec*1000*craftTimeMul(), // ★ B7/G-100 제작시간 버프
             p0:cp.p0, sec:cp.sec, gold:cp.gold, recipe:item.recipe.map(r=>({k:r.k,need:r.need})) };
-  sfx('tap'); toast(`${GRADES[grade].name} ${item.n} 제작 시작`); openModal('forge', item.n); refreshHUD();
+  sfx('tap'); toast(`${GRADES[grade].name} ${item.n} 제작 시작`); openModal('forge', item.n); refreshHUD(); save();   /* ★ v5.309: 제작비·재료 차감 확정 즉시 저장 */
 }
 // 제작 취소 — 재료·골드 100% 환급
 function cancelCraft(){
@@ -5562,7 +5562,7 @@ const MODALS = {
         sfx('awaken'); Battle.refreshParty();
         toast(`각성의 결정 ✦${S.awakenCrystal}! 계정 전체 스탯 +0.5%`);
         sysLog(`<span class="lgd">각성의 결정</span> <span class="lgd">✦${S.awakenCrystal}단계</span> 달성`);
-        openModal('awaken'); refreshHUD();
+        openModal('awaken'); refreshHUD(); save();   /* ★ v5.309: 기록서·강화석 소모 확정 즉시 저장 */
       };
       b.appendChild(cbtn);
     } else if(deep){
@@ -6038,7 +6038,7 @@ const MODALS = {
       const ok=have(cur)>=cost;
       const btn=el('button','btn sm'+(ok?' gold':''), label||'구매'); if(!ok) btn.disabled=true;
       btn.onclick=()=>{ if(have(cur)<cost){ toast(`${CURN[cur]}가 부족합니다.`); return; }
-        payCur(cur,cost); give(); sfx('tap'); toast(`${t} 획득`); render(); refreshHUD(); };
+        payCur(cur,cost); give(); sfx('tap'); toast(`${t} 획득`); render(); refreshHUD(); save(); };   /* ★ v5.309: 구매 확정 즉시 저장 */
       card.querySelector('.sh-left').appendChild(btn);
       body.appendChild(card); return card;
     }
@@ -6079,7 +6079,7 @@ const MODALS = {
             if(it.kind==='sub') S.buffs[it.key]=Math.max(now,S.buffs[it.key]||0)+30*86400000;
             else if(it.kind==='perm') S.buffs[it.key]=true;
             else S[it.key]=500;
-            sfx('tap'); toast(`${it.t} 적용`); render(); refreshHUD(); };
+            sfx('tap'); toast(`${it.t} 적용`); render(); refreshHUD(); save(); };   /* ★ v5.309: 루비 차감·버프 확정 즉시 저장 */
           card.mount(btn); });
 
       /* ── ③ 영웅 (G-102 결정): 개별 영웅 조각 확정 구매 ──
@@ -6128,7 +6128,7 @@ const MODALS = {
               const base=rosterOf(r.class_id)[0];
               if(base && !heroOwned(base.hero_id) && (t.qty>=600 || heroShardAvail(r.hero_id)>=HERO_SHARD_NEED.N)){
                 const st=heroSlot(base.hero_id); st.own=true; st.level=st.level||1; }
-              sfx('tap'); toast(`${label} 획득`); Battle.refreshParty(); render(); refreshHUD(); };
+              sfx('tap'); toast(`${label} 획득`); Battle.refreshParty(); render(); refreshHUD(); save(); };   /* ★ v5.309: 조각팩 구매 확정 즉시 저장 */
             card.appendChild(btn); grid.appendChild(card);
           });
         });
@@ -6229,7 +6229,7 @@ const MODALS = {
           const btn=el('button','btn sm'+(ok?' gold':''), owned?'보유':'구매'); if(!ok) btn.disabled=true;
           btn.onclick=()=>{ if(costumeHas(c.id)) return; if(S.ruby<c.price){ toast('루비가 부족합니다.'); return; }
             S.ruby-=c.price; S.costumeOwn=S.costumeOwn||{}; S.costumeOwn[c.id]=true; S.costumes=(S.costumes||0)+1;
-            sfx('craft'); toast(`${c.name} 획득 — 코스튬 메뉴에서 착용`); render(); refreshHUD(); };
+            sfx('craft'); toast(`${c.name} 획득 — 코스튬 메뉴에서 착용`); render(); refreshHUD(); save(); };   /* ★ v5.309: 구매 확정 즉시 저장 */
           card.mount(btn); });
       }
     }
@@ -6794,7 +6794,7 @@ const MODALS = {
       if(monthlyState().claimed.forgeTrial){ toast('이번 달 도전 완료'); return; }
       styledConfirm(`${FORGE_TRIAL.n}에게 도전할까요?`, ()=>{
         if(monthlyState().claimed.forgeTrial){ toast('이번 달 도전 완료'); return; }
-        monthlyState().claimed.forgeTrial=true;
+        monthlyState().claimed.forgeTrial=true; save();   /* ★ v5.309: 월 1회 소진 확정 즉시 저장 — 롤백 무한 재도전 차단 */
         enterDungeonFight({ name:`용광로 시련 · ${FORGE_TRIAL.n}`, col:'#c9a04a', foeCP:FORGE_TRIAL.foe,
           kind:'boss', dur:45, hpMul:3,
           rewardText:FORGE_REWARD_TXT,
@@ -7220,7 +7220,7 @@ const MODALS = {
         if(S.gold<CONQUEST_COST){ toast(`도전 비용 골드 ${fmtFull(CONQUEST_COST)} 부족`); return; }
         styledConfirm('입장 하시겠습니까?', ()=>{
           if(S.gold<CONQUEST_COST){ toast('골드가 부족합니다.'); return; }
-          S.gold-=CONQUEST_COST;                              // ← 차감은 [예] 이후에만
+          S.gold-=CONQUEST_COST; save();                   // ← 차감은 [예] 이후에만 · ★ v5.309 확정 즉시 저장
           enterDungeonFight({ name:`점령전 · ${c.n}`, col:'#8a9a6a',
             foeCP:Math.round(totalCP()*rnd(0.9,1.15)), kind:'mobs', count:8, dur:22,
             rewardText:`${c.n} 점령 성공 — ${c.buff} 상시 적용`,
@@ -8007,7 +8007,7 @@ function heroDetail(hidOrJob){
     const lvCost = lv*80000; const lb=el('button','btn wide',`레벨업 (골드 ${fmt(lvCost)})`); lb.style.marginTop='8px';
     if(S.gold<lvCost) lb.disabled=true;
     lb.onclick=()=>{ if(S.gold<lvCost){ toast('골드 부족'); return; } S.gold-=lvCost; st.level=(st.level||1)+1;
-      Battle.refreshParty(); toast(`Lv${st.level}`); heroDetail(hid); refreshHUD(); };
+      Battle.refreshParty(); toast(`Lv${st.level}`); heroDetail(hid); refreshHUD(); save(); };   /* ★ v5.309: 레벨업 확정 즉시 저장 */
     body.appendChild(lb);
   }
   else if(_heroTab==='스킬'){
@@ -8246,12 +8246,12 @@ function openEnhance(e){
           if(prot.cur==='hammerN') S.hammerN-=prot.n; else S.hammers-=prot.n;
           toast(`강화 실패 · ${prot.label} ${prot.n} 소모로 파괴 방지`);
         }
-        else { S.equips=S.equips.filter(x=>x!==e); toast('강화 실패 · 장비 파괴…'); Battle.refreshParty(); openModal('inventory'); refreshHUD(); return; }
+        else { S.equips=S.equips.filter(x=>x!==e); toast('강화 실패 · 장비 파괴…'); Battle.refreshParty(); openModal('inventory'); refreshHUD(); save(); return; }   /* ★ v5.309: 파괴(장비 소멸)는 즉시 저장 */
       } else {
         if(useWard && (S.wards||0)>0){ S.wards--; toast('강화 실패 · 하락 방지권으로 단계 유지'); }
         else { e.enh=Math.max(0,e.enh-1); toast('강화 실패 · 단계 하락'); }
       } }
-    Battle.refreshParty(); openEnhance(e); refreshHUD(); };
+    Battle.refreshParty(); openEnhance(e); refreshHUD(); save(); };   /* ★ v5.309: 강화 시도(성공/실패·망치 소모) 확정 즉시 저장 */
   b.appendChild(btn);
   const back=el('button','btn sm','◀ 인벤토리'); back.style.marginTop='8px'; back.onclick=()=>openModal('inventory'); b.appendChild(back);
 }
@@ -8377,7 +8377,7 @@ function summonRun(count, fixJob){
       const st=heroSlot(base.hero_id); st.own=true; st.level=st.level||1; unlocked.push(base);
     }
   }
-  Battle.refreshParty(); tutEvent('hsum'); return { gained, legend, unlocked };
+  Battle.refreshParty(); tutEvent('hsum'); save(); return { gained, legend, unlocked };   /* ★ v5.309: 소환 지급 확정 즉시 저장 */
 }
 /* ★ v5.4: 등급 공용풀 폐지(v4.3) 잔재 — `S.mats[g]++` (g='N'/'R'/'E') 로 적재하고 있었다.
    matAvail/matSpend 는 실제 재료명 키만 인식하므로, 이렇게 쌓인 값은 대장간에서 조회도 소비도 안 된다.
@@ -8386,7 +8386,7 @@ function summonRun(count, fixJob){
 function matSummon(n){ n=n||20; const got={}, list=[];
   for(let i=0;i<n;i++){ const g=pick(['N','N','R','R','E']); const m=matGainGrade(g,1);
     const k=m?m.k:g; got[k]=(got[k]||0)+1; list.push({ k, g }); }   // 상자를 열면 실제 재료가 나오도록 키까지 전달
-  tutEvent('msum'); return { mats:got, list }; }
+  tutEvent('msum'); save(); return { mats:got, list }; }   /* ★ v5.309: 소환 지급 확정 즉시 저장 */
 function playSummon(res){
   const fx=$('#summon-fx'), rc=$('#runeCircle'); rc.textContent = res.legend?'🌟':'✨'; fx.classList.toggle('legend', !!res.legend); fx.classList.add('on'); sfx(res.legend?'legendary':'summon');
   setTimeout(()=>{ fx.classList.remove('on');

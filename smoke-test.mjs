@@ -681,8 +681,11 @@ step('오프라인 정산 수령 — 지급·소진·즉시 저장', ()=>{
    (투기장 롤오버)·v5.307(오프라인 수령)에 이어 전수 스캔에서 15곳 더 발견됐다(차감 직후
    5초 내 새로고침 = 상한 우회/무한 수령 창). 소진 게이트 9곳은 전부 dailyUse 를 지나므로
    관문에서 일괄 저장하고, claimed·루비 확정 6곳은 각 onclick 에서 저장한다.
-   ①dailyUse 즉시 save 실행 스파이 ②6곳 앵커 라인 save 소스 정합. */
-step('소진·수령 즉시 저장 — dailyUse 관문 + 수령·구매 6곳', ()=>{
+   ★ v5.309: 2차 스캔(클로저 결제·공용 함수)에서 13곳 추가 — 소환(summonRun/matSummon
+   관문)·상점(mkBuy)·제작 시작·각성의 결정·코스튬·버프 구매·조각팩·길드 창설·점령전 입장·
+   영웅 레벨업·장비 강화(파괴 포함)·용광로 월 1회 소진.
+   ①dailyUse 즉시 save 실행 스파이 ②12곳 앵커 라인 save 소스 정합. */
+step('소진·수령 즉시 저장 — dailyUse 관문 + 수령·구매 12곳', ()=>{
   const errs=[];
   ev('globalThis.__v3o=save; globalThis.__v3n=0; save=function(){globalThis.__v3n++;};');
   try{
@@ -700,6 +703,13 @@ step('소진·수령 즉시 저장 — dailyUse 관문 + 수령·구매 6곳', (
     'S.claimed.attend[i]=true; S.attendLastDate=today(); save();',
     '우편 ${n}건 일괄 수령',
     'give(); S.claimed.mail[id]=true; toast(`${t}`)',
+    /* v5.309 — 2차 스캔(공용 관문·클로저 결제) */
+    "tutEvent('hsum'); save();",
+    "tutEvent('msum'); save();",
+    'payCur(cur,cost); give();',
+    'monthlyState().claimed.forgeTrial=true; save();',
+    'openEnhance(e); refreshHUD(); save();',
+    'openModal(\'forge\', item.n); refreshHUD(); save();',
   ];
   for(const a of anchors){
     const line=src.split('\n').find(l=>l.includes(a));
