@@ -648,6 +648,35 @@ step('오프라인 정산 8h 상한 — 부팅·복귀 양 경로 + 60초 임계
     S.offlinePending=before; }
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ v5.307 회귀: 오프라인 정산 [수령] — 실물 clock QA(3일 미접속 부팅)에서 발견: 수령
+   onclick 이 상태만 바꾸고 save() 를 안 불러, 컴백 유저가 [수령] 직후 창을 닫으면 세이브에
+   offlinePending 이 남아 재접속에서 같은 금액을 또 수령할 수 있었다(중복 지급). 지급·소진·
+   즉시 저장(save 스파이)을 modal render → 버튼 클릭 경로로 실증한다(v5.306 투기장
+   롤오버와 같은 '상태만 바꾸고 저장 안 함' 유형). */
+step('오프라인 정산 수령 — 지급·소진·즉시 저장', ()=>{
+  const S=ev('S');
+  const bak=JSON.stringify({ offlinePending:S.offlinePending, gold:S.gold });
+  const errs=[];
+  ev('globalThis.__oOS=toast; toast=function(){};');
+  ev('globalThis.__oOSv=save; globalThis.__osN=0; save=function(){globalThis.__osN++;};');
+  try{
+    S.offlinePending=1000000;
+    const g0=S.gold;
+    const b=new Node2('div'); ev('MODALS').settle.render(b);
+    const all=[]; (function walk(n){ (n.children||[]).forEach(c=>{ all.push(c); walk(c); }); })(b);
+    const btn=all.find(c=>String(c._text||c._html||'')==='수령');
+    if(!btn||!btn.onclick) throw new Error('[수령] 버튼 미발견');
+    btn.onclick();
+    if(S.gold<=g0) errs.push('수령 후 골드 미증가(지급 안 됨)');
+    if(S.offlinePending!==0) errs.push('offlinePending 미소진: '+S.offlinePending);
+    if(ev('globalThis.__osN')!==1) errs.push('수령 즉시 save 미호출(v5.307 회귀): '+ev('globalThis.__osN'));
+  } finally {
+    ev('toast=globalThis.__oOS');
+    ev('save=globalThis.__oOSv');
+    Object.assign(S, JSON.parse(bak));
+  }
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ v5.9: 몬스터 종 수 검증 — 등급당 5종, 총 20종(설계 기준). 마릿수 선택기 기본값 30.
    종전 120종(등급당 30종)은 "30마리" 마릿수 선택기를 도감 종 수로 오독한 것이었다. */
 step('몬스터 종 수 = 20 (등급당 5종) + 마릿수 기본 30', ()=>{

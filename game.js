@@ -6908,7 +6908,11 @@ const MODALS = {
     b.appendChild(two);
     if(S.offlinePending>0){
       const btn=el('button','btn gold wide','수령'); btn.style.marginTop='6px';
-      btn.onclick=()=>{ addGold(S.offlinePending); toast(`오프라인 골드 +${fmt(S.offlinePending)}`); sysLog(`오프라인 방치 보상 +${fmt(S.offlinePending)}G`); S.offlinePending=0; closeModal(); refreshHUD(); refreshClaimBadges(); };
+      /* ★ v5.307: 수령 직후 save() — 종전엔 주기 저장을 기다려야 해서, 컴백 유저가 [수령]을
+         누르고 곧장 창을 닫으면 세이브에 offlinePending 이 그대로 남아 재접속에서 같은 금액을
+         또 수령할 수 있었다(중복 지급. v5.306 투기장 롤오버와 같은 유형 — 상태만 바꾸고
+         저장을 안 한 사례). 지급이 일어난 자리에서 즉시 저장한다. */
+      btn.onclick=()=>{ addGold(S.offlinePending); toast(`오프라인 골드 +${fmt(S.offlinePending)}`); sysLog(`오프라인 방치 보상 +${fmt(S.offlinePending)}G`); S.offlinePending=0; closeModal(); refreshHUD(); refreshClaimBadges(); save(); };
       b.appendChild(btn);
     } else b.appendChild(el('div','center mut small','현재 온라인 실시간 수급 중 · 접속 종료 시 자동 누적됩니다.'));
   }},
