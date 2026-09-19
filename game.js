@@ -8516,12 +8516,17 @@ function arenaWeekKey(d){
 }
 function arenaWeekRoll(){
   const k=arenaWeekKey();
-  if(!S.arenaWeek){ S.arenaWeek=k; return false; }   // 구세이브·첫 진입은 현재 주차로 봉인(즉시 초기화 금지)
+  /* ★ v5.306: 키가 바뀌는 두 경로(봉인·롤오버)에서 즉시 save — 종전엔 S만 바꾸고 저장을
+     안 해서, 리셋 토스트를 보고 바로 창을 닫으면 세이브에 반영이 안 되고 재접속마다
+     '랭킹이 초기화되었습니다' 토스트가 반복됐다. weeklyState/monthlyState 롤오버의
+     즉시 save 관례와 같은 패턴으로 맞춘다(점수 리셋 자체는 멱등이라 피해는 없었음). */
+  if(!S.arenaWeek){ S.arenaWeek=k; save(); return false; }   // 구세이브·첫 진입은 현재 주차로 봉인(즉시 초기화 금지)
   if(S.arenaWeek===k) return false;
   S.arenaWeek=k;
   S.arenaPts=0; S.arenaTier=arenaTierOf(0); S.arenaStreak=0; S.arenaRank=ARENA_RANK_RESET;
   if(S.arenaSession) { S.arenaSession.w=0; S.arenaSession.l=0; }
   toast('투기장 랭킹이 초기화되었습니다.');
+  save();
   return true;
 }
 /* ★ B6/G-87: 대전 화면 DOM 3분할 헤더 — 좌(내 닉/내 점수 2줄) · 중앙(대형 mm:ss) · 우(상대 닉/상대 티어 2줄).

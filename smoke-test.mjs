@@ -1464,6 +1464,63 @@ step('의뢰 리듬 날짜 경계(2월 말·연말 월·ISO 주 비대칭)', ()=
   if(errs.length) throw new Error(errs.join(' | '));
 });
 
+/* ★ 2026-09-19 회귀: 투기장 주간 롤오버 — 위 스텝(의뢰 리듬)은 ISO 월요일 00시 경계만 본다.
+   투기장은 원작 안내문 벤치마크(N2)로 '매주 월요일 12시'라 경계가 다르다. 시간 의존 경로
+   전수 조사(2026-09-19)에서 이 경로가 회귀 무커버로 발견돼 추가했다:
+   ①경계 산술(arenaWeekKey 는 인자 주입 가능 — 결정적) ②구세이브 '' 봉인(첫 진입 즉시
+   초기화 금지) ③주차 변경 시 1회 리셋+토스트 ④같은 주 재진입 금지.
+   기대 주차는 Node 사전 검증(2026-09-19): 일 밤·월 11:59 → 전 주, 월 12:00 → 새 주. */
+step('투기장 주간 롤오버 — 월요일 12시 경계·구세이브 봉인·점수 리셋', ()=>{
+  const errs=[];
+  const arith=[
+    [2026,8,20,23,59,'2026-9-14'],   // 일요일 밤 — 전 주차
+    [2026,8,21,11,59,'2026-9-14'],   // 월요일 11:59 — 아직 전 주차
+    [2026,8,21,12,0 ,'2026-9-21'],   // 월요일 12:00 정각 — 새 주차
+    [2026,8,22,10,0 ,'2026-9-21'],   // 화요일 아침 — 유지
+  ];
+  for(const [y,m,d,h,mi,want] of arith){
+    const got=ev(`arenaWeekKey(new Date(${y},${m},${d},${h},${mi},0))`);
+    if(got!==want) errs.push(`경계 ${y}-${m+1}-${d} ${h}:${mi} → ${got}≠${want}`);
+  }
+  const S=ev('S');
+  const bak=JSON.stringify({ arenaWeek:S.arenaWeek, arenaPts:S.arenaPts, arenaTier:S.arenaTier,
+    arenaStreak:S.arenaStreak, arenaRank:S.arenaRank, arenaSession:S.arenaSession });
+  ev('globalThis.__oAT=toast; globalThis.__atN=0; toast=function(){globalThis.__atN++;};');
+  ev('globalThis.__oSv=save; globalThis.__svN=0; save=function(){globalThis.__svN++;};');
+  try{
+    /* vm Date 를 2026-09-21(월) 12:01 로 고정 — arenaWeekRoll 은 무인자 arenaWeekKey() */
+    ev(`(function(){ const _D=Date; globalThis.__realDate=_D;
+      Date=class extends _D{ constructor(...a){ if(a.length===0) super(2026,8,21,12,1,0); else super(...a); }
+        static now(){ return new _D(2026,8,21,12,1,0).getTime(); } }; })()`);
+    /* ② 구세이브 봉인 — ''면 현재 주차로 봉인만 하고 리셋 금지 */
+    Object.assign(S,{ arenaWeek:'', arenaPts:5000, arenaTier:3, arenaStreak:5, arenaRank:500, arenaSession:{w:2,l:1,t:0} });
+    if(ev('arenaWeekRoll()')!==false) errs.push('봉인이 true 반환');
+    if(S.arenaWeek!=='2026-9-21') errs.push('봉인 키 미설정: '+S.arenaWeek);
+    if(S.arenaPts!==5000) errs.push('봉인에 점수 리셋(진행도 파괴): '+S.arenaPts);
+    if(ev('globalThis.__atN')!==0) errs.push('봉인에 토스트 발화');
+    if(ev('globalThis.__svN')!==1) errs.push('봉인 즉시 save 미호출: '+ev('globalThis.__svN'));
+    /* ③ 주차 변경 — 1회 리셋 + 토스트 1번 */
+    S.arenaWeek='2026-9-14';
+    if(ev('arenaWeekRoll()')!==true) errs.push('월 12시 롤오버 false');
+    if(S.arenaWeek!=='2026-9-21') errs.push('롤오버 키 미갱신: '+S.arenaWeek);
+    if(S.arenaPts!==0||S.arenaStreak!==0||S.arenaRank!==ev('ARENA_RANK_RESET')) errs.push('점수/연승/랭크 리셋 미동작 pts='+S.arenaPts+' rank='+S.arenaRank);
+    if(S.arenaTier!==ev('arenaTierOf(0)')) errs.push('티어 리셋 미동작: '+S.arenaTier);
+    if(!S.arenaSession||S.arenaSession.w!==0||S.arenaSession.l!==0) errs.push('세션 리셋 미동작');
+    if(ev('globalThis.__atN')!==1) errs.push('롤오버 토스트 미발화/중복: '+ev('globalThis.__atN'));
+    if(ev('globalThis.__svN')!==2) errs.push('롤오버 즉시 save 미호출(v5.306 회귀): '+ev('globalThis.__svN'));
+    /* ④ 같은 주 재진입 — 재리셋 금지 */
+    if(ev('arenaWeekRoll()')!==false) errs.push('같은 주 재롤오버 true');
+    if(ev('globalThis.__atN')!==1) errs.push('재진입 토스트 추가 발화');
+    if(ev('globalThis.__svN')!==2) errs.push('변화 없는 재진입에 save');
+  } finally {
+    ev('if(globalThis.__realDate){ Date=globalThis.__realDate; delete globalThis.__realDate; }');
+    ev('toast=globalThis.__oAT');
+    ev('save=globalThis.__oSv');
+    Object.assign(S, JSON.parse(bak));
+  }
+  if(errs.length) throw new Error(errs.join(' | '));
+});
+
 /* ★ v5.284 회귀: 7일 출석 주기 반복 — 완주(7칸 전부 수령) 다음 날 rollDaily 가
    claimed.attend 를 리셋해 1일차가 다시 열리고, 도중 미수령(이어받기 중)이면
    리셋하지 않는다. 종전 리셋 경로가 없어 완주자의 출석 보상이 영구히 끊겼다. */
