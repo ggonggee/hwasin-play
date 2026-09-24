@@ -1590,6 +1590,7 @@ function freshState(){
     towerBox:0,       // 웨이브 도달 상자 — [교환] 으로 재료 환전
     dgSeen:{},        // ★ 2026-09-25(워크플로 #11): 던전 계열별 첫 클리어 기록 — [즉시 결과] 노출 조건(dgSkipOK)
     awayBank:{ days:0, gold:0, stones:0, box:0, hi:0 },   // ★ 2026-09-25(워크플로 #26): 복귀 적립(부재 최대 7일분 탑 소탕·잔불 몫) — awayAccrue
+    _awayFrom:'',     // ★ #18(2차): 숨김 탭 중 날짜가 넘어간 경우의 부재 적립 기준일(awayCatchUp 이 소비) — 이관 플래그 아님
     _wbdmg:0,        // 월드보스 누적 데미지(서버 랭킹 반영)
     wbScore:0,        // ★ v4.1 A1-2: 월드보스 누적 점수(정수 'N점') — 보상과 무관한 별도 적립
     ddDay:null,       // 요일던전에서 선택 중인 요일(null=오늘)
@@ -1646,11 +1647,26 @@ function freshState(){
    백업은 localStorage 에 남아 수동 복구가 가능하고, 신규 진행 흐름은 종전과 동일하다. */
 function load(){
   claimTab();   // ★ 2026-09-24: 세이브를 읽는 창이 저장 주도권을 가진다(다른 창은 저장을 멈춘다 — claimTab 주석)
-  try{ const raw = localStorage.getItem(SAVE_KEY); if(raw){ S = JSON.parse(raw); mergeDefaults(); computeOffline(); return; } }catch(e){
-    try{ const raw2 = localStorage.getItem(SAVE_KEY);
-      if(raw2) localStorage.setItem(SAVE_KEY+'_corrupt_'+Date.now(), raw2);
-      setTimeout(()=>toast('⚠ 세이브가 손상되어 새로 시작합니다. 백업을 보관했습니다.'), 500);
-    }catch(_){}
+  /* ★ 2026-09-25(워크플로 2차 #17): 파싱 실패와 **이관 실패를 나눈다**. 종전엔 JSON.parse·mergeDefaults·computeOffline 을 try 하나로 묶어,
+     유효한 JSON 인데 이관(mergeDefaults — 이관 10여 개)이 예외를 내도 '손상'으로 보고 새 게임으로 시작해 5초 뒤 정상 세이브를 덮었다(실측:
+     골드 7.7억 세이브의 필드 하나만 이상해도 초기화, 백업 키는 읽는 코드 0곳). 이관 실패는 **코드 결함**이다 — 새 게임으로 덮으면
+     모든 이용자가 초기화된다. ⚠ 이관 실패 시 슬롯을 덮지 마라·봉인(_saveSealed)을 풀지 마라: 원본은 슬롯과 _migfail_ 키에 그대로 두고 복구 화면을 띄운다. */
+  let raw=null; try{ raw=localStorage.getItem(SAVE_KEY); }catch(e){}
+  if(raw){
+    let obj=null; try{ obj=JSON.parse(raw); }catch(e){}
+    if(obj && typeof obj==='object' && !Array.isArray(obj)){
+      S=obj;
+      try{ mergeDefaults(); computeOffline(); return; }
+      catch(e){
+        try{ localStorage.setItem(SAVE_KEY+'_migfail_'+Date.now(), raw); }catch(_){}
+        _saveSealed=true; _loadFailRaw=raw;
+        try{ console.error('load: 이관 실패 —', e); }catch(_){}
+      }
+    } else {
+      try{ localStorage.setItem(SAVE_KEY+'_corrupt_'+Date.now(), raw);
+        setTimeout(()=>toast('⚠ 세이브가 손상되어 새로 시작합니다. 백업을 보관했습니다.'), 500);
+      }catch(_){}
+    }
   }
   S = freshState();
   S.lastSeen = Date.now();
@@ -1805,6 +1821,28 @@ let _saveFailFlag = false;
    그래서 가져오기 직전에 이 플래그를 세워 이후의 모든 save() 를 무효화한다.
    ⚠ 이 플래그를 끄는 코드를 넣지 마라 — 세운 뒤에는 곧바로 새로고침해 페이지가 사라지는 것이 전제다. */
 let _saveSealed = false;
+let _loadFailRaw = null;   // ★ 2026-09-25(#17): 이관 실패한 세이브 원본 — 복구 화면(showLoadFail)이 [원본 복사]에 쓴다
+/* 이관 실패 복구 화면 — 다중 창 잠금(#tab-lock) 구조를 재사용해 조작을 막는다(봉인된 채 플레이해 진행이 저장되지 않는 줄 모르고 넘어가지 않게). */
+function showLoadFail(){
+  try{
+    const host=document.getElementById('device')||document.body;
+    const ov=el('div', null, `<div class="tl-box"><div class="tl-ic">⚠️</div><b>세이브를 읽는 중 문제가 생겼습니다</b>`
+      + `<div class="tl-msg">진행도 원본은 그대로 보관돼 있고, 덮어쓰지 않도록 저장을 멈췄습니다.<br>[원본 복사]로 보관한 뒤 다시 시도해 보세요.</div></div>`);
+    ov.id='tab-lock';
+    const cp=el('button','btn gold wide','원본 복사');
+    cp.onclick=()=>{ const t=_loadFailRaw||''; let ok=false;
+      try{ const ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); ok=document.execCommand&&document.execCommand('copy'); ta.remove(); }catch(e){}
+      if(!ok && navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(t).then(()=>toast('복사했습니다'),()=>toast('복사 실패')); return; }
+      toast(ok?'복사했습니다':'복사 실패'); };
+    const rt=el('button','btn wide','다시 시도'); rt.style.marginTop='6px'; rt.onclick=()=>location.reload();
+    const nw=el('button','btn red wide','새로 시작'); nw.style.marginTop='6px';
+    /* 두 번 눌러 확정 — styledConfirm 은 #modal-root(z20) 안이라 이 화면(#tab-lock z≥71) 뒤에 깔려 누를 수 없다. */
+    let armed=false;
+    nw.onclick=()=>{ if(!armed){ armed=true; nw.textContent='한 번 더 누르면 새로 시작 (원본은 백업 키에 남음)'; return; }
+      try{ localStorage.removeItem(SAVE_KEY); }catch(e){} location.reload(); };
+    ov.firstChild.append(cp, rt, nw); host.appendChild(ov);
+  }catch(e){}
+}
 /* ★ 2026-09-24: 다중 창 잠금 — 한 번에 한 창만 저장한다.
    같은 브라우저에서 게임을 두 창으로 열면(백그라운드에 남은 탭 + 메신저 링크로 새로 연 탭이 흔하다)
    두 창이 세이브 하나를 5초마다 번갈아 덮어썼다. 새 창에서 한 시간 진행해도, 옛 창의 자동저장·
@@ -1911,7 +1949,11 @@ function awayAccrue(prevDs, nowDs){
 function rollDaily(){
   const t=today(); if(S.daily.date===t) return;
   const first = !S.daily.date;
-  if(!first) awayAccrue(S.daily.date, t);   // ★ #26 — S.daily.date 를 덮어쓰기 전에(직전 접속일 기준)
+  /* ★ #26 — S.daily.date 를 덮어쓰기 전에(직전 접속일 기준). #18(2차): 숨김 중 날짜 전환은 기준일만 붙잡는다(awayCatchUp 이 보일 때 적립). */
+  if(!first){ const hid=(typeof document!=='undefined' && document.hidden);
+    if(hid){ if(!S._awayFrom) S._awayFrom=S.daily.date; }
+    else { const n=awayAccrue(S._awayFrom||S.daily.date, t); S._awayFrom='';
+      if(n>0 && _loopOn) setTimeout(()=>toast(`🏠 비운 ${n}일분 탑·미궁 몫을 적립했습니다 · 좌상단 시계에서 수령`), 300); } }
   if(!first) S.day=(S.day||1)+1;   // 최초 1회(빈 문자열)는 신규 접속이라 일차를 올리지 않는다
   S.daily.date=t; S.daily.counts={};
   /* ★ N2: 안내문 'ⓘ 매일 입장권 5개가 자동충전 됩니다.' — 날짜가 실제로 바뀐 경우에만 배치 지급한다.
@@ -2020,6 +2062,7 @@ function huntUpgradeTier(){
   const safe=huntSafeTier();
   return safe > Math.max(S.huntTier||0, S.huntHintSeen|0) ? safe : -1;
 }
+function heroFuseAvail(){ return !!(S && S.seenTutorial) && HERO_ROSTER.some(r=>heroFuseReady(r.hero_id)); }   // #6(2차) 영웅 버튼 점 조건
 function refreshClaimBadges(){
   /* ★ v5.269: 미수령 오프라인 정산 배지 — offlinePending(방치 골드)이 쌓여 있어도
      timepod 을 누르기 전엔 표시가 없어 보상 존재를 몰랐다. 점으로 상시 알리고
@@ -2033,6 +2076,9 @@ function refreshClaimBadges(){
   const m=mailPending();   // ★ 2026-09-25: 미수령 우편
   _setDot(document.querySelector('[data-modal="mail"]'), m);
   _setDot(document.querySelector('[data-modal="monster"]'), huntUpgradeTier()>=0);   // ★ 2026-09-25(워크플로 #6): 더 좋은 안전 사냥터
+  /* ★ 2026-09-25(워크플로 2차 #6): 합성 가능한 영웅이 있으면 영웅 버튼 점 — 튜토리얼 직후 이미 조각 185/80 이 모여 있어도 알림이 없었다(실측).
+     튜토리얼 중엔 끈다(7단계 손가락이 [합성]을 짚는다). 합성은 레벨 100% 승계의 순수 상승이라 켜진 채 남는 점이 없다. */
+  _setDot(document.querySelector('[data-modal="hero"]'), heroFuseAvail());
   _setDot(document.getElementById('btnMenuToggle'), q||a||n||od||m);
   /* ★ v5.271: 칭호 개선 가능 — [data-modal="titles"] 항목(드로어 내 칭호). ☰ 합산. */
   titleSyncOwn();   // ★ 2026-09-25: 달성한 칭호를 보유로 기록(5초 주기)
@@ -5673,6 +5719,9 @@ function saveImport(){
       try{ obj=JSON.parse(raw); }
       catch(e){ toast('형식이 올바르지 않습니다 (JSON 아님)'); return; }
       if(!looksLikeSave(obj)){ toast('이 게임의 진행도 데이터가 아닙니다'); return; }
+      /* ★ 2026-09-25(#17): 이관을 미리 돌려 본다 — 이관이 못 견디는 데이터(예 stats:null)를 쓰면 다음 로드에서 복구 화면에 갇힌다. S 는 원복(통과하면 곧 새로고침). */
+      { const keep=S; let ok=true; try{ S=JSON.parse(JSON.stringify(obj)); mergeDefaults(); }catch(e){ ok=false; } finally{ S=keep; }
+        if(!ok){ toast('이 진행도 데이터는 형식이 맞지 않아 불러올 수 없습니다'); return; } }
       styledConfirm('지금 진행도를 덮어씁니다. 계속할까요?', ()=>{
         try{
           localStorage.setItem(SAVE_KEY+'_before_import_'+Date.now(), saveSnapshot());   // 되돌릴 수 있게
@@ -9305,6 +9354,7 @@ function resolveCraft(forceSuccess){
       if(eqb.parentNode) eqb.parentNode.insertBefore(done, eqb); eqb.remove();
       Battle.refreshParty(); refreshHUD(); save(); };
     b.appendChild(eqb);
+    b.appendChild(el('div','small mut center','홈 출격 = 보유 중 가장 강한 영웅(자동) · 고정하려면 영웅 [배치]'));   // #6(2차): 리더가 바뀌면 장비가 따라가지 않는다는 전제를 미리 알린다
   }
   const again=el('button','btn'+((canEq||gNext)?'':' gold')+' wide','다시 제작'); again.style.marginTop=canEq?'6px':'10px';   // 장착·다음 길잡이가 주 행동일 땐 금색을 양보
   again.onclick=()=>{ closeSub();
@@ -9961,10 +10011,32 @@ function tickForge(){
   if(done && bar.parentNode && bar.parentNode.classList) bar.parentNode.classList.remove('run');
   const fin=document.getElementById('forgeFin'); if(fin && done && fin.disabled){ fin.disabled=false; fin.classList.add('gold'); }
 }
+/* ★ 2026-09-25(워크플로 2차 #6): 홈 출격(리더)은 편성이 비어 있으면 '보유 중 가장 강한 영웅'으로 **조용히** 바뀐다(party 정렬). 그 순간 옛 리더에게
+   입힌 장비는 홈·탑 솔로 전투에서 빠지는데(장비는 영웅 귀속·해제 UI 없음) 아무 안내가 없었다(실측: 합성 직후 리더 교체 → 방금 장착한 지팡이·방패 제외).
+   표시 전용 — 편성이 비었고 옛 리더가 장비를 입고 있을 때만, 60초 쿨다운(레벨업으로 리더가 오가는 소음 방지). 로드 직후·전투 중엔 무음. */
+let _leadSeen=null, _leadToastAt=0;
+function tickLeadWatch(){
+  try{
+    if(!S || !S.seenTutorial) return;
+    if(Battle.inDungeon && Battle.inDungeon()) return;
+    const p=party()[0], id=p && p.hero_id; if(!id) return;
+    if(_leadSeen===null){ _leadSeen=id; return; }
+    if(id===_leadSeen) return;
+    const prev=_leadSeen; _leadSeen=id;
+    const fs=(S.formations && S.formations[S.formActive||'1']) || {};
+    if(Object.values(fs).some(Boolean)) return;   // 이용자가 편성으로 고정한 경우
+    const n=(S.equips||[]).filter(e=>e.equipped && e.heroId===prev).length;
+    const now=Date.now(); if(n<=0 || now-_leadToastAt<60000) return;
+    _leadToastAt=now;
+    const pn=(HERO_BY_ID[prev]||{}).name||'';
+    toast(`홈 출격이 <b>${p.name}</b>(으)로 바뀌었습니다 — 가장 강한 영웅이 자동 출격 · 장비 ${n}개는 ${pn} 착용 중 · 고정은 영웅 [배치]`);
+    sysLog(`홈 출격 교체: ${pn} → ${p.name} (편성이 비어 있으면 가장 강한 영웅이 자동 출격합니다)`);
+  }catch(e){}
+}
 function gameLoop(ts){
   const dt=Math.min(0.1,(ts-lastFrame)/1000||0); lastFrame=ts;
   idleTick(dt); chatTick(dt); craftAutoCheck(); tutFingerTick();
-  hudT-=dt; if(hudT<=0){ hudT=0.5; refreshHUD(); tickClock(); tickForge(); reviveHUDTick(); tickDgSkip(); syncGuideBannerFight(); }
+  hudT-=dt; if(hudT<=0){ hudT=0.5; refreshHUD(); tickClock(); tickForge(); reviveHUDTick(); tickDgSkip(); syncGuideBannerFight(); tickLeadWatch(); }
   requestAnimationFrame(gameLoop);
 }
 /* ★ 2026-09-25(워크플로 2차 #13): 주·월 롤오버를 5초 주기에서도 잡는다 — v5.272 는 접속 시점만 잡아, 창을 켠 채 월요일 0시·매월 1일 0시를 넘기면
@@ -9972,7 +10044,8 @@ function gameLoop(ts){
    _loopOn(홈 진입 뒤에만 true) + 보이는 동안만 — 숨김 중엔 rAF 가 멈춰 진행이 쌓이지 않으므로 복귀 첫 틱에 잡아도 손실이 없다.
    rollDaily 에 넣지 않는 이유: load 중에도 불려 타이틀에서 알림이 사라지고 시뮬·smoke 경로에 부작용이 섞인다. 멱등(키가 같으면 무동작).
    refreshClaimBadges 보다 앞 — 같은 틱의 배지가 새 주 기준으로 판정된다. 월 경계 탑 정산 알림도 이 세션에 뜬다(flushLoginToasts). */
-setInterval(()=>{ if(_loopOn && !document.hidden){ try{ weeklyState(); monthlyState(); flushLoginToasts(); }catch(e){} } save(); refreshClaimBadges(); try{ updateGuideBanner(); }catch(e){} }, 5000);   // ★ 2026-09-25: 골드가 차면 배너가 '부족'에서 원래대로(글자는 바뀔 때만 씀)   /* ★ v5.162: 배지 갱신 동반 — 전투 중 미션 달성도 5초 안에 점이 켜진다 */
+setInterval(()=>{ { const now=Date.now(); _wallGapCheck(_tickWall, now); _tickWall=now; }   // #18(2차) 절전 간격 — save 앞(저장되는 lastSeen 이 정산 뒤 '지금')
+  if(_loopOn && !document.hidden){ try{ weeklyState(); monthlyState(); flushLoginToasts(); }catch(e){} } save(); refreshClaimBadges(); try{ updateGuideBanner(); }catch(e){} }, 5000);   // ★ 2026-09-25: 골드가 차면 배너가 '부족'에서 원래대로(글자는 바뀔 때만 씀)   /* ★ v5.162: 배지 갱신 동반 — 전투 중 미션 달성도 5초 안에 점이 켜진다 */
 /* ★ v5.173: 백그라운드 탭 복귀 정산 — rAF 는 백그라운드에서 스로틀돼 방치 수입이 멈추는데,
    5초 저장 타이머는 살아 있어 lastSeen 이 계속 갱신된다 → 숨김 구간은 오프라인 정산
    (computeOffline, 세션 로드 시 1회)에도 못 들어가 완전히 증발했다.
@@ -9995,11 +10068,29 @@ document.addEventListener('visibilitychange', ()=>{
   /* ★ 2026-09-25(리뷰 확정): 잠긴 창(loseTab)·가져오기/초기화 직후 새로고침 대기 창은 저장하지 않는다 — 받을 수 없는 '복귀 정산' 토스트를 띄우지 않는다.
      _saveSealed 는 한 번 켜지면 새로고침으로만 풀리고, 새로고침 뒤엔 computeOffline 이 저장된 lastSeen 으로 정산하므로 건너뛰어도 잃는 정산이 없다. */
   if(_saveSealed) return;
+  _tickWall=Date.now();   // #18(2차): 절전 간격 검사 기준 — 숨김 정산과 구간이 겹치지 않게 전환마다 새로 잡는다
   if(document.hidden){ _tabHideTs=Date.now(); return; }
   const ts=_tabHideTs; _tabHideTs=0;
   if(ts) _visibilitySettle(ts, Date.now());
   if(S) S.lastSeen=Date.now();   // ★ 2026-09-25: 메모리만 갱신(설정 '마지막 저장'이 숨김 시각으로 보이지 않게) — 세이브는 다음 save 가 씀
+  awayCatchUp();   // #18(2차): 숨긴 채 날을 넘겼다면 보이는 지금 부재 적립
 });
+/* ★ 2026-09-25(워크플로 2차 #18): 창을 닫지 않은 부재의 정산 사각.
+   ① 화면을 켠 채 절전(덮개 닫기)하면 visibilitychange 가 없고 rAF dt 는 0.1초로 잘려, 3시간·48시간 뒤에도 방치 골드 0 이었다(실측) —
+      5초 주기에서 벽시계 간격이 60초를 넘으면(보이는 상태·숨김 정산 대기 없음) 그 구간을 복귀 정산과 같은 식으로 쌓는다. 멈춘 구간엔 실시간 수입이 없어 이중 정산 없음.
+   ② 숨김 탭으로 며칠 두면 5초 주기가 매일 rollDaily 를 돌려 부재 적립의 '빠진 날'이 0 이 됐다(닫았다 열면 2일 적립인데 숨김이면 0) —
+      숨김 중 날짜 전환은 적립 기준일(S._awayFrom)만 붙잡아 두고, 보이게 된 순간(또는 다음 부팅) 그 날부터 적립한다. hi·7일 상한·금액 확정 규칙은 awayAccrue 그대로. */
+let _tickWall=Date.now();
+function _wallGapCheck(prev, now){ if(_saveSealed || (typeof document!=='undefined' && document.hidden) || _tabHideTs) return 0; return (now-prev>60000) ? _visibilitySettle(prev, now) : 0; }
+function awayCatchUp(){
+  try{
+    if(!S || !S._awayFrom || (typeof document!=='undefined' && document.hidden) || !S.daily || S.daily.date!==today()) return 0;
+    const from=S._awayFrom; S._awayFrom='';
+    const n=awayAccrue(from, today());
+    if(n>0 && _loopOn) toast(`🏠 비운 ${n}일분 탑·미궁 몫을 적립했습니다 · 좌상단 시계에서 수령`);
+    refreshClaimBadges(); save(); return n;
+  }catch(e){ return 0; }
+}
 
 /* 접속 보상(rollDaily 가 load 중 지급하고 큐에 쌓은 알림) 표시. {msg} 객체는 머리말 없이 — 접속 보상이 아닌 알림(탑 월간 정산 등)에
    '🎁 N일차 접속 보상 —' 이 붙던 것(검증 지적). 보상은 이미 지급됐으므로 여기서 지급하지 않는다. */
@@ -10226,6 +10317,8 @@ window.addEventListener('unhandledrejection', (e)=>{ reportFatal('promise', e.re
 
 window.addEventListener('DOMContentLoaded',()=>{
   load();
+  if(_loadFailRaw) showLoadFail();   // ★ 2026-09-25(#17): 이관 실패 — 봉인된 채 복구 화면(원본 복사·다시 시도·새로 시작)
+  else awayCatchUp();   // #18(2차): 숨긴 채 날을 넘기고 같은 날 닫았다 다시 연 경우(rollDaily 가 조기 반환해 기준일이 남는다)
   /* ★ 2026-09-25(리뷰 확정): 배경에서 열린 탭(새 탭 배경 열기·세션 복원)은 숨김 '전이'가 없어 _tabHideTs 가 0 으로 남는다 → save 가 5초마다
      lastSeen 을 '지금'으로 밀어, 한 번도 안 보고 닫으면 그 구간 방치 수익이 사라졌다(재현: 3시간 → 10분만 인정). load(computeOffline 이
      로드 시각까지 정산) **뒤에** 잡아야 겹쳐 세지 않는다 — _tabHideTs 초기값에 넣지 마라(정산보다 먼저 실행돼 순서가 뒤집힌다). */

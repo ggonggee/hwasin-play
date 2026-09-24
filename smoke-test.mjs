@@ -212,6 +212,26 @@ step('손상 세이브 → 백업 키 보존', ()=>{
   const backedUp = [...store.keys()].some(k => typeof k==='string' && k.startsWith('hwasin_save_v1_corrupt_'));
   if(!backedUp) throw new Error('손상 세이브 백업 키가 생성되지 않음');
 });
+/* ★ 2026-09-25(워크플로 2차 #17): 유효 JSON 인데 이관이 예외 → 새 게임으로 덮지 않는다(슬롯 원본 유지·봉인·_migfail_ 백업) · 가져오기는 이관 사전 검사로 거부. */
+step('이관 실패 세이브 — 덮어쓰기 금지·봉인·백업 · 가져오기 사전 거부', ()=>{
+  const errs=[];
+  const bad=JSON.stringify({ gold:777777777, name:'진행도주인', heroes:{ HERO_001:{level:321,own:true} }, stats:null });
+  store.set('hwasin_save_v1', bad); ev('_saveSealed = false; _loadFailRaw = null'); ev('load')(); ev('save')();
+  if(store.get('hwasin_save_v1')!==bad) errs.push('이관 실패 세이브가 덮어써짐');
+  if(ev('_saveSealed')!==true) errs.push('봉인 안 됨');
+  if(ev('_loadFailRaw')!==bad) errs.push('복구 화면 원본 없음');
+  if(![...store.keys()].some(k=>typeof k==='string' && k.startsWith('hwasin_save_v1_migfail_'))) errs.push('_migfail_ 백업 키 없음');
+  // 가져오기: 같은 데이터는 이관 사전 검사에서 거부(확인창 없이)
+  ev('_saveSealed = false; _loadFailRaw = null'); store.delete('hwasin_save_v1'); ev('load')();
+  const before=store.get('hwasin_save_v1'); const root=ev("$('#modal-root')");
+  ev('saveImport')();
+  let ta=null; const rec=n=>{ if(!n||typeof n!=='object'||ta) return; if(n.tagName==='TEXTAREA') ta=n; (n.children||[]).forEach(rec); }; rec(root); rec(ev('document').body||{});
+  const btn=findBtnByText(root,'불러오기',true)||findBtnByText(ev('document').body||{},'불러오기',true);
+  if(!ta || !btn) errs.push('가져오기 UI 요소 없음');
+  else { ta.value=bad; btn.onclick(); if(findBtnByText(root,'덮어쓰기',true)) errs.push('이관 불가 데이터인데 덮어쓰기 확인창이 뜸'); if(store.get('hwasin_save_v1')!==before) errs.push('가져오기 거부 전에 슬롯이 바뀜'); }
+  ev('closeModal')(); ev('_saveSealed = false; _loadFailRaw = null');
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ F3: 명칭 IP 세탁으로 코스튬·패키지 id 가 바뀌었다 → 구 id 세이브의 보유/구매 이력 이관 확인 */
 step('구 id 세이브 → 신 id 이관(코스튬·패키지)', ()=>{
   const old=JSON.parse(JSON.stringify(legacy));
@@ -2403,6 +2423,33 @@ step('퀘스트 기본 탭(주간 우선) · 길드 레이드 결과 뒤 복귀'
   S.guideStep=keep.gs;
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ 2026-09-25(워크플로 2차 #18·#6): 창을 닫지 않은 부재 — 켠 채 절전 간격 정산 · 숨김 중 날짜 전환의 부재 적립 기준일 · 합성 가능 점. */
+step('절전 간격 정산 · 숨김 날짜 전환 부재 적립 · 합성 가능 점', ()=>{
+  const errs=[], S=ev('S'), doc=ev('document');
+  const keep={ hidden:doc.hidden, p:S.offlinePending, ab:JSON.parse(JSON.stringify(S.awayBank||{})), af:S._awayFrom, dd:S.daily.date, tw:S._tower, st:S.seenTutorial, sh:JSON.parse(JSON.stringify(S.shards)) };
+  ev('_saveSealed = false; _tabHideTs = 0'); doc.hidden=false;
+  const now=ev('Date.now()'); S.offlinePending=0;
+  const add=ev('_wallGapCheck')(now-3*3600e3, now);
+  const want=Math.floor(ev('OFFLINE_GPM')/60*3*3600); if(Math.abs(add-want)>1 || S.offlinePending!==add) errs.push('보이는 절전 3시간 정산 '+add+' (기대 '+want+')');
+  doc.hidden=true; if(ev('_wallGapCheck')(now-3*3600e3, now)!==0) errs.push('숨김 중 절전 간격이 정산됨(숨김 경로와 이중)');
+  doc.hidden=false; ev('_tabHideTs='+(now-100)); if(ev('_wallGapCheck')(now-3*3600e3, now)!==0) errs.push('숨김 정산 대기 중 절전 간격 정산'); ev('_tabHideTs=0');
+  // 숨김 중 3일 경과(날짜 전환) → 보이면 2일 적립 / 밤새 숨김 → 0
+  S._tower=20; S.awayBank={ days:0, gold:0, stones:0, box:0, hi:0 }; S._awayFrom='';
+  const D=n=>new Date(now-n*864e5).toDateString();
+  doc.hidden=true; S.daily.date=D(3); ev('rollDaily')();
+  if(S._awayFrom!==D(3) || S.awayBank.days!==0) errs.push('숨김 날짜 전환에서 기준일 보존 실패 '+JSON.stringify([S._awayFrom,S.awayBank.days]));
+  doc.hidden=false; const n=ev('awayCatchUp')(); if(n!==2 || S.awayBank.days!==2) errs.push('보일 때 부재 적립 '+n+'/'+S.awayBank.days+' (기대 2)');
+  S.awayBank={ days:0, gold:0, stones:0, box:0, hi:0 }; S._awayFrom='';
+  doc.hidden=true; S.daily.date=D(1); ev('rollDaily')(); doc.hidden=false; ev('awayCatchUp')();
+  if(S.awayBank.days!==0) errs.push('밤새 숨김(하루 전환)인데 적립 '+S.awayBank.days);
+  // 합성 가능 점: 튜토리얼 뒤 + 합성 가능 영웅 → 영웅 내비 점
+  S.seenTutorial=true; const nx=ev('HERO_ROSTER').find(r=>!ev('heroOwned')(r.hero_id) && ev('heroFusePrereq')(r.hero_id));
+  if(nx){ S.shards[nx.class_id]=ev('heroFuseNeed')(nx.hero_id)+10; ev('refreshClaimBadges')();
+    if(!ev('heroFuseAvail')()) errs.push('합성 가능한데 영웅 버튼 점 조건 거짓');   // 스텁 DOM 은 querySelector 가 매번 새 노드 — 조건 함수로 검사, 실제 점은 브라우저 QA
+    S.seenTutorial=false; if(ev('heroFuseAvail')()) errs.push('튜토리얼 중 합성 점'); }
+  doc.hidden=keep.hidden; S.offlinePending=keep.p; S.awayBank=keep.ab; S._awayFrom=keep.af; S.daily.date=keep.dd; S._tower=keep.tw; S.seenTutorial=keep.st; S.shards=keep.sh;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ 2026-09-25(워크플로 2차 #1·#8·#13·#7·#12): 골드던전권 실사용 · 재료 상한 무지급/표시 · 주·월 롤오버 5초 주기 · 길잡이 다음 목표 · 처치음. */
 step('2차 A묶음 — 골드던전권·재료 상한·주월 롤오버·길잡이 다음·처치음', ()=>{
   const errs=[], S=ev('S'), root=ev("$('#modal-root')");
@@ -2568,7 +2615,8 @@ step('잠긴 창 복귀 정산 차단 · 배경 로드 탭 숨김 시각 포착'
   if((S.offlinePending||0)!==0) errs.push('잠긴 창에서 복귀 정산 '+S.offlinePending);
   ev('_saveSealed = false; _tabLost = false'); ev('_tabHideTs=0');
   // 배경 로드: 부팅 경로 소스 — load() 뒤에서 document.hidden 이면 _tabHideTs 를 잡는다(초기값이 아니라)
-  const boot=js.slice(js.indexOf("  load();\n  /* ★ 2026-09-25(리뷰 확정): 배경에서"), js.indexOf('  wire(); refreshHUD(); applyFxClass();'));
+  const _w=js.indexOf('  wire(); refreshHUD(); applyFxClass();'), _l=js.lastIndexOf('\n  load();\n', _w);   // 부팅의 load() ~ wire() 구간(사이에 다른 줄이 끼어도 되게)
+  const boot=(_l>=0 && _w>_l) ? js.slice(_l, _w) : '';
   if(!/if\(document\.hidden && !_tabHideTs\) _tabHideTs=Date\.now\(\);/.test(boot)) errs.push('배경 로드 탭 _tabHideTs 포착이 load() 뒤에 없다');
   if(!/let _tabHideTs=0;/.test(js)) errs.push('_tabHideTs 초기값 변경됨(0 이어야 — 정산 순서)');
   doc.hidden=keep.hidden; S.offlinePending=keep.p; S.lastSeen=keep.ls;
