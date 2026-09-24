@@ -2025,7 +2025,7 @@ function totalCP(){ const hs=ownedHeroes(); if(!hs.length) return 0; return hs.r
 /* ★ v5.220: 전투력 구성 상세 — 각 성장축이 몇 %를 기여하는지. heroPower 정본 공식:
    (100 + level×30) × 등급mult × 각성 × (1 + 장비eq×0.05) × 직업특성 × 코스튬 × 세트 × 고서
    각 팩터를 '없을 때' 대비 배율로 환산해 표시한다. 순수 표시 — 상태 변경 없음. */
-function openCPBreakdown(){
+function openCPBreakdown(fromHome){   // fromHome: 홈 전투력 칩에서 열면 [닫기] 가 홈으로 돌아간다(착용창으로 보내지 않는다)
   const h=heroEntry(party()[0].hero_id); if(!h){ toast('보유 영웅이 없습니다.'); return; }
   const eq=(S.equips||[]).filter(e=>e.equipped&&(!e.heroId||e.heroId===h.hero_id))
     .reduce((a,e)=>a+(1+(e.enh||0)*0.12)*GRADES[e.grade].mult,0);
@@ -2056,7 +2056,7 @@ function openCPBreakdown(){
   if(trait>1) b.appendChild(el('div','',row('직업 특성', '×'+trait.toFixed(2), pct(final-without('trait')))));
   if(costume>1) b.appendChild(el('div','',row('코스튬', '×'+costume.toFixed(2), pct(final-without('costume')))));
   const bk=el('button','btn wide','닫기'); bk.style.marginTop='8px';
-  bk.onclick=()=>{ closeModal(); openModal('equip'); };
+  bk.onclick=()=>{ closeModal(); if(!fromHome) openModal('equip'); };
   b.appendChild(bk);
   $('#modal-root').classList.add('on'); currentModal='cpBreakdown';
 }
@@ -3123,8 +3123,12 @@ const Battle = (()=>{
     /* ★ v5.84: foes(투기장 적 영웅)가 타겟이면 hitFoe로 위임 */
     if(foes.includes(m)){ hitFoe(m, dmg, crit, color); return; }
     if(!mobs.includes(m)) return;
+    /* ★ 2026-09-25: 0 데미지는 연출 없이 끝낸다 — 홈 원거리 영웅의 '보여주기용' 발사체(bolt, dmg:0)가 착탄하면
+       여기로 0 이 들어와 "0" 숫자·번쩍임·넉백·타격음이 났다(아트 디렉터 검수 발견). HP 가 안 변하므로
+       여기서 돌아가도 전투 결과(결정론 해시)는 같다. */
+    if(!(dmg>0)) return;
     m.hp -= dmg; dmgText(m.x, m.y-m.r-4, dmg, crit, txtColor||color); m.flash = 0.12; m.kb = 0.12;   // kb = 넉백 연출(그리기 전용 — drawMob)
-    if(crit){ shake=0.14; spark(m.x,m.y,color); }
+    if(crit){ shake=Math.max(shake,0.14); spark(m.x,m.y,color); }
     hitSfx(crit);
     if(m.hp<=0){ const mx=m.x,my=m.y,boss=m.boss; mobs = mobs.filter(x=>x!==m); spark(mx,my,boss?'#ffd36a':'#ff8a3c');
       /* ★ 2026-09-25: 사망 연출 — 종전엔 배열에서 빠지는 순간 그림도 사라져 '맞다가 증발' 했다.
@@ -3142,7 +3146,7 @@ const Battle = (()=>{
     const hpDmg = dmg / Math.max(1, f.cp) * 0.08;
     f.hp = Math.max(0, f.hp - hpDmg);
     dmgText(f.x, f.y-30, dmg, crit, color);
-    if(crit){ shake=0.14; spark(f.x,f.y,color); }
+    if(crit){ shake=Math.max(shake,0.14); spark(f.x,f.y,color); }
     if(f.hp<=0){
       f.dead=true; f.respT=3; f.dieAnimT=0;
       spark(f.x,f.y,'#ff8a3c'); sfx('craft');
@@ -3991,8 +3995,27 @@ function refreshHUD(){
     _fc.innerHTML=`${eImg(_f.ic,1)} ${_f.n} <span style="color:#cdbf9f;font-weight:400">${_f.fx}</span> <span style="color:#8a7a5c;font-weight:400">D-${daysToWeeklyReset()}</span>`;
     _fc.title=`다음 축제까지 ${daysToWeeklyReset()}일 (매주 월요일 교체)`;
     _fc.onclick=()=>{ sfx('tap'); openModal('notice'); }; }
+  tickCpChip();
   tutPoll();   // ★ B1/G-01: 튜토리얼 실제 완료 이벤트 폴링
   refreshClaimBadges();   // ★ v5.162: 수령 가능 배지 — 수령 직후 즉시 꺼지게(5초 타이머와 별개)
+}
+/* ★ 2026-09-25: 홈 전투력 칩 + 증감 표시.
+   종전엔 홈 화면 어디에도 전투력이 없었다(영웅 → 스탯 → 전투력 구성 모달에서만 보였다). 제작·강화·장착·
+   레벨업의 결과가 '숫자로 즉시 보이는 것' 이 성장 게임의 가장 싼 보상 순환인데, 그 숫자가 화면에 없었다.
+   (자료 근거: 강의 규칙집 '짧은 조작일수록 결과를 명확히 시각화' · '숫자 상승=세계의 변화' — 구조만 차용)
+   · 증가: 초록 '+N ▲' 가 떠오르고 칩이 한 번 맥동한다. 감소(세트 해제 등): 빨강 '−N ▼' — 숨기지 않는다.
+   · 첫 호출은 기준값만 잡는다(부팅·새로고침마다 '+전체' 가 뜨지 않게). */
+let _cpShown=null;
+function tickCpChip(){
+  const c=$('#cpChip'), v=$('#cpVal'); if(!c||!v||!S) return;
+  if(!c._wired){ c._wired=true; c.onclick=()=>{ sfx('tap'); openCPBreakdown(true); }; }
+  const cp=Math.round(totalCP());
+  if(_cpShown===null || !isFinite(cp)){ _cpShown=cp; v.textContent=fmt(cp); return; }
+  if(cp===_cpShown) return;
+  const d=cp-_cpShown; _cpShown=cp; v.textContent=fmt(cp);
+  const p=el('div','cp-delta'+(d<0?' dn':''), (d>0?'+':'−')+fmt(Math.abs(d))+(d>0?' ▲':' ▼'));
+  c.appendChild(p); setTimeout(()=>{ try{ p.remove(); }catch(e){} }, 1500);
+  if(d>0){ c.classList.remove('up'); void c.offsetWidth; c.classList.add('up'); }
 }
 function mmss(s){ const m=Math.floor(s/60), ss=s%60; return String(m).padStart(2,'0')+':'+String(ss).padStart(2,'0'); }
 function tickClock(){ const base = 6*3600 + Math.floor(S.playSec)*60; const hh=Math.floor(base/3600)%24, mm=Math.floor(base/60)%60; $('#clock').textContent = String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0'); updateSkillCD(); }
