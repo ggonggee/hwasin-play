@@ -5333,7 +5333,7 @@ function wipeRemedies(lead){
 function showWipeAdvice(tier){
   const t=HUNT_TIERS[tier]; const lead=party()[0]||ownedHeroes()[0]; if(!t || !lead) return;
   const cp=heroPower(lead), gap=Math.max(0,t.cp-cp);
-  let safe=0; HUNT_TIERS.forEach((x,i)=>{ if(x.cp<=cp) safe=i; });
+  const safe=huntSafeTier();   // ★ 2026-09-25(리뷰): 정의는 huntSafeTier 한 곳 — 몬스터 버튼 점·추천 행과 같은 값이어야 한다(인라인 복제는 한쪽만 바뀔 위험)
   setModalTitle('전멸 분석');
   const b=$('#modalBody'); b.innerHTML='';
   b.appendChild(el('div','wa-head',`<div class="wa-t"><span style="color:${t.c}">${t.n}</span> 사냥 실패</div>`

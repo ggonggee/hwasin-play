@@ -36,6 +36,11 @@ const CASUAL = process.argv.slice(3).some(a=>a==='casual');
 const SEED = (()=>{ for(const a of process.argv.slice(3)){ const m=/^seed=(\d+)$/.exec(a||''); if(m){ const n=Number(m[1])>>>0; if(!n) throw new Error('seed=0 은 xorshift 붕괴 — 1 이상'); return n; } } return 42; })();
 const ACTIVE_WINDOWS_PER_DAY = 16;
 /* ★ 2026-09-25: 오프라인 상한 — 기본은 game.js 의 OFFLINE_CAP_H(단일 출처). 'offcap=N' 인자로 가정 실험(게임 코드 무수정). */
+/* ★ 2026-09-25(워크플로 #25): 탑 도달 모델 실전투 보정 계수. 종전 공식은 리더 전투력과 1:1 로 맞서는 가정인데, 실제 탑 전투는
+   몹 체력이 사냥터 등급에서 나오고 반격·자연회복·방패가 따로 돌아 **모든 측정점에서 실전투가 +4~+8 Wave 높았다**(검증 실측, 점마다 시드 3개).
+   K 는 영웅 유형·전투력에 따라 1.7(근접)~2.9(원거리 고전투력)로 흔들린다 — 로스터 중앙값 2.2 를 쓴다(±1~2 Wave 오차 잔존).
+   영향: 기록서·강화석 유입이 약 20% 과소 추정돼 있었다(기록서 경제 조정 전에 측정 기준부터 맞춘다). towercal=1 이면 종전 모델 재현. */
+const TOWER_CAL = (()=>{ for(const a of process.argv.slice(3)){ const m=/^towercal=([\d.]+)$/.exec(a||''); if(m) return Number(m[1]); } return 2.2; })();
 const OFFCAP_ARG = (()=>{ for(const a of process.argv.slice(3)){ const m=/^offcap=(\d+)$/.exec(a||''); if(m) return Number(m[1]); } return null; })();
 
 /* ---- 최소 DOM 스텁 (smoke-test 의 것에서 전투 구동에 필요한 만큼만) ---- */
@@ -331,7 +336,7 @@ function dailyStep(){
   {
     const ld=ev('heroPower')(ev('party')()[0]);
     const best=S._tower||0, base=600+best*450;
-    const reach=Math.max(1, 1+Math.floor(Math.log(Math.max(1,ld)/base)/Math.log(1.18)));
+    const reach=Math.max(1, 1+Math.floor(Math.log(Math.max(1,ld*TOWER_CAL)/base)/Math.log(1.18)));   // ★ #25 실전투 보정(TOWER_CAL)
     if(ld>=600 && dailyStep._towerCh!==day){
       dailyStep._towerCh=day;
       S.stats.towerTries=(S.stats.towerTries||0)+1;   // ★ v5.262: 주간 의뢰 w4 축(게임 reward와 동일 시점)
@@ -656,7 +661,7 @@ const killLog=[];               // ★ v5.185 진단: 등급별 제작 시도 �
 
 events.push({t:0, cp:myCP(), what:'시작 — '+ev('party')()[0].name});
 
-log(`\n[밸런스 시뮬] 시드 ${SEED}${CASUAL?' · 캐주얼':''} · 최대 ${MAX_HOURS}시뮬시간 · 창 ${WINDOW/60}분\n`);
+log(`\n[밸런스 시뮬] 시드 ${SEED}${CASUAL?' · 캐주얼':''} · 최대 ${MAX_HOURS}시뮬시간 · 창 ${WINDOW/60}분 · 탑 보정 ×${TOWER_CAL}\n`);
 let lastCP=myCP(), lastEventT=0, windows=0;
 let lastSetm=1;                    // ★ v5.228 세트 계측 — 창 사이 배율 변화 감지용
 const gradeReached={};
