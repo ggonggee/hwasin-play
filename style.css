@@ -267,6 +267,19 @@ body{
   background:radial-gradient(circle at 50% 34%,#4a3823,#160f09 72%); display:flex; flex-direction:column; align-items:center; justify-content:center;
   box-shadow:0 0 20px rgba(255,140,50,.4), inset 0 -6px 14px rgba(0,0,0,.6); }
 .nav.center .anvil .gi{ font-size:30px; } .nav.center .craft-timer{ font-size:var(--fs-sm); color:#f0d59a; margin-top:0; letter-spacing:.04em; }
+/* ★ 2026-09-25(워크플로 #18): 모루 진행 링(제작 중 --p 만큼 금빛 호) · 빈 모루 표기 · 대장간 진행바 흐르는 광택 · 빈 상태 전폭 */
+.nav.center .anvil{ position:relative; }
+.nav.center .anvil.crafting::before{ content:""; position:absolute; inset:-5px; border-radius:50%; pointer-events:none;
+  background:conic-gradient(#ffb347 var(--p,0%), rgba(255,255,255,.07) 0);
+  -webkit-mask:radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px)); mask:radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px)); }
+.nav.center .craft-timer.idle{ font-size:11px; color:#9a8e78; letter-spacing:-.02em; white-space:nowrap; }   /* 64px 원 안에서 줄바꿈되지 않게 */
+.pbar.run{ position:relative; }
+.pbar.run::after{ content:""; position:absolute; top:0; bottom:0; left:-40%; width:40%; pointer-events:none;
+  background:linear-gradient(90deg,transparent,rgba(255,240,200,.35),transparent); animation:pbarRun 1.8s linear infinite; }
+@keyframes pbarRun{ to{ left:100%; } }
+@media (prefers-reduced-motion: reduce){ .pbar.run::after{ display:none; } }
+.empty-state{ grid-column:1/-1; text-align:center; padding:14px 8px; color:var(--txt-dim); font-size:var(--fs-sm); line-height:1.5; word-break:keep-all; }
+.empty-state .btn{ margin-top:8px; }
 
 /* ===== 모달 ===== */
 #modal-root{ position:absolute; inset:0; z-index:20; display:none; }

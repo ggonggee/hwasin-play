@@ -3789,10 +3789,11 @@ const Battle = (()=>{
     } else {
       // WAVE + 사냥 대상 라벨 (좌상단)
       const td=tierDef();
-      ctx.fillStyle='rgba(240,228,201,.9)'; ctx.font="bold 12px 'Malgun Gothic'"; ctx.textAlign='left';
-      ctx.fillText('WAVE '+wave, 10, 16);
-      ctx.fillStyle=td.c; ctx.font="10px 'Malgun Gothic'"; ctx.textAlign='right';
-      ctx.fillText('사냥: '+td.n+' ('+GRADES[td.drop].name+' 재료)', W-8, 16);
+      /* ★ 2026-09-25(워크플로 #16): 좌상단 'WAVE N'(캔버스 10,16)은 G-14 이후 시계(#timepod)에 완전히 가려졌고, 우상단 사냥터 라벨은 10px·N등급 색(#8a9a6a)이라
+         청록 바닥에서 거의 안 읽혔다. 한 줄로 합쳐 12px 굵게 + 외곽선, N등급은 밝은 색. (우두머리는 5웨이브마다 — WAVE 가 예고 단서다) */
+      const lab=td.n+' · '+GRADES[td.drop].name+' 재료 · WAVE '+wave;
+      ctx.font="bold 12px 'Malgun Gothic'"; ctx.textAlign='right'; ctx.lineWidth=3; ctx.strokeStyle='rgba(0,0,0,.6)'; ctx.strokeText(lab, W-8, 16);
+      ctx.fillStyle = td.drop==='N' ? '#d8d0bc' : td.c; ctx.fillText(lab, W-8, 16);
     }
     /* ★ v5.165: 킬 콤보 표시 — 광역 스킬로 몹이 몰리며 쓸려나가는 순간(1.5초 내 연달아 처치)을
        눈에 띄게 만든다. 5콤보부터 표시, 콤보당 글자가 커지고 10/20에서 색이 오른다.
@@ -3998,6 +3999,11 @@ const Battle = (()=>{
     }
   }
   function drawMob(m){
+    /* ★ 2026-09-25(워크플로 #16): 스폰 페이드 — 스폰의 약 52% 가 화면 안쪽(그중 1/4 은 필드 한가운데)에 완성된 채 '툭' 나타났다(검증 표본 20만).
+       처음 그려진 벽시계(_bornW, 그리기 전용 필드)부터 0.25초 동안 투명→불투명·0.8→1 배. 시뮬 좌표·HP 불변. */
+    const _nw=(typeof performance!=='undefined'&&performance.now)?performance.now():Date.now(); if(!m._bornW) m._bornW=_nw;
+    const born=clamp((_nw-m._bornW)/250,0,1), _ga=ctx.globalAlpha;
+    if(born<1) ctx.globalAlpha=_ga*born;
     ctx.fillStyle='rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(m.x, m.y+m.r+3, m.r, m.boss?7:4, 0,0,7); ctx.fill();
     /* ★ v5.25: 스프라이트가 있으면 drawImage, 없으면 종전 도형.
        ★ v5.25.2: MON_SCALE 로 몬스터별 크기 정규화 — 그림자에 꽉 채움.
@@ -4018,6 +4024,7 @@ const Battle = (()=>{
       const refX = heroes.length ? (heroes[0].x || W*0.5) : W*0.5;
       const flip = m.x < refX;
       ctx.save();
+      if(born<1){ const sc=0.8+0.2*born; ctx.translate(m.x, m.y+m.r); ctx.scale(sc,sc); ctx.translate(-m.x, -(m.y+m.r)); }   // #16 발 기준 확대
       /* ★ 2026-09-25: 넉백 — 맞은 순간 영웅 반대쪽으로 최대 5px 밀렸다 돌아온다(0.12초). 그리기 오프셋일 뿐
          m.x(전투 좌표)는 건드리지 않는다 — 이동·거리 판정·결정론 해시에 영향 없음. */
       if(m.kb>0){ ctx.translate((flip?-1:1)*5*(m.kb/0.12), 0); }
@@ -4040,6 +4047,7 @@ const Battle = (()=>{
     const w=m.r*2.2, hpx=m.x-w/2, hpy=m.y-m.r-8, hh=m.boss?5:3;
     ctx.fillStyle='#2a0d0b'; ctx.fillRect(hpx,hpy,w,hh); ctx.fillStyle='#d84a3f'; ctx.fillRect(hpx,hpy,w*clamp(m.hp/m.hpMax,0,1),hh);
     if(m.boss){ ctx.fillStyle='#ffd36a'; ctx.font="bold 11px 'Malgun Gothic'"; ctx.textAlign='center'; ctx.fillText('👑 '+m.name, m.x, m.y-m.r-14); }
+    if(born<1) ctx.globalAlpha=_ga;   // #16 스폰 페이드 알파 원복(다음 몹·영웅에 새지 않게)
   }
   function roundRectPath(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
   /* ★ v5.84→v5.89: 투기장 적 영웅 렌더링 — drawHero와 동일한 방식.
@@ -4344,8 +4352,11 @@ function refreshHUD(){
       : '';
   }
   const ct=$('#craftTimer');
-  if(S.craft){ const left=Math.max(0,Math.ceil((S.craft.endAt-Date.now())/1000)); ct.textContent = left>0? mmss(left) : '완성!'; }
-  else ct.textContent='00:00';
+  /* ★ 2026-09-25(워크플로 #18): 제작 중엔 모루 둘레에 진행 링(--p), 비었을 땐 '00:00'(끝난 타이머처럼 읽혔다) 대신 '비어 있음'. */
+  const anv=ct.parentNode;
+  if(S.craft){ const left=Math.max(0,Math.ceil((S.craft.endAt-Date.now())/1000)); ct.textContent = left>0? mmss(left) : '완성!';
+    if(anv&&anv.classList){ anv.classList.add('crafting'); if(anv.style&&anv.style.setProperty) anv.style.setProperty('--p', (craftProg(S.craft)*100).toFixed(1)+'%'); } ct.classList.remove('idle'); }
+  else { ct.textContent='비어 있음'; ct.classList.add('idle'); if(anv&&anv.classList) anv.classList.remove('crafting'); }
   /* ★ v5.295: 주간 축제 배지 — 이번 주 테마 상시 표시(전장 좌상단). 클릭 시 공지판.
      주 경계를 지난 뒤 5초 주기 이 타이머가 자동으로 다음 축제로 갈아끼운다.
      ★ v5.299: 끝에 D-N(다음 교체까지 남은 일수) — '다음 주는 무엇의 주인가'를
@@ -5646,8 +5657,9 @@ function craftStart(grade, catKey, item){
   }
   S.stats.poorClick=0;                                                      // 제작이 실제로 시작되면 스트릭 초기화
   item.recipe.forEach(r=>matSpend(r.k,r.need)); S.gold-=cp.gold;
-  S.craft={ grade, slot:item.n, cat:catKey, ic:item.ic, endAt:Date.now()+cp.sec*1000*craftTimeMul(), // ★ B7/G-100 제작시간 버프
-            p0:cp.p0, sec:cp.sec, gold:cp.gold, recipe:item.recipe.map(r=>({k:r.k,need:r.need})) };
+  const _dur=cp.sec*craftTimeMul();   // ★ #18: 실제 소요 시간 — 진행률 분모(craftDur)
+  S.craft={ grade, slot:item.n, cat:catKey, ic:item.ic, endAt:Date.now()+_dur*1000, // ★ B7/G-100 제작시간 버프
+            p0:cp.p0, sec:cp.sec, dur:_dur, gold:cp.gold, recipe:item.recipe.map(r=>({k:r.k,need:r.need})) };
   sfx('tap'); toast(`${GRADES[grade].name} ${item.n} 제작 시작`); openModal('forge', item.n); refreshHUD(); save();   /* ★ v5.309: 제작비·재료 차감 확정 즉시 저장 */
 }
 // 제작 취소 — 재료·골드 100% 환급
@@ -5922,13 +5934,13 @@ const MODALS = {
       if(S.craft) renderProgress();
     }
     function renderProgress(){
-      const c=S.craft, sec=c.sec||CRAFT[c.grade].sec;
+      const c=S.craft;
       const left=Math.max(0,Math.ceil((c.endAt-Date.now())/1000)), done=left<=0;
       body.appendChild(el('div','hr'));
       body.appendChild(el('div','center',`<div class="ei" style="font-size:44px">${equipImg(c.slot||c.item||'',3)}</div><div class="big" style="color:${GRADES[c.grade].color}">${GRADES[c.grade].name} ${c.slot||'장비'} 제작 중</div>`));
-      const pb=el('div','pbar'); pb.appendChild(el('i')); pb.firstChild.id='forgeBar';
-      pb.firstChild.style.width=(clamp(1-left/sec,0,1)*100)+'%'; body.appendChild(pb);
-      const lt=el('div','center mut small',done?'제작 완료 · 확정하세요':`남은 시간 ${mmss(left)}`); lt.id='forgeLeft'; body.appendChild(lt);
+      const pb=el('div','pbar'+(done?'':' run')); pb.appendChild(el('i')); pb.firstChild.id='forgeBar';   // run = 진행 중 흐르는 광택(긴 제작에서 바가 멈춘 것처럼 보이던 것)
+      pb.firstChild.style.width=(craftProg(c)*100)+'%'; body.appendChild(pb);
+      const lt=el('div','center mut small',done?'제작 완료 · 확정하세요':`남은 시간 ${mmss(left)} · 완성 예정 ${craftEtaTxt(c)}`); lt.id='forgeLeft'; body.appendChild(lt);
       const row=el('div','btnrow'); row.style.marginTop='12px';
       // G-27: 즉시 완성 확인 팝업
       /* ★ 2차 UI 정리: 버튼 라벨은 "즉시 완성"(띄어쓰기 있음)으로 통일한다.
@@ -6386,7 +6398,7 @@ const MODALS = {
     }
     b.appendChild(el('div','small mut',`보유 장비 ${S.equips.length}종 (탭하여 강화)`));
     const tray=el('div','grid c5'); tray.style.marginTop='6px';
-    if(!S.equips.length) tray.appendChild(el('div','hint','아직 장비가 없습니다. 대장간(⚒️)에서 제작하세요.'));
+    if(!S.equips.length){ const es=el('div','empty-state','<div>아직 장비가 없습니다. 대장간에서 제작하세요.</div>'); const go=el('button','btn sm gold','대장간으로'); go.onclick=()=>{ sfx('tap'); openModal('forge'); }; es.appendChild(go); tray.appendChild(es); }   // #18: 5칸 그리드 한 칸에 끼어 5줄로 깨지던 것
     /* ★ v5.166: 트레이 정렬 — v5.152(인벤토리)와 같은 결함이었다. 획득 순 앞 15칸만 보여
        오래된 일반 장비가 15개 쌓인 뒤로 새 상위 등급이 여기에도 안 나타났다.
        같은 기준(등급→강화→최신)으로 정렬해 상위 15개를 보여준다. slice() 사본 정렬이라
@@ -7011,7 +7023,8 @@ const MODALS = {
       /* 안내문에는 내부 키(S.invTab)가 아니라 화면에 보이는 라벨을 쓴다 —
          키는 '벨트' 인데 탭 이름은 '방어구·장신구' 라 그대로 쓰면 없는 탭 이름이 나온다. */
       const tabLabel = (TABS.find(t=>t[0]===S.invTab)||[])[1] || S.invTab;
-      if(!arr.length){ list.appendChild(el('div','hint',`${tabLabel} 탭에 미장착 장비가 없습니다.`)); return; }
+      /* ★ 2026-09-25(#18): 빈 상태는 그리드 전폭(.empty-state) + [대장간으로] — 종전엔 4칸 그리드 한 칸(79px)에 끼어 3줄로 깨졌다(튜토리얼 직후 거의 모두가 본다). */
+      if(!arr.length){ const es=el('div','empty-state',`<div>${tabLabel} 탭에 미장착 장비가 없습니다.</div>`); const go=el('button','btn sm gold','대장간으로'); go.onclick=()=>{ sfx('tap'); openModal('forge'); }; es.appendChild(go); list.appendChild(es); return; }
       /* ★ v5.152: 정렬 + 표시 확장. 종전엔 획득 순서 그대로 앞 16칸만 보여줬다 —
          오래된 일반 장비가 16개 쌓인 시점부터 새로 만든 상위 등급이 목록에 안 나타나
          '제작했는데 어디 갔지?'가 됐다(모달 본문 .mbody 가 스크롤되므로 개수 제약도 불필요).
@@ -9775,13 +9788,20 @@ function showDungeonResult(cfg, win, stats){
    ============================================================ */
 let lastFrame=0, _loopOn=false;
 // 대장간 진행 중: 전체 재렌더 대신 진행바·확정버튼만 부분 갱신(탭 유실·선택 초기화 방지)
+/* ★ 2026-09-25(워크플로 #18, 검증 추가 발견): 진행률은 **실제 소요 시간**(dur = sec × 시작 시점 제작시간 배율) 기준이어야 한다.
+   종전엔 endAt 만 배율을 쓰고 진행률은 원래 sec 로 나눠, 제작시간 버프(-50%) 중엔 시작하자마자 진행바가 50% 로 떴다(실측).
+   dur 없는 구세이브(진행 중 제작)는 종전처럼 sec 로 후퇴. */
+function craftDur(c){ return (c && (c.dur || c.sec || (CRAFT[c.grade]&&CRAFT[c.grade].sec))) || 1; }
+function craftProg(c){ if(!c) return 0; const left=Math.max(0,(c.endAt-Date.now())/1000); return clamp(1-left/craftDur(c),0,1); }
+function craftEtaTxt(c){ try{ const d=new Date(c.endAt); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }catch(e){ return ''; } }
 function tickForge(){
   if(currentModal!=='forge' || !S.craft) return;
   const bar=document.getElementById('forgeBar');
   if(!bar){ openModal('forge'); return; }
   const left=Math.max(0,Math.ceil((S.craft.endAt-Date.now())/1000)), done=left<=0;
-  bar.style.width=(clamp(1-left/(S.craft.sec||CRAFT[S.craft.grade].sec),0,1)*100)+'%';
-  const lt=document.getElementById('forgeLeft'); if(lt) lt.textContent=done?'제작 완료 · 확정하세요':`남은 시간 ${mmss(left)}`;
+  bar.style.width=(craftProg(S.craft)*100)+'%';
+  const lt=document.getElementById('forgeLeft'); if(lt) lt.textContent=done?'제작 완료 · 확정하세요':`남은 시간 ${mmss(left)} · 완성 예정 ${craftEtaTxt(S.craft)}`;
+  if(done && bar.parentNode && bar.parentNode.classList) bar.parentNode.classList.remove('run');
   const fin=document.getElementById('forgeFin'); if(fin && done && fin.disabled){ fin.disabled=false; fin.classList.add('gold'); }
 }
 function gameLoop(ts){

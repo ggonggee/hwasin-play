@@ -2403,6 +2403,27 @@ step('퀘스트 기본 탭(주간 우선) · 길드 레이드 결과 뒤 복귀'
   S.guideStep=keep.gs;
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ 2026-09-25(워크플로 #18): 제작 진행률 = 실제 소요 시간 기준(버프 중 시작 즉시 50% 표기 결함) · 모루 빈/제작 중 표기 · 빈 상태 전폭 + [대장간으로]. */
+step('제작 진행률(버프 반영) · 모루 표기 · 빈 인벤토리 안내', ()=>{
+  const errs=[], S=ev('S'), now=ev('Date.now()');
+  const keep={ craft:S.craft, eq:S.equips.slice() };
+  const prog=ev('craftProg');
+  S.craft={ grade:'E', slot:'장비', endAt:now+1800e3, sec:3600, dur:1800 };
+  if(prog(S.craft)>0.01) errs.push('버프 중 시작 직후 진행률 '+prog(S.craft).toFixed(2)+' (기대 ~0)');
+  const old={ grade:'E', slot:'장비', endAt:now+1800e3, sec:3600 };   // dur 없는 구세이브 → sec 로 후퇴
+  if(Math.abs(prog(old)-0.5)>0.01) errs.push('구세이브 후퇴 진행률 '+prog(old).toFixed(2));
+  ev('refreshHUD')(); const ct=ev("$('#craftTimer')");
+  // 스텁 DOM 은 index.html 트리를 만들지 않아 #craftTimer 의 부모(.anvil)가 없을 수 있다 — 있으면 실제 클래스, 없으면 소스로 확인(실물은 브라우저 QA)
+  if(ct.parentNode && ct.parentNode.classList){ if(!ct.parentNode.classList.contains('crafting')) errs.push('제작 중 모루 링 클래스 없음'); }
+  else if(!js.includes("anv.classList.add('crafting')")) errs.push('모루 링 토글 코드 없음');
+  S.craft=null; ev('refreshHUD')();
+  if(String(ct.textContent)!=='비어 있음') errs.push("빈 모루 표기 '"+ct.textContent+"'");
+  S.equips=[]; const b=new Node2('div'); ev('MODALS').inventory.render(b);
+  let es=null; const rec=n=>{ if(!n||typeof n!=='object'||es) return; if(/\bempty-state\b/.test(String(n.className||''))) es=n; (n.children||[]).forEach(rec); }; rec(b);
+  if(!es) errs.push('빈 인벤토리 .empty-state 없음'); else if(!findBtnByText(es,'대장간으로')) errs.push('[대장간으로] 버튼 없음');
+  S.craft=keep.craft; S.equips=keep.eq; ev('refreshHUD')();
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ 2026-09-25(워크플로 #15): 피격 연출 — source-atop 사각 칠하기(이웃 스프라이트로 번짐) 재발 금지 · 투기장 적 피격 반응 · 임팩트 상한. */
 step('피격 연출 — 실루엣 번쩍임 · 투기장 적 반응 · 임팩트', ()=>{
   const errs=[];
