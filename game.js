@@ -3318,8 +3318,38 @@ const Battle = (()=>{
   }
 
   /* --------- 렌더 --------- */
+  /* ★ 2026-09-25: 렌더 보간 — 전투 시뮬은 20Hz 고정 스텝(FIXED_DT)이라, 화면(60fps)은 몬스터·영웅 위치와
+     숫자·파티클이 50ms 마다 한 칸씩 '뚝뚝' 움직였다(아트 디렉터 검수: 모든 연출의 품질을 깎는 배수).
+     표준 해법인 고정 스텝 + 렌더 보간을 쓴다:
+       · 스텝 직전 위치를 _px/_py 로 남겨 두고(pumpFrame), 그리기 순간에만 x,y 를 prev→cur 사이 α(=acc/FIXED_DT)로
+         옮겨 그린 뒤 finally 에서 **원래 값으로 되돌린다**. fx 시간(t)도 종류별 진행 속도만큼 앞당겨 그린 뒤 되돌린다.
+       · 시뮬 상태는 그리기 전후로 한 비트도 안 바뀐다 — 결정론 검증(D1~D5)은 draw 를 부르지도 않는다.
+       · 60px 넘게 한 스텝에 옮긴 것(스폰·순간이동·편성 재배치)은 보간하지 않는다(가로지르는 잔상 방지).
+     ⚠ drawScene 안에서 x,y,t 를 '쓰면' 안 된다 — 보간값이 되돌려지며 사라진다(읽기 전용). */
+  const FX_RATE = { dmg:1, die:1, aoe:1, lvup:2, skill:2.5, spark:3, bolt:4 };
+  function snapPositions(){
+    for(const a of [mobs, heroes, foes]) for(const e of a){ if(e){ e._px=e.x; e._py=e.y; } }
+  }
   function draw(){
     if(!ctx) return;
+    const alpha = clamp(acc/FIXED_DT, 0, 1), ia = alpha*FIXED_DT;
+    const saved=[];
+    try{
+      for(const a of [mobs, heroes, foes]) for(const e of a){
+        if(!e || typeof e._px!=='number') continue;
+        const dx=e.x-e._px, dy=e.y-e._py; if(dx*dx+dy*dy>3600) continue;
+        saved.push([e,'x',e.x],[e,'y',e.y]); e.x=e._px+dx*alpha; e.y=e._py+dy*alpha;
+      }
+      for(const f of fx){ const r=FX_RATE[f.type]; if(!r) continue;
+        saved.push([f,'t',f.t]); f.t+=r*ia;
+        if(f.type==='spark'){ saved.push([f,'x',f.x],[f,'y',f.y]); f.x+=f.vx*ia; f.y+=f.vy*ia; } }
+      for(const d of drops){ saved.push([d,'x',d.x],[d,'y',d.y]); const e=clamp(d.t+1.1*ia,0,1), k=Math.pow(e,1.6); d.x=d.sx+(d.tx-d.sx)*k; d.y=d.sy+(d.ty-d.sy)*k; }
+      drawScene();
+    } finally {
+      for(let i=saved.length-1;i>=0;i--){ const s=saved[i]; s[0][s[1]]=s[2]; }
+    }
+  }
+  function drawScene(){
     ctx.clearRect(0,0,W,H);
     const sx=shake>0?(Math.random()-0.5)*shake*36:0, sy=shake>0?(Math.random()-0.5)*shake*36:0;
     ctx.save(); ctx.translate(sx,sy);
@@ -3820,6 +3850,7 @@ const Battle = (()=>{
     const modeAtStart = mode;
     let guard = 0;
     while(acc >= FIXED_DT && guard < 10000){
+      snapPositions();   // ★ 2026-09-25: 렌더 보간용 직전 위치(draw 주석) — 시뮬 값은 읽기만 한다
       stepOnce(FIXED_DT); acc -= FIXED_DT; guard++;
       if(mode !== modeAtStart) break;
     }
