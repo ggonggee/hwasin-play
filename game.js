@@ -711,8 +711,11 @@ const ARENA_GBUFF_ROWS = [
 ];
 /* ★ 2026-09-25: '매일 티어 골드' — 종전엔 표(투기장 [매일 보상] 탭)에만 있고 지급 코드가 없었다(검증 워크플로 실측: 레전더리 하루 경과 골드 +0).
    이제 rollDaily 가 **이 표 그대로** 지급한다(표 = 지급 단일 정본). 수치는 종전 표의 1/10 — 원래 값(레전더리 2,500만/일)은
-   초반 방치 수입(약 2,700만/일)을 거의 두 배로 만들고, 투기장 매칭(적 CP ≈ 내 CP×0.85~1.15)상 승률이 성장과 무관하게 ~50%라
-   신규도 빠르게 상위 티어에 닿는다. 1/10 이면 레전더리도 초반 방치 수입의 ~9%, 후반엔 미미한 '매일 들를 이유' 수준. */
+   초반 방치 수입(약 2,700만/일)을 거의 두 배로 만들고, 신규도 빠르게 상위 티어에 닿는다. 1/10 이면 레전더리도 초반 방치 수입의 ~9%,
+   후반엔 미미한 '매일 들를 이유' 수준.
+   ⚠ 정정(2026-09-25, 워크플로 2차 #2): 여기 적었던 '매칭상 승률 ~50%'는 추정이었고 틀렸다. 실전투 측정(balance-sim arenawin=real,
+   arenaFight→arenaResult 정본, 연승 보정 포함)은 **승률 92.5~93.8%**(초·중·후반 동일). 적 CP 는 맞춰도 적 3인(N/R 로스터·레벨=CP 환산)이
+   같은 CP 의 아군보다 약하다. 결론은 같다 — 티어는 금방 오르므로 1/10 이 맞다. */
 const ARENA_TIER_ROWS = [
   ['레전더리',2500000],['마스터',1200000],['다이아몬드',800000],['플래티넘',400000],
   ['골드',160000],['실버',80000],['브론즈',40000],
@@ -1414,6 +1417,13 @@ const ATTEND_DAYS = [
 ];
 /* ★ B9/G-134: 공지 — 제목 밴드 + 양피지 서술형 본문 (목록 → 상세 2단) */
 const NOTICES = [
+  /* ★ v5.356: 투기장 순위 버프 주차 가드(이용자 불리 정정 포함 — v5.330 관례대로 숨기지 않고 알린다) · 주간 정산 자동 · 교환 경합 · 긴 안내 표시 시간. */
+  { cat:'[수정]', ic:'🏟️', t:'투기장 주간 정산이 화면을 열지 않아도 진행됩니다', d:'2026-09-25',
+    body:'군주들에게 알립니다.<br><br>'+
+      '· <b>🏟️ 투기장 주간 정산</b> — 종전엔 투기장 화면에 들어가야만 주간 정산이 돌아, 투기장을 열지 않은 주에는 순위 보상 주사위를 제때 받지 못했습니다. 이제 한 번이라도 투기장에 참여했다면 월요일 12시가 지난 뒤 접속만 해도 지난주 순위로 주사위가 지급되고 랭킹이 초기화됩니다.<br>'+
+      '· <b>🪙 순위 골드 버프</b> — 주가 바뀐 뒤에도 투기장을 열기 전까지 지난주 순위의 골드 버프가 계속 적용되던 오류를 바로잡았습니다. 순위 골드 버프는 그 주에 오른 순위로만 적용됩니다(순위를 올리는 방식·버프 수치는 그대로입니다).<br>'+
+      '· <b>🛡️ 회색코인 재료 교환</b> — 상점을 열어 둔 사이 사냥으로 그 등급 재료가 모두 보유 상한에 닿으면, 교환 버튼을 눌렀을 때 코인만 빠지고 재료가 들어오지 않을 수 있었습니다. 이제 누르는 순간 다시 확인해 코인을 쓰지 않고 안내합니다.<br>'+
+      '· <b>💬 긴 안내</b> — 홈 출격 영웅이 자동으로 바뀔 때의 안내가 다 읽기 전에 사라지던 것을 6초로 늘렸습니다(채팅 기록에도 장비 안내가 남습니다).' },
   /* ★ v5.352: 골드던전권 사용처 — 판매·지급만 되고 쓸 곳이 없던 재화(과금 후 무지급)를 약속대로 쓰게 했다. 재료 상한 표기 정정도 함께 알린다. */
   { cat:'[수정]', ic:'🪪', t:'골드던전권을 이제 사용할 수 있습니다 · 재료 보유 상한 안내', d:'2026-09-25',
     body:'군주들에게 알립니다.<br><br>'+
@@ -1679,7 +1689,7 @@ function load(){
     let obj=null; try{ obj=JSON.parse(raw); }catch(e){}
     if(obj && typeof obj==='object' && !Array.isArray(obj)){
       S=obj;
-      try{ mergeDefaults(); computeOffline(); return; }
+      try{ migrateLoaded(); return; }
       catch(e){
         try{ localStorage.setItem(SAVE_KEY+'_migfail_'+Date.now(), raw); }catch(_){}
         _saveSealed=true; _loadFailRaw=raw;
@@ -1801,9 +1811,16 @@ const OFFLINE_GPM = Math.round(18885*0.5);   // 분당
 const OFFLINE_CAP_H = 12;
 function computeOffline(){
   const now=Date.now();
-  if(S.lastSeen){ const elapsed=(now-S.lastSeen)/1000, cap=OFFLINE_CAP_H*3600; if(elapsed>60){ S.offlinePending=(S.offlinePending||0)+Math.floor(OFFLINE_GPM/60*Math.min(elapsed,cap)); } }
+  /* ★ 2026-09-25(리뷰 v5.350~353): 숫자가 아닌 lastSeen·offlinePending(손으로 고친 세이브의 {valueOf:1} 등)은 산술에서 TypeError 를 냈다 → 0 으로 본다(값 버림). */
+  const ls=(typeof S.lastSeen==='number' && isFinite(S.lastSeen)) ? S.lastSeen : 0;
+  const op=(typeof S.offlinePending==='number' && isFinite(S.offlinePending)) ? S.offlinePending : 0;
+  S.offlinePending=op;   // 숫자 아닌 값을 남겨 두면 정산 화면의 비교·덧셈에서 같은 TypeError 가 난다
+  if(ls){ const elapsed=(now-ls)/1000, cap=OFFLINE_CAP_H*3600; if(elapsed>60){ S.offlinePending=op+Math.floor(OFFLINE_GPM/60*Math.min(elapsed,cap)); } }
   S.lastSeen=now;
 }
+/* 로드한 세이브의 이관 단위 — ⚠ load() 와 saveImport() 사전검사가 **반드시 이 함수 하나**를 같이 써야 한다.
+   가져오기 검사가 로드의 실패 조건과 달라지면(종전: 검사는 mergeDefaults 만) 확인창을 통과한 데이터가 다음 로드에서 복구 화면에 갇힌다. */
+function migrateLoaded(){ mergeDefaults(); computeOffline(); }
 // 깊은 병합: 중첩 객체 신규 하위키까지 기본값 채움 (세이브 마이그레이션 NaN 방지)
 function deepFill(t,d){ for(const k in d){ if(t[k]===undefined) t[k]=d[k]; else if(d[k]&&typeof d[k]==='object'&&!Array.isArray(d[k])&&typeof t[k]==='object') deepFill(t[k],d[k]); } }
 function mergeDefaults(){ scrubSaveStrings(S); deepFill(S, freshState());   // ★ 2026-09-24: 세이브 문자열의 < > 제거(safeText 주석 참조)
@@ -2158,7 +2175,11 @@ function pickN(arr, n){
   return a.slice(0, Math.min(n, a.length));
 }
 function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
-function toast(msg){ const box=$('#toast'); const t=el('div','toast',msg); box.appendChild(t); setTimeout(()=>t.remove(), 1900); }
+/* ms(선택): 긴 안내용 표시 시간. 기본 1.9초는 '복사했습니다' 같은 짧은 문구 기준이라, 60자 넘는 설명은 다 읽기 전에 사라졌다(리뷰 v5.350~353 실측).
+   ⚠ setTimeout 만 늘리면 안 된다 — style.css .toast 의 사라짐 애니메이션이 1.5초에 고정돼 있어 그 뒤로는 투명한 채 남는다. 애니메이션 지연도 같이 바꾼다. */
+function toast(msg, ms){ const box=$('#toast'); const t=el('div','toast'+(ms?' long':''),msg);
+  if(ms){ t.style.animation=`toastIn .25s ease, toastOut .3s ease ${Math.max(0.3,(ms-400)/1000)}s forwards`; }
+  box.appendChild(t); setTimeout(()=>t.remove(), ms||1900); }
 
 /* ★ 2026-09-25: 드랍 비행체 — 캔버스 좌표(cx,cy)의 금화/보석을 #device 좌표계 DOM 요소로 띄워 실제 재화 카운터(골드)나
    인벤토리 버튼(재료)으로 날린다. 바깥 요소가 가로를 선형으로, 안쪽이 세로를 가속으로 움직여 곡선 궤적이 된다.
@@ -4459,6 +4480,10 @@ const ARENA_GBUFF_BANDS = ARENA_GBUFF_ROWS.map(([label,pct])=>{
   return { lo, hi, pct };
 });
 function arenaGoldBuffPct(){
+  /* ★ 2026-09-25(워크플로 2차 #2): 순위 버프는 **그 주의 순위**에만 — 종전엔 주차 가드가 없어, 1위를 찍고 투기장을 다시 열지 않으면
+     (주간 초기화는 투기장 화면 진입 때만 일어났다) +90% 골드 버프가 영구히 남았다(검증 실측). 규칙은 매일 티어 골드의 stale 판정(v5.331)과 같다.
+     시뮬은 arenaWeek='' 라 가드를 건너뛴다(곡선 불변). */
+  if(S && S.arenaWeek && S.arenaWeek!==arenaWeekKey()) return 0;
   const r = (S && S.arenaRank) | 0;
   if(r < 1) return 0;
   for(const b of ARENA_GBUFF_BANDS){ if(r>=b.lo && r<=b.hi) return b.pct; }
@@ -5787,7 +5812,7 @@ function saveImport(){
       catch(e){ toast('형식이 올바르지 않습니다 (JSON 아님)'); return; }
       if(!looksLikeSave(obj)){ toast('이 게임의 진행도 데이터가 아닙니다'); return; }
       /* ★ 2026-09-25(#17): 이관을 미리 돌려 본다 — 이관이 못 견디는 데이터(예 stats:null)를 쓰면 다음 로드에서 복구 화면에 갇힌다. S 는 원복(통과하면 곧 새로고침). */
-      { const keep=S; let ok=true; try{ S=JSON.parse(JSON.stringify(obj)); mergeDefaults(); }catch(e){ ok=false; } finally{ S=keep; }
+      { const keep=S; let ok=true; try{ S=JSON.parse(JSON.stringify(obj)); migrateLoaded(); }catch(e){ ok=false; } finally{ S=keep; }
         if(!ok){ toast('이 진행도 데이터는 형식이 맞지 않아 불러올 수 없습니다'); return; } }
       styledConfirm('지금 진행도를 덮어씁니다. 계속할까요?', ()=>{
         try{
@@ -6999,7 +7024,9 @@ const MODALS = {
        한 줄짜리 .pack 리스트로 뭉개놔서, 상점을 열었을 때의 첫인상이 '매대'가 아니라 '목록'이었다.
        mkBuy 한 곳만 바꾸면 이 함수를 쓰는 탭(추천·기타·골드·재료·길드)이 한 번에 카드형이 된다.
        리본과 우측에 품명을 중복 표기하는 구성도 그대로 따른다(영웅 카드 실측 구조와 동일). */
-    function mkBuy(ic,t,d,cur,cost,give,label){
+    /* soldOut(선택): 클릭 시점에 다시 판정한다. 목록 필터(render)는 그릴 때 1회뿐이라, 창을 연 채 사냥 드랍이 마지막 재료를 상한까지 채우면
+       '코인만 빠지고 무지급 · 토스트는 획득'이 좁은 창으로 재발했다(리뷰 v5.350~353 실측). ⚠ 판정은 payCur '앞'에 — 결제를 막으니 환불 로직이 필요 없다. */
+    function mkBuy(ic,t,d,cur,cost,give,label,soldOut){
       const card=el('div','shop-card');
       card.innerHTML=`<div class="sh-ribbon">${t}</div>
         <div class="sh-body">
@@ -7008,7 +7035,8 @@ const MODALS = {
         </div>`;
       const ok=have(cur)>=cost;
       const btn=el('button','btn sm'+(ok?' gold':''), label||'구매'); if(!ok) btn.disabled=true;
-      btn.onclick=()=>{ if(have(cur)<cost){ toast(`${CURN[cur]}가 부족합니다.`); return; }
+      btn.onclick=()=>{ if(soldOut && soldOut()){ toast(`${t} — 보유 상한이라 지금은 교환할 수 없습니다`); render(); return; }
+        if(have(cur)<cost){ toast(`${CURN[cur]}가 부족합니다.`); return; }
         payCur(cur,cost); give(); sfx('tap'); toast(`${t} 획득`); render(); refreshHUD(); save(); };   /* ★ v5.309: 구매 확정 즉시 저장 */
       card.querySelector('.sh-left').appendChild(btn);
       body.appendChild(card); return card;
@@ -7186,7 +7214,7 @@ const MODALS = {
            길드 레이드·약탈·기여로 버는 재화이므로 길드 탭 하단에 교환소로 되붙인다. */
         grpLabel('회색코인 교환');
         curLine('gray');
-        GRAYSHOP.filter(it=>!(it.soldOut&&it.soldOut())).forEach(it=> mkBuy(it.ic,it.t,priceTxt('gray',it.cost),'gray',it.cost,it.give,'교환'));   // ★ 2026-09-25: 품절 상품은 숨긴다(과금 후 무지급 방지)
+        GRAYSHOP.filter(it=>!(it.soldOut&&it.soldOut())).forEach(it=> mkBuy(it.ic,it.t,priceTxt('gray',it.cost),'gray',it.cost,it.give,'교환',it.soldOut));   // ★ 2026-09-25: 품절 상품은 숨긴다(과금 후 무지급 방지)
 
       /* ── ⑨ 코스튬 (G-101): COSTUMES 판매 5종, 루비 3,400 균일 ── */
       } else if(tab==='costume'){
@@ -9665,6 +9693,10 @@ function arenaWeekKey(d){
   if(t.getTime() < mon.getTime()) mon.setDate(mon.getDate()-7);   // 월요일 12시 이전이면 지난 주차
   return mon.getFullYear()+'-'+(mon.getMonth()+1)+'-'+mon.getDate();
 }
+/* ★ 2026-09-25(워크플로 2차 #2): 투기장에 들어간 적이 있는 이용자는 화면을 열지 않아도 주간 정산·초기화를 받는다(홈 진입·5초 주기).
+   종전엔 투기장 화면 진입 때만 돌아, 안 여는 이용자는 획득한 순위의 주간 주사위를 제때 못 받고 순위(와 버프)가 묵었다.
+   한 번도 안 한 이용자는 제외 — 매주 '랭킹이 초기화되었습니다' 토스트만 뜨는 소음이 된다. 멱등(같은 주면 무동작). */
+function arenaWeekAuto(){ if(S && S.stats && (S.stats.arenaEnters|0)>0 && S.arenaWeek) arenaWeekRoll(); }
 function arenaWeekRoll(){
   const k=arenaWeekKey();
   /* ★ v5.306: 키가 바뀌는 두 경로(봉인·롤오버)에서 즉시 save — 종전엔 S만 바꾸고 저장을
@@ -10124,8 +10156,8 @@ function tickLeadWatch(){
     const now=Date.now(); if(n<=0 || now-_leadToastAt<60000) return;
     _leadToastAt=now;
     const pn=(HERO_BY_ID[prev]||{}).name||'';
-    toast(`홈 출격이 <b>${p.name}</b>(으)로 바뀌었습니다 — 가장 강한 영웅이 자동 출격 · 장비 ${n}개는 ${pn} 착용 중 · 고정은 영웅 [배치]`);
-    sysLog(`홈 출격 교체: ${pn} → ${p.name} (편성이 비어 있으면 가장 강한 영웅이 자동 출격합니다)`);
+    toast(`홈 출격 → <b>${p.name}</b> (가장 강한 영웅 자동) · 장비 ${n}개는 ${pn} 착용 중 · 고정: 영웅 [배치]`, 6000);
+    sysLog(`홈 출격 교체: ${pn} → ${p.name} — 장비 ${n}개는 ${pn} 착용 중 · 고정은 영웅 [배치] (편성이 비어 있으면 가장 강한 영웅이 자동 출격합니다)`);
   }catch(e){}
 }
 function gameLoop(ts){
@@ -10140,7 +10172,7 @@ function gameLoop(ts){
    rollDaily 에 넣지 않는 이유: load 중에도 불려 타이틀에서 알림이 사라지고 시뮬·smoke 경로에 부작용이 섞인다. 멱등(키가 같으면 무동작).
    refreshClaimBadges 보다 앞 — 같은 틱의 배지가 새 주 기준으로 판정된다. 월 경계 탑 정산 알림도 이 세션에 뜬다(flushLoginToasts). */
 setInterval(()=>{ { const now=Date.now(); _wallGapCheck(_tickWall, now); _tickWall=now; }   // #18(2차) 절전 간격 — save 앞(저장되는 lastSeen 이 정산 뒤 '지금')
-  if(_loopOn && !document.hidden){ try{ weeklyState(); monthlyState(); flushLoginToasts(); }catch(e){} } save(); refreshClaimBadges(); try{ updateGuideBanner(); }catch(e){} }, 5000);   // ★ 2026-09-25: 골드가 차면 배너가 '부족'에서 원래대로(글자는 바뀔 때만 씀)   /* ★ v5.162: 배지 갱신 동반 — 전투 중 미션 달성도 5초 안에 점이 켜진다 */
+  if(_loopOn && !document.hidden){ try{ weeklyState(); monthlyState(); arenaWeekAuto(); flushLoginToasts(); }catch(e){} } save(); refreshClaimBadges(); try{ updateGuideBanner(); }catch(e){} }, 5000);   // ★ 2026-09-25: 골드가 차면 배너가 '부족'에서 원래대로(글자는 바뀔 때만 씀)   /* ★ v5.162: 배지 갱신 동반 — 전투 중 미션 달성도 5초 안에 점이 켜진다 */
 /* ★ v5.173: 백그라운드 탭 복귀 정산 — rAF 는 백그라운드에서 스로틀돼 방치 수입이 멈추는데,
    5초 저장 타이머는 살아 있어 lastSeen 이 계속 갱신된다 → 숨김 구간은 오프라인 정산
    (computeOffline, 세션 로드 시 1회)에도 못 들어가 완전히 증발했다.
@@ -10210,7 +10242,7 @@ function enterHome(){
      weeklyState/monthlyState 가 잡혀, 월요일 리셋 후 늦게 열면 그 사이 처치·제작이
      진행 카운트에 못 들어갔다(불리). 접속 시점에 확정하면 리셋 직후 첫 킬부터 정확.
      (시뮬의 dailyStep 은 매일 호출이라 이미 정확 — 실유저와의 정합) */
-  try{ weeklyState(); monthlyState(); }catch(e){}
+  try{ weeklyState(); monthlyState(); arenaWeekAuto(); }catch(e){}
   /* ★ 2026-09-25(리뷰 확정): 접속 알림 플러시는 monthlyState **뒤**에 — 탑 월간 정산은 monthlyState 안에서 큐에 쌓이므로,
      앞에서 비우면 정산 알림이 그 세션에 안 뜨고 다음 접속으로 밀렸다(검증 실측). */
   flushLoginToasts();

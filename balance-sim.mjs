@@ -41,6 +41,14 @@ const ACTIVE_WINDOWS_PER_DAY = 16;
    K 는 영웅 유형·전투력에 따라 1.7(근접)~2.9(원거리 고전투력)로 흔들린다 — 로스터 중앙값 2.2 를 쓴다(±1~2 Wave 오차 잔존).
    영향: 기록서·강화석 유입이 약 20% 과소 추정돼 있었다(기록서 경제 조정 전에 측정 기준부터 맞춘다). towercal=1 이면 종전 모델 재현. */
 const TOWER_CAL = (()=>{ for(const a of process.argv.slice(3)){ const m=/^towercal=([\d.]+)$/.exec(a||''); if(m) return Number(m[1]); } return 2.2; })();
+/* ★ 2026-09-25(워크플로 2차 #2 2단계): 투기장 순위 골드 버프 측정 — arena=N(주당 판 수, 기본 0 = 종전 기준선 그대로), arenawin=P(승률 상수, 기본 0.95 —
+   arenawin=real 실측 92.5~93.8%(casual 150/600h·full 200h, 80~160판)에 가깝다. 상수 모드는 빠르고, real 은 정확하다).
+   이 버프(최대 +90%, 사냥·골드던전·탑·방치 골드에 곱)가 시뮬에 없어 곡선이 실제보다 낮게 그려질 수 있었다. 실제 전투를 돌리지 않는 근사(승률 상수). */
+const ARENA_N = (()=>{ for(const a of process.argv.slice(3)){ const m=/^arena=(\d+)$/.exec(a||''); if(m) return Number(m[1]); } return 0; })();
+const ARENA_WIN = (()=>{ for(const a of process.argv.slice(3)){ if(a==='arenawin=real') return -1; const m=/^arenawin=([\d.]+)$/.exec(a||''); if(m) return Number(m[1]); } return 0.95; })();
+/* arenawin=real — 승률 상수 대신 **실제 투기장 전투**(arenaFight → 헤드리스 펌프 → arenaResult 정본)를 N판 돌린다.
+   연승 보정(적 CP +8%/연승)·편성 4인·데미지 50% 감소가 전부 실물 그대로 들어간다. 느리다(판당 최대 60초 전투). */
+const arenaTally={ weeks:0, rankSum:0, buffSum:0, fights:0, wins:0 };
 const OFFCAP_ARG = (()=>{ for(const a of process.argv.slice(3)){ const m=/^offcap=(\d+)$/.exec(a||''); if(m) return Number(m[1]); } return null; })();
 
 /* ---- 최소 DOM 스텁 (smoke-test 의 것에서 전투 구동에 필요한 만큼만) ---- */
@@ -284,6 +292,32 @@ function dailyStep(){
   const day=Math.floor(simSec/86400);
   if(day===dailyStep._day) return; dailyStep._day=day;
   const cp=myCP(); let acts='';   // ★ v5.245: 일일 콘텐츠 수행을 액션 이벤트로 반환
+  /* ★ 2026-09-25(#2 2단계): 투기장 — 주가 바뀌면 순위 초기화(ARENA_RANK_RESET) 후 N판. 순위 갱신식은 arenaResult 정본 그대로
+     (승: round(순위×0.94)−ri(1,5)−연승 / 패: round(순위×1.03)+ri(1,4)). S.arenaWeek 를 현재 주차로 둬 게임의 주차 가드(arenaGoldBuffPct)를 그대로 탄다. */
+  if(ARENA_N>0){
+    const wk=ev('arenaWeekKey')();
+    if(dailyStep._arenaWk!==wk && ARENA_WIN<0){ dailyStep._arenaWk=wk;
+      ev('S.arenaWeek=arenaWeekKey(); S.arenaRank=ARENA_RANK_RESET; S.arenaStreak=0; S.stats.arenaEnters=(S.stats.arenaEnters|0)+1');
+      const B=ev('Battle'), f0=arenaTally.fights, w00=arenaTally.wins;
+      for(let i=0;i<ARENA_N;i++){
+        const w0=ev('S.stats.arenaWins')|0; ev('arenaFight')();
+        for(let g=0; g<40 && B.inDungeon(); g++) B.pumpFrame(5);   // 60초 + 서든데스 여유
+        if(B.inDungeon()) break;
+        arenaTally.fights++; if((ev('S.stats.arenaWins')|0)>w0) arenaTally.wins++;
+      }
+      ev("closeModal()");
+      const rk=ev('S.arenaRank')|0;
+      (arenaTally.log=arenaTally.log||[]).push(`${day}일 ${arenaTally.wins-w00}/${arenaTally.fights-f0}승 ${rk}위`);
+      arenaTally.weeks++; arenaTally.rankSum+=rk; arenaTally.buffSum+=ev('arenaGoldBuffPct')(); acts+=('투기장'+rk+'위 ');
+    }
+    if(dailyStep._arenaWk!==wk){ dailyStep._arenaWk=wk;
+      const rk=ev(`(()=>{ S.arenaWeek=arenaWeekKey(); S.arenaRank=ARENA_RANK_RESET; S.arenaStreak=0;
+        for(let i=0;i<${ARENA_N};i++){ if(Math.random()<${ARENA_WIN}){ S.arenaStreak++; S.arenaRank=Math.max(1, Math.round(S.arenaRank*0.94)-ri(1,5)-S.arenaStreak); }
+          else { S.arenaStreak=0; S.arenaRank=Math.min(999999, Math.round(S.arenaRank*1.03)+ri(1,4)); } }
+        return S.arenaRank; })()`);
+      arenaTally.weeks++; arenaTally.rankSum+=rk; arenaTally.buffSum+=ev('arenaGoldBuffPct')(); acts+=('투기장'+rk+'위 ');
+    }
+  }
   // 골드던전 — 오늘 3회, foeCP ≤ 내 CP 인 최고 단계
   let left=3;
   for(let i=ev('GOLD_DUNGEON').length-1;i>=0&&left>0;i--){
@@ -876,6 +910,8 @@ log(`\n총 시뮬: ${(simSec/3600).toFixed(1)}h · 창 ${windows}회 · 최종 C
      부위당 기대 비용은 hammerGold/파괴 재제작까지 합쳐 실측된다(종전 몬테카를로 479M 갱신). */
   log(`[진단] 위험강화: 시도 ${riskTally.tries} · 성공 ${riskTally.success} · 하락 ${riskTally.drop} · 보호 ${riskTally.saved} · 파괴 ${riskTally.destroyed} · +25도달 ${riskTally.max20}부위 · 망치구매 골드 ${(riskTally.hammerGold/1e6).toFixed(0)}M + 강화석 ${riskTally.hammerStone}개`);
   log(`[진단] 보유 영웅별 CP:`, ev('ownedHeroes')().map(h=>`${h.name.slice(0,5)}(${h.grade})=${ev('heroPower')(h)}`).join(' · '));
+  if(arenaTally.log) log('[진단] 투기장 주별(실전투): '+arenaTally.log.join(' · '));
+  if(ARENA_N>0) log(`[진단] 투기장(#2 측정): 주당 ${ARENA_N}판·승률 ${ARENA_WIN<0?`실전투 ${arenaTally.wins}/${arenaTally.fights}=${arenaTally.fights?(arenaTally.wins/arenaTally.fights*100).toFixed(1):0}%`:ARENA_WIN} · ${arenaTally.weeks}주 평균 순위 ${arenaTally.weeks?Math.round(arenaTally.rankSum/arenaTally.weeks):0}위 · 평균 버프 +${arenaTally.weeks?Math.round(arenaTally.buffSum/arenaTally.weeks):0}%`);
   log(`[진단] 영웅 강화(#12): 총 ${enhTally.ups}단계 ·`, ev('ownedHeroes')().map(h=>`${h.name.slice(0,5)}+${ev('heroEnhLv')(h.hero_id)}`).join(' · '));
   log('[진단] 결정 가호: '+buffTally.n+'회('+(buffTally.gold/1e6).toFixed(0)+'M) · 골드 보유 '+Math.floor(S.gold));
   // E 아이템 첫 후보 왜 안 되는지 — recipeOk/gold 각각 출력

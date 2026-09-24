@@ -2423,6 +2423,21 @@ step('퀘스트 기본 탭(주간 우선) · 길드 레이드 결과 뒤 복귀'
   S.guideStep=keep.gs;
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ 2026-09-25(워크플로 2차 #2 1단계): 투기장 순위 골드 버프는 그 주 순위에만 — 지난 주차 순위면 0(종전: 투기장을 안 열면 +90% 영구) ·
+   투기장을 해 본 이용자만 자동 주간 정산. */
+step('투기장 순위 버프 주차 가드 · 자동 주간 정산 대상', ()=>{
+  const errs=[], S=ev('S'), buff=ev('arenaGoldBuffPct');
+  const keep={ rk:S.arenaRank, wk:S.arenaWeek, en:S.stats.arenaEnters, dice:S.dice, pts:S.arenaPts, tier:S.arenaTier, st:S.arenaStreak, ses:JSON.parse(JSON.stringify(S.arenaSession||{})) };
+  S.arenaRank=1; S.arenaWeek=ev('arenaWeekKey')(); const top=buff(); if(!(top>0)) errs.push('현재 주차 1위 버프 '+top);
+  S.arenaWeek='1999-1-4'; if(buff()!==0) errs.push('지난 주차 순위인데 버프 '+buff());
+  S.arenaWeek=''; if(buff()!==top) errs.push('주차 미기록(구세이브·시뮬)은 가드 건너뜀이어야');
+  // 자동 주간 정산: 투기장 입장 이력 없으면 무동작
+  S.stats.arenaEnters=0; S.arenaWeek='1999-1-4'; S.arenaRank=1; ev('arenaWeekAuto')(); if(S.arenaWeek!=='1999-1-4') errs.push('투기장 안 한 이용자가 자동 정산됨');
+  S.stats.arenaEnters=3; S.arenaSession={w:5,l:0,t:5}; const d0=S.dice||0; ev('arenaWeekAuto')();
+  if(S.arenaWeek!==ev('arenaWeekKey')()) errs.push('입장 이력 있는데 자동 정산 안 됨'); if(!((S.dice||0)>d0)) errs.push('자동 정산 주사위 미지급');
+  S.arenaRank=keep.rk; S.arenaWeek=keep.wk; S.stats.arenaEnters=keep.en; S.dice=keep.dice; S.arenaPts=keep.pts; S.arenaTier=keep.tier; S.arenaStreak=keep.st; S.arenaSession=keep.ses;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ 2026-09-25(워크플로 2차 #5): 길잡이 완주 뒤 — 모험 버튼 점(오늘 안 봤고 남은 입장 있을 때) · 완주 1회 배너(모험을 열면 끝) · 배지 틱이 월 롤오버를 일으키지 않음. */
 step('길잡이 완주 뒤 모험 점 · 완주 1회 배너', ()=>{
   const errs=[], S=ev('S'), bn=ev("$('#guide-banner')");
@@ -2518,7 +2533,9 @@ step('2차 A묶음 — 골드던전권·재료 상한·주월 롤오버·길잡�
   if(ev('matGainGrade')('E',1,{avoidCap:true})!==null) errs.push('전부 상한 avoidCap 이 null 아님');
   S.mats[E[3].k]=0; for(let i=0;i<20;i++){ const m=ev('matGainGrade')('E',1,{avoidCap:true}); if(!m || m.k!==E[3].k){ errs.push('avoidCap 이 상한 재료를 고름'); break; } }
   // ③ 주·월 롤오버 — 5초 주기가 weeklyState/monthlyState 를 refreshClaimBadges 보다 먼저 부른다(_loopOn·보일 때)
-  { const i=js.indexOf("if(_loopOn && !document.hidden){ try{ weeklyState(); monthlyState(); flushLoginToasts(); }catch(e){} } save(); refreshClaimBadges();"); if(i<0) errs.push('5초 주기 주·월 롤오버 없음'); }
+  { const line=js.split('\n').find(l=>l.includes('if(_loopOn && !document.hidden){') && l.includes('refreshClaimBadges()')) || '';
+    const iw=line.indexOf('weeklyState();'), im=line.indexOf('monthlyState();'), ib=line.indexOf('refreshClaimBadges()');
+    if(!(iw>=0 && im>=0 && ib>iw && ib>im)) errs.push('5초 주기 주·월 롤오버 없음(또는 배지보다 뒤)'); }
   // ④ 길잡이 단계를 넘긴 제작 결과 → [다음 길잡이 · 다음 목표 ▶]
   S.seenTutorial=true; S.guideStep=0; S.guideProg=0; const G=ev('GUIDE_CHAIN');
   const loc=ev('forgeLocate')(G[0].slot);
@@ -2530,6 +2547,62 @@ step('2차 A묶음 — 골드던전권·재료 상한·주월 롤오버·길잡�
   if(js.includes("sfx(boss?'legendary':'coin')")) errs.push('우두머리 처치에 legendary 음');
   if(!/bossdown:\[/.test(js) || !js.includes('_coinG') || !js.includes('createDynamicsCompressor')) errs.push('처치음 합치기·리미터 코드 없음');
   S.goldTicket=keep.tk; S.mats=keep.mats; S.guideStep=keep.gs; S.seenTutorial=keep.st; S.equips=keep.eq; S.guideProg=keep.gp; S.goldAuto=keep.goldAuto;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
+/* ★ 2026-09-25(리뷰 v5.350~353 확정 3건): ① 회색코인 교환 — 그린 뒤 상한에 닿은 품목은 클릭 시점에 막는다(결제 전)
+   ② 긴 안내 토스트 — 표시 시간·사라짐 애니메이션을 함께 늘린다(기본 토스트 불변) ③ 가져오기 사전검사 = 로드 이관 단위(migrateLoaded). */
+step('리뷰 반영 — 교환 클릭 시점 품절 · 긴 토스트 · 가져오기 검사 = 로드 이관', ()=>{
+  const errs=[], S=ev('S');
+  const keep={ mats:JSON.parse(JSON.stringify(S.mats)), gray:S.gray, ls:S.lastSeen, op:S.offlinePending };
+  // ① 상점 길드 탭을 그린 뒤(E 한 칸 남음) 마지막 칸이 차면 [교환]은 코인을 빼지 않는다
+  const E=ev('MAT_BY_GRADE').E, capE=ev('MAT_CAP').E, it=ev('GRAYSHOP').find(x=>/영웅 재료/.test(x.t));
+  E.forEach(m=>S.mats[m.k]=capE); S.mats[E[0].k]=capE-1; S.gray=1000;
+  /* el 은 const 라 바꿀 수 없다 → document.createElement 를 감싸 만든 노드를 순서대로 모은다. mkBuy 는 카드(shop-card) → 버튼 순으로 만든다. */
+  const made=[], ceO=documentStub.createElement;
+  documentStub.createElement=function(t){ const n=ceO.call(this,t); made.push(n); return n; };
+  const pick=()=>{ let card=null, out=null;
+    made.forEach(n=>{ if(String(n.className).split(' ').includes('shop-card')) card=n;
+      else if(n.tagName==='BUTTON' && String(n._html).trim()==='교환' && card && /영웅 재료/.test(String(card._html||''))) out=n; });
+    return out; };
+  Object.assign(ctx, { __tO:null, __toasts:[] });   // game.js 는 strict — 스텁 전역은 vm 컨텍스트에 먼저 선언
+  ev(`__tO=toast; __toasts=[]; toast=function(m,ms){ __toasts.push(String(m)); return __tO(m,ms); };`);
+  try{
+    const box=new Node2('div'); ev('MODALS').shop.render(box);
+    const tabs=box.children[0]; tabs.children[7].onclick();   // 길드 탭
+    const hit=pick() && { btn:pick() };
+    if(!hit) errs.push('회색코인 영웅 재료 교환 버튼 못 찾음(E 한 칸 남았는데 품절 처리?)');
+    else {
+      S.mats[E[0].k]=capE;   // 창을 연 채 사냥 드랍이 마지막 칸을 채움
+      const g0=S.gray, sum0=E.reduce((a,m)=>a+(S.mats[m.k]|0),0);
+      hit.btn.onclick();
+      if(S.gray!==g0) errs.push(`상한 뒤 클릭에 회색코인 차감 ${g0}→${S.gray}`);
+      if(E.reduce((a,m)=>a+(S.mats[m.k]|0),0)!==sum0) errs.push('상한 뒤 클릭에 재료 변동');
+      if(!ev('__toasts').some(t=>/보유 상한/.test(t))) errs.push('품절 안내 토스트 없음: '+ev('__toasts').slice(-2).join(' / '));
+      // 대조: 한 칸 남은 상태에선 정상 교환(코인 −비용 · 재료 +1)
+      S.mats[E[2].k]=capE-1; made.length=0;
+      tabs.children[7].onclick();
+      const hit2=pick() && { btn:pick() };
+      if(!hit2) errs.push('대조 — 교환 버튼 없음');
+      else { const g1=S.gray; hit2.btn.onclick(); if(g1-S.gray!==it.cost || (S.mats[E[2].k]|0)!==capE) errs.push(`대조 교환 코인 −${g1-S.gray}(기대 ${it.cost}) · 재료 ${S.mats[E[2].k]}`); }
+    }
+  } finally { documentStub.createElement=ceO; ev('toast=__tO'); }
+  if(String(ev('toast')).includes('__toasts')) errs.push('toast 스텁 원복 실패');
+  // ② 긴 토스트: 폭·애니메이션 지연 함께 · 기본 토스트는 종전 그대로
+  const tb=ev("$('#toast')");
+  ev('toast')('짧은 안내'); const t1=tb.children[tb.children.length-1];
+  if(String(t1.className).includes('long') || t1.style.animation) errs.push('기본 토스트가 바뀜');
+  ev('toast')('긴 안내', 6000); const t2=tb.children[tb.children.length-1];
+  if(!String(t2.className).includes('long') || !/toastOut \.3s ease 5\.6s/.test(String(t2.style.animation))) errs.push('긴 토스트 지연 '+t2.style.animation);
+  if(!/toast\(`홈 출격 → [^`]*`, 6000\)/.test(js)) errs.push('리더 교체 안내가 긴 토스트가 아님');
+  if(!/\.toast\.long\{/.test(css)) errs.push('.toast.long 폭 규칙 없음');
+  // ③ 가져오기 사전검사와 로드가 같은 이관 단위 · 숫자 아닌 lastSeen 은 throw 대신 0
+  const imp=js.slice(js.indexOf('function saveImport(){'), js.indexOf('function saveImport(){')+2000);
+  const ld=js.slice(js.indexOf('function load(){'), js.indexOf('function load(){')+2000);
+  if(!imp.includes('migrateLoaded();') || !ld.includes('migrateLoaded();')) errs.push('가져오기 검사·로드가 migrateLoaded 를 같이 쓰지 않음');
+  S.lastSeen={ valueOf:1, toString:1 }; S.offlinePending={ valueOf:1 };
+  try{ ev('computeOffline')(); if(typeof S.lastSeen!=='number' || typeof (S.offlinePending||0)!=='number') errs.push('비정상 lastSeen 정리 안 됨'); }
+  catch(e){ errs.push('비정상 lastSeen 에 computeOffline throw: '+e.message); }
+  S.mats=keep.mats; S.gray=keep.gray; S.lastSeen=keep.ls; S.offlinePending=keep.op;
   if(errs.length) throw new Error(errs.join(' | '));
 });
 /* ★ 2026-09-25(워크플로 #26): 복귀 적립 — 부재 일 수(로컬 자정 반올림)·7일 상한·시계 앞뒤 반복 적립 차단(hi)·적립 시점 금액 확정·수령 1회. */
