@@ -5936,7 +5936,7 @@ const MODALS = {
         const cp0=totalCP();   // ★ 2026-09-25: 달성 연출의 전후 비교
         S.records-=cCost; S.stones-=cStones; S.awakenCrystal=(S.awakenCrystal||0)+1;
         sfx('awaken'); Battle.refreshParty();
-        growthBurst(`각성의 결정 ✦${S.awakenCrystal}`, [cpDeltaLine(cp0, totalCP()), '계정 전체 스탯 +0.5%'], S.awakenCrystal%5===0?'mile':'up');
+        try{ growthBurst(`각성의 결정 ✦${S.awakenCrystal}`, [cpDeltaLine(cp0, totalCP()), '계정 전체 스탯 +0.5%'], S.awakenCrystal%5===0?'mile':'up'); }catch(_){}   // 연출 실패가 뒤따르는 저장·갱신을 막지 않게
         sysLog(`<span class="lgd">각성의 결정</span> <span class="lgd">✦${S.awakenCrystal}단계</span> 달성`);
         openModal('awaken'); refreshHUD(); save();   /* ★ v5.309: 기록서·강화석 소모 확정 즉시 저장 */
       };
@@ -5973,7 +5973,7 @@ const MODALS = {
       }
       const cp0=totalCP();   // ★ 2026-09-25: 달성 연출의 전후 비교
       S.awaken++; sfx('awaken'); Battle.refreshParty();
-      growthBurst(`${deep?'심화 각성':'각성'} +${S.awaken}`, [cpDeltaLine(cp0, totalCP()), '계정 전체 스탯 +1.5%'], S.awaken%5===0?'mile':'up');
+      try{ growthBurst(`${deep?'심화 각성':'각성'} +${S.awaken}`, [cpDeltaLine(cp0, totalCP()), '계정 전체 스탯 +1.5%'], S.awaken%5===0?'mile':'up'); }catch(_){}   // 연출 실패가 뒤따르는 저장·갱신을 막지 않게
       sysLog(`${deep?'<span class="lgd">심화 각성</span>':'각성'} <span class="lgd">+${S.awaken}단계</span> 달성`);
       guideCheck('awaken'); openModal('awaken'); refreshHUD();
     };
@@ -8672,12 +8672,12 @@ function openEnhance(e){
           if(prot.cur==='hammerN') S.hammerN-=prot.n; else S.hammers-=prot.n;
           toast(`강화 실패 · ${prot.label} ${prot.n} 소모로 파괴 방지`);
         }
-        else { S.equips=S.equips.filter(x=>x!==e); toast('강화 실패 · 장비 파괴…'); Battle.refreshParty(); openModal('inventory'); refreshHUD(); save(); enhBurst(e, e0, true); return; }   /* ★ v5.309: 파괴(장비 소멸)는 즉시 저장 */
+        else { S.equips=S.equips.filter(x=>x!==e); toast('강화 실패 · 장비 파괴…'); Battle.refreshParty(); openModal('inventory'); refreshHUD(); save(); try{ enhBurst(e, e0, true); }catch(_){} return; }   /* ★ v5.309: 파괴(장비 소멸)는 즉시 저장 */
       } else {
         if(useWard && (S.wards||0)>0){ S.wards--; toast('강화 실패 · 하락 방지권으로 단계 유지'); }
         else { e.enh=Math.max(0,e.enh-1); toast('강화 실패 · 단계 하락'); }
       } }
-    Battle.refreshParty(); openEnhance(e); refreshHUD(); save(); enhBurst(e, e0); };   /* ★ v5.309: 강화 시도(성공/실패·망치 소모) 확정 즉시 저장 */
+    Battle.refreshParty(); openEnhance(e); refreshHUD(); save(); try{ enhBurst(e, e0); }catch(_){} };   /* ★ v5.309: 강화 시도(성공/실패·망치 소모) 확정 즉시 저장 */
   b.appendChild(btn);
   const back=el('button','btn sm','◀ 인벤토리'); back.style.marginTop='8px'; back.onclick=()=>openModal('inventory'); b.appendChild(back);
 }
@@ -8825,7 +8825,8 @@ function playSummon(res){
       /* ★ 2026-09-25: 상자 열기 = 카드 뒤집기(flip-in). 영웅·레전더리 등급 상자는 열리기 직전 등급색으로 먼저 빛난다(예고 0.28초) —
          '뭔가 좋은 게 나온다' 는 기대의 순간을 만든다(연출 문법만 차용). 모두 열기는 70ms 간격(종전 35ms — 너무 빨라 읽을 수 없었다). */
       const openOne=(c,i)=>{ if(c.dataset.open) return; c.dataset.open='1'; const gr=c.dataset.g, mk=c.dataset.k, big=(gr==='E'||gr==='L');
-        const reveal=()=>{ c.className='cell gframe grade-'+gr+' flip-in'; c.style.aspectRatio='1';
+        const reveal=()=>{ if(!c.isConnected) return;   // 공개 대기 중 결과 창을 닫았으면 효과음·갱신 생략(코드리뷰 2026-09-25)
+          c.className='cell gframe grade-'+gr+' flip-in'; c.style.aspectRatio='1';
           c.innerHTML=`<div class="ei" style="font-size:20px">${matIcon(mk)}</div><div class="cn" style="font-size:7.5px">${mk}</div>`;
           sfx(gr==='L'?'legendary':gr==='E'?'craft':'tap'); };
         setTimeout(()=>{ if(big){ c.classList.add('pre-'+gr); setTimeout(reveal, 280); } else reveal(); }, i*70); };

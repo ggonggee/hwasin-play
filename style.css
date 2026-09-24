@@ -1501,6 +1501,7 @@ body.fx-noflash .result-card .rc-rays{ display:none; }
 /* ★ 2026-09-25: 연출 줄이기 — body.fx-noflash(설정 '번쩍임' 끔)이면 CSS 쪽 번쩍임을 약하게, OS 동작 줄이기면 흔들림·회전 광선을 멈춘다.
    완전히 지우지 않고 약하게만 하는 이유: 결과(성공·파괴·보스)를 알리는 신호 자체는 남아야 한다. */
 body.fx-noflash .lgd-flash{ opacity:.35 !important; }
+body.fx-noflash .loot-hit{ animation:none; }   /* 드랍 도착 반짝임(밝기 1.7배) — 코드리뷰 2026-09-25: 연출 줄이기 연동 누락 */
 body.fx-noflash .enh-burst .eb-rays{ display:none; }
 body.fx-noflash .boss-banner .bb-vig{ opacity:.35; animation:none; }
 @media (prefers-reduced-motion: reduce){
@@ -1509,6 +1510,8 @@ body.fx-noflash .boss-banner .bb-vig{ opacity:.35; animation:none; }
   .boss-banner .bb-band{ animation-timing-function:linear; }
   .tut-finger .tf-hand{ animation:none; }
   #cpChip.up{ animation:none; }
+  .fly-loot{ display:none; }   /* 날아가는 드랍 — 동작 줄이기에서는 생략(도착 반짝임도 아래 규칙으로 정지) */
+  .loot-hit{ animation:none; }
 }
 
 /* ★ 2026-09-25: 정체 계단 패널 (game.js showWipeAdvice) — 부족분 막대 + 수단 3행(전투력 +N · 비용 · [가기]). */
