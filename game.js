@@ -3506,6 +3506,10 @@ const Battle = (()=>{
         ctx.strokeStyle=f.color; ctx.lineWidth=2+e*2; ctx.beginPath(); ctx.arc(f.x,f.y,r,0,7); ctx.stroke();
         ctx.fillStyle=f.color; ctx.font=`${10+e*4}px serif`; ctx.textAlign='center';
         ctx.fillText('★', f.x+rnd(-6,6), f.y-e*40+rnd(-6,6));
+        /* ★ 2026-09-25: '레벨 업!' 글자 — 링·별만으로는 무엇이 일어났는지 읽히지 않았다(달성 순간을 문자로 확정). 팝 후 상승·페이드. */
+        if(e<0.85){ const pop=1+0.4*clamp(1-e/0.12,0,1), yy=f.y-26-e*22;
+          ctx.globalAlpha=clamp((0.85-e)/0.3,0,1); ctx.font=`bold ${(13*pop).toFixed(1)}px 'Malgun Gothic',sans-serif`; ctx.lineJoin='round';
+          ctx.lineWidth=3; ctx.strokeStyle='rgba(30,14,0,.85)'; ctx.strokeText('레벨 업!', f.x, yy); ctx.fillStyle='#ffe27a'; ctx.fillText('레벨 업!', f.x, yy); ctx.lineWidth=1; }
         ctx.globalAlpha=1; }
       /* ★ v5.35: 스킬 4종 완전 차별화 연출 — 단계마다 다른 시각 효과. */
       else if(f.type==='skill'){
