@@ -2343,6 +2343,7 @@ step('투기장 매일 티어 골드·주간 주사위 — 표 = 지급', ()=>{
   if(D(3,true)!==three) errs.push('3위 주사위 '+D(3,true)+' ≠ '+three);
   if(D(500,true)!==40) errs.push('참여 기본 주사위 '+D(500,true)+' ≠ 40');
   if(D(1,false)!==0) errs.push('미참여 주에 주사위 지급');
+  { let prev=Infinity; for(const r of [1,2,3,4,10,11,15,16,20,21,30,31,40,41,500]){ const v=D(r,true); if(v>prev) errs.push('주사위 순위 역전 '+r+'위 '+v+'>'+prev); prev=v; } }   // v5.334: 순위 단조성
   S.arenaWeek='1999-1-4'; S.arenaRank=3; S.arenaSession={w:2,l:1,t:0}; const d0=S.dice||0;
   ev('arenaWeekRoll')(); if((S.dice||0)-d0!==three) errs.push('주간 롤오버 주사위 '+((S.dice||0)-d0)+' ≠ '+three);
   if(S.arenaRank!==ev('ARENA_RANK_RESET')) errs.push('롤오버 후 순위 리셋 안 됨');

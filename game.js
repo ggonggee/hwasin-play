@@ -693,7 +693,10 @@ function arenaTierOf(pts){ let t=0; for(let i=0;i<TIER_PTS.length;i++){ if(pts>=
    담당이 재조정. 행수(9/13/7)·라벨 구간·정렬(내림차순)은 UI 구조라 유지하되 수치만 바꿨다. */
 const ARENA_DICE_ROWS = [
   ['1위','X400'],['2위','X300'],['3위','X220'],['4~10위','X130'],['11~15위','X90'],
-  ['16~20위','X60'],['21~30위','X30'],['31~40위','X15'],['참여한 모든 유저','X40'],
+  /* ★ 2026-09-25(v5.334): 21~30위 X30·31~40위 X15 → X50·X45. v5.331 부터 이 표가 실제 지급(arenaWeeklyDice)이 되면서 순위 역전이
+     드러났다(코드리뷰 워크플로 확정: 40위권 안이 순위권 밖 '참여'(X40)보다 적게 받아 41위 근처에선 이기지 않을 유인). 참여 보상을
+     깎지 않고(U1) 순위 쪽을 올려 1위→참여까지 단조 감소로 맞춘다. smoke 가 단조성을 검사한다. */
+  ['16~20위','X60'],['21~30위','X50'],['31~40위','X45'],['참여한 모든 유저','X40'],
 ];
 const ARENA_GBUFF_ROWS = [
   ['1위',90],['2위',75],['3위',65],['4위',58],['5위',50],['6위',44],
@@ -4135,11 +4138,8 @@ function addGold(n, raw){
 // ★ B7/G-100: '제작 시간 -50%' 구독 버프 배율 (상점 버프탭에서 구매, 30일)
 //   ★ F2: 칭호의 '제작 시간 -X%' 도 같은 관문에서 곱한다(제작 시작 시점의 endAt 산출에 사용).
 function craftTimeMul(){ return ((S && S.buffs && S.buffs.craftUntil > Date.now()) ? 0.5 : 1) * titleCraftTimeMul(); }
-/* ★ B9/G-127: 개인랭크 버프 — 투기장 티어에 비례하는 골드 획득 보너스(%).
-   ★ A3-3: TIERS 7단(브론즈~레전더리) 확장에 맞춰 7항으로 정합. 브론즈가 1단계(=5%)이며,
-   티어를 못 가진 구간은 존재하지 않는다(투기장 시작 시점이 곧 브론즈).
-   ⚠미확정: 단계별 % 값은 미판독으로 종전 5%p 등차를 유지한다. */
-function personalRankBuffPct(){ const t=clamp((S&&S.arenaTier)|0, 0, TIERS.length-1); return [5,10,15,20,25,30,35][t] || 5; }
+/* ★ 2026-09-25(v5.334): 티어 기반 '개인랭크 버프'(personalRankBuffPct, 티어별 5~35% · ⚠미판독 수치)를 삭제했다. 표시 전용이었고 실제 골드엔
+   곱해진 적이 없다. 실제 투기장 골드 버프는 순위 기반 arenaGoldBuffPct(addGoldMul 에 포함)다 — 티어 버프를 되살려 곱하면 이중 가산이 된다. */
 function idleTick(dt){
   /* ★ 2026-09-25: 방치 골드 배율은 idleGoldMul() 하나(마을회관 0.2%p/Lv·코스튬·용암 광산). 프리미엄(goldUntil)은
      addGold 관문이 곱한다 — 여기서 또 ×2 하던 줄이 약속 ×2 를 ×4 로 만들었다(실측 346→1,385G/s). */
@@ -4533,7 +4533,8 @@ const TUT = [
   { k:'shield',  goal:1,  modal:'forge',     txt:'대장간에서 방패를 제작하세요',              base:true, cnt:()=>S.equips.filter(e=>(e.slot||'').indexOf('방패')>=0).length,
     /* 제작이 걸려 있는 30초 동안은 누를 것이 없다(대기 문구로 남은 시간을 보여준다). 완성되면 결과 팝업의
        [확인] 을 엔진이 짚는다. 제작 중에 [제작] 을 다시 짚으면 안 되므로 subs 를 함수로 둔다. */
-    wait:()=>!!S.craft, waitTxt:()=>`제작 중 — ${Math.max(0,Math.ceil(((S.craft&&S.craft.endAt)||0)-Date.now())/1000)}초 뒤 완성`,
+    /* ★ 2026-09-25: ceil 을 초 단위에 건다 — 종전 Math.ceil(ms)/1000 은 '28.277초' 처럼 밀리초가 매 프레임 떨렸다(검증 워크플로 #8). */
+    wait:()=>!!S.craft, waitTxt:()=>`제작 중 — ${Math.max(0,Math.ceil((((S.craft&&S.craft.endAt)||0)-Date.now())/1000))}초 뒤 완성`,
     subs:{ forge:()=> S.craft ? null : '#forgeCraftBtn' } },
   /* ★ v5.112: STEP3·4 는 '영웅탭 → 영웅 장비창'에서 장착·강화한다.
      종전엔 인벤토리를 가리켰는데, 인벤토리에는 장착 기능이 없어(영웅 귀속 필요) 흐름이 끊겼다.
@@ -4959,17 +4960,39 @@ function guideOverride(cat, itemName){
   if(g.cat!==cat || g.slot!==itemName) return null;
   return (S.guideStep===GUIDE_CHAIN.length-1) ? GUIDE_RECIPE.final : GUIDE_RECIPE.step;
 }
+/* ★ 2026-09-25: 현재 길잡이 단계 제작에 모자란 골드(0 = 충분). 1~8단계는 150만·마지막 500만(GUIDE_RECIPE).
+   근거(검증 워크플로 #1 실측): 튜토리얼 직후 933만으로 1~6단계를 만들면 7단계(반지)에서 골드가 모자라 **약 50분 정체**하는데,
+   게임은 '골드가 부족합니다' 토스트만 띄웠다. 골드던전 1·2단계(+56만·+166만)면 바로 풀리지만 어디서도 안내하지 않았다. */
+function guideGoldShort(){
+  if(!S || !S.seenTutorial || S.guideStep>=GUIDE_CHAIN.length) return 0;
+  const need=(S.guideStep===GUIDE_CHAIN.length-1 ? GUIDE_RECIPE.final : GUIDE_RECIPE.step).gold;
+  return Math.max(0, Math.ceil(need - S.gold));
+}
+/* ★ 2026-09-25: 배너가 보이면 좌·우 HUD 열을 배너 높이만큼 내린다(style.css --gbh) — 배너가 시계·축제·절전 토글을 덮던 결함(#7). */
+function syncGuideOffset(){
+  const sw=$('#stage-wrap'), bn=$('#guide-banner'); if(!sw || !bn || !sw.style || !sw.style.setProperty) return;
+  const h = bn.classList.contains('hidden') ? 0 : (bn.offsetHeight||0);
+  const v = h>0 ? (h+4)+'px' : '0px';
+  if(sw._gbh!==v){ sw._gbh=v; sw.style.setProperty('--gbh', v); }
+}
 function updateGuideBanner(){
   const bn=$('#guide-banner'); if(!bn) return;
-  if(!S.seenTutorial || S.guideStep>=GUIDE_CHAIN.length){ bn.classList.add('hidden'); return; }
+  if(!S.seenTutorial || S.guideStep>=GUIDE_CHAIN.length){ bn.classList.add('hidden'); syncGuideOffset(); return; }
   const g=GUIDE_CHAIN[S.guideStep], need=GUIDE_NEED[S.guideStep]||1, prog=S.guideProg||0;
   bn.classList.remove('hidden');
   /* ★ v5.109: 길잡이 목표 아이콘도 아이콘 팩을 쓴다(종전엔 이모지 그대로 노출).
      목표는 언제나 '제작할 장비'라 부위 아이콘(equipImg)이 goalIcon 이모지보다 정확하다. */
   const ic=$('#gbGoal'); if(ic) ic.innerHTML = g.slot ? equipImg(g.slot, 1.15) : eImg(g.goalIcon, 1.15);
-  $('#gbTxt').textContent=`길잡이 ${S.guideStep+1}/${GUIDE_CHAIN.length} · ${guideName(g)} 제작${need>1?` (${prog}/${need})`:''}`;
+  const short=guideGoldShort();
+  const txt = short>0
+    ? `길잡이 ${S.guideStep+1}/${GUIDE_CHAIN.length} · ${guideName(g)} · 골드 ${fmt(short)} 부족`
+    : `길잡이 ${S.guideStep+1}/${GUIDE_CHAIN.length} · ${guideName(g)} 제작${need>1?` (${prog}/${need})`:''}`;
+  const gt=$('#gbTxt'); if(gt && gt.textContent!==txt) gt.textContent=txt;
+  bn.classList.toggle('short', short>0);
+  const go=$('#gbGo'); if(go){ const lab = short>0 && dailyLeft('gold',3)>0 ? '골드던전' : '바로가기'; if(go.textContent!==lab) go.textContent=lab; }
   const ri=$('#gbRwIc'); if(ri) ri.innerHTML=eImg(g.rewardIcon, 1.15);   // ★ v5.109
   const rq=$('#gbRwQty'); if(rq) rq.textContent='X'+fmt(g.rewardQty);
+  syncGuideOffset();
 }
 // ★ 길잡이 실제 추적 — 9단계 전부 '제작 성공'만으로 진행된다 (합성·각성·투기장 조건 없음)
 function guideCheck(ev, data){
@@ -5416,7 +5439,7 @@ function craftStart(grade, catKey, item){
   if(S.gold<cp.gold){
     S.stats.poorClick=(S.stats.poorClick||0)+1;
     S.stats.poorBest=Math.max(S.stats.poorBest||0,S.stats.poorClick);
-    toast('골드가 부족합니다.'); return;
+    toast(cp.guide ? '골드가 부족합니다 · 모험 → 골드던전(일 3회)에서 벌 수 있습니다.' : '골드가 부족합니다.'); return;   // ★ 2026-09-25: 길잡이 단계면 벌 곳 안내
   }
   S.stats.poorClick=0;                                                      // 제작이 실제로 시작되면 스트릭 초기화
   item.recipe.forEach(r=>matSpend(r.k,r.need)); S.gold-=cp.gold;
@@ -5669,11 +5692,19 @@ const MODALS = {
            종전엔 원값만 표기해 프리미엄 버프(-50%)가 켜져 있으면 '30초'라 쓰고 15초에
            완성되던 표시↔판정 불일치였다. 할인 중이면 금색+버프 표시로 체감도 준다. */
         const effSec=Math.ceil(cp.sec*craftTimeMul());
-        info.innerHTML=`제작시간 : <b${effSec<cp.sec?' style="color:var(--g-legend)"':''}>${mmss(effSec)}</b>${effSec<cp.sec?' <span style="color:var(--g-legend)">버프 적용</span>':''}<br>필요 골드 : <b style="color:${G.color}">${fmt(cp.gold)}</b><br>제작 확률 : <b style="color:${G.color}">${Math.round(cp.p0*100)}%</b>`
+        /* ★ 2026-09-25: 골드가 모자라면 빨강 + '(N 부족)' — 재료는 부족하면 빨강인데 골드만 표시가 없었다(검증 워크플로 #1). */
+        const gShort=Math.max(0, Math.ceil(cp.gold-S.gold));
+        info.innerHTML=`제작시간 : <b${effSec<cp.sec?' style="color:var(--g-legend)"':''}>${mmss(effSec)}</b>${effSec<cp.sec?' <span style="color:var(--g-legend)">버프 적용</span>':''}<br>필요 골드 : <b style="color:${gShort?'var(--bad)':G.color}">${fmt(cp.gold)}</b>${gShort?` <span style="color:var(--bad)">(${fmt(gShort)} 부족)</span>`:''}<br>제작 확률 : <b style="color:${G.color}">${Math.round(cp.p0*100)}%</b>`
           + (cp.guide?'<br><b style="color:var(--g-legend)">길잡이 단계</b>':'');
         side.appendChild(info);
-        /* ★ v5.58: 제작 버튼 클릭 시 제작 팝업(확률/비용 표시) → 확인 후 startCraft. */
+        /* ★ v5.58: 제작 버튼 클릭 시 제작 팝업(확률/비용 표시) → 확인 후 startCraft.
+           ⚠ 골드가 모자라도 [제작]은 그대로 둔다 — 칭호 '빈털터리'(부족한 채 제작 연속 시도)의 획득 경로다. */
         const btn=el('button','btn gold sm','제작'); btn.id='forgeCraftBtn'; btn.onclick=()=>openForgeItemPopup(item); side.appendChild(btn);
+        if(gShort && cp.guide){   // 길잡이 단계에서 골드가 막히면 바로 벌 곳을 알려 준다
+          const left=dailyLeft('gold',3);
+          if(left>0){ const gd=el('button','btn sm',`골드던전 (${left}/3)`); gd.style.marginTop='4px'; gd.onclick=()=>{ if(busyFight()) return; openModal('golddungeon'); }; side.appendChild(gd); }
+          else side.appendChild(el('div','small mut',`방치로 약 ${Math.ceil(gShort/Math.max(1,idleGoldPerMin()))}분`));
+        }
       }
       grid.appendChild(side); body.appendChild(grid);
       // G-17: 6칸 부위행 — 5·6번째(용광로·망치)는 액션 숏컷
@@ -5741,7 +5772,8 @@ const MODALS = {
     b.appendChild(matn);
     /* ★ v5.60: 제작 정보를 명확히 3줄로 표시. */
     b.appendChild(el('div','stat-line',`<span>제작시간</span><span class="v" style="color:#f0cd82">${mmss(Math.ceil(c.cp.sec*craftTimeMul()))}${c.cp.sec*craftTimeMul()<c.cp.sec?' · 버프':''}</span>`));   /* ★ v5.176: 실제 소요 기준 */
-    b.appendChild(el('div','stat-line',`<span>필요 골드</span><span class="v" style="color:${G.color}">${fmt(c.cp.gold)}</span>`));
+    { const gs=Math.max(0, Math.ceil(c.cp.gold-S.gold));   // ★ 2026-09-25: 부족하면 빨강 + 부족액
+      b.appendChild(el('div','stat-line',`<span>필요 골드</span><span class="v" style="color:${gs?'var(--bad)':G.color}">${fmt(c.cp.gold)}${gs?` (${fmt(gs)} 부족)`:''}</span>`)); }
     b.appendChild(el('div','stat-line',`<span>제작 확률</span><span class="v" style="color:${c.cp.p0>=1?'var(--ok)':'var(--warn)'}">${Math.round(c.cp.p0*100)}%</span>`));
     b.appendChild(el('div','warn','⚠ 실패 시 재료 90% 환급'));
     const row=el('div','btnrow'); row.style.marginTop='9px';
@@ -6392,7 +6424,7 @@ const MODALS = {
         const ttl=rewardTitle();
         if(ttl) rankBox.appendChild(el('div','ar-rwtitle',ttl));
         rewardRows().forEach(([r,v,me],i)=>{
-          const row=el('div','lrow'+(me?' me':''));
+          const row=el('div','lrow rw'+(me?' me':''));   // ★ 2026-09-25: rw — 보상표 라벨이 음절 단위로 쪼개지던 것(레/전/더/리) 방지(style.css .lrow.rw)
           const cls = i<3 ? ' rank-'+(i+1) : '';                                               // ★ G-88 (상위 3행 색배지)
           row.innerHTML=`<div class="nm2${cls}">${r}</div><div class="sc">${v}</div>`;
           rankBox.appendChild(row);
@@ -7359,7 +7391,7 @@ const MODALS = {
       const bar=el('div','settle-hero');
       bar.innerHTML=`<div class="sh-top"><b style="color:${GRADES[p0.grade].color}">${p0.job.name}</b><span>${p0.level}LV</span></div>`;
       const pb=el('div','pbar'); pb.appendChild(el('i')); pb.firstChild.style.width=pct+'%'; bar.appendChild(pb);
-      bar.appendChild(el('div','sh-pct',`${pct}%`));
+      bar.appendChild(el('div','sh-pct',`${Math.floor(pct)}%`));   // ★ 2026-09-25: '6.800000000000001%' 부동소수 노출 방지 — 내림(99.6% 를 100% 로 보이지 않게)
       b.appendChild(bar);
     }
     // ② 통화줄
@@ -9432,7 +9464,7 @@ function gameLoop(ts){
   hudT-=dt; if(hudT<=0){ hudT=0.5; refreshHUD(); tickClock(); tickForge(); reviveHUDTick(); }
   requestAnimationFrame(gameLoop);
 }
-setInterval(()=>{ save(); refreshClaimBadges(); }, 5000);   /* ★ v5.162: 배지 갱신 동반 — 전투 중 미션 달성도 5초 안에 점이 켜진다 */
+setInterval(()=>{ save(); refreshClaimBadges(); try{ updateGuideBanner(); }catch(e){} }, 5000);   // ★ 2026-09-25: 골드가 차면 배너가 '부족'에서 원래대로(글자는 바뀔 때만 씀)   /* ★ v5.162: 배지 갱신 동반 — 전투 중 미션 달성도 5초 안에 점이 켜진다 */
 /* ★ v5.173: 백그라운드 탭 복귀 정산 — rAF 는 백그라운드에서 스로틀돼 방치 수입이 멈추는데,
    5초 저장 타이머는 살아 있어 lastSeen 이 계속 갱신된다 → 숨김 구간은 오프라인 정산
    (computeOffline, 세션 로드 시 1회)에도 못 들어가 완전히 증발했다.
@@ -9545,7 +9577,11 @@ function wire(){
   const npl=$('#npc-layer'); if(npl) npl.addEventListener('click', nextDialogue);
   /* ★ v5.119: 바로가기는 '대장간 유도'로 설계한다. 퀘스트 목록을 한 번 거치던 것을
      현재 목표가 선택된 대장간 직행으로 — [바로가기] → [제작] 두 번이면 끝난다. */
-  const gbGo=$('#gbGo'); if(gbGo) gbGo.addEventListener('click',()=>{ const g=guideTarget(); if(g) openModal('forge', g.slot); else openModal('quest'); });
+  /* ★ 2026-09-25: 골드가 모자란 단계면 [골드던전]으로(오늘 남은 횟수가 있을 때) — 대장간에 가 봐야 '골드가 부족합니다' 뿐이다. */
+  const gbGo=$('#gbGo'); if(gbGo) gbGo.addEventListener('click',()=>{ const g=guideTarget();
+    if(g && guideGoldShort()>0 && dailyLeft('gold',3)>0 && !busyFight()){ openModal('golddungeon'); return; }
+    if(g) openModal('forge', g.slot); else openModal('quest'); });
+  const gbn=$('#guide-banner'); if(gbn && typeof ResizeObserver==='function') new ResizeObserver(()=>syncGuideOffset()).observe(gbn);   // 배너 높이 변화(줄바꿈·배율) 추적
   $('#battle').addEventListener('click',()=>{ $('#sidemenu').classList.add('hidden'); });
   document.querySelectorAll('[data-modal]').forEach(elm=>{ elm.addEventListener('click',()=>{ sfx('tap'); $('#sidemenu').classList.add('hidden'); openModal(elm.dataset.modal); }); });
   const ci=$('#chatInput'); ci.addEventListener('keydown',e=>{ if(e.key==='Enter'&&ci.value.trim()){
