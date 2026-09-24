@@ -1407,7 +1407,7 @@ function freshState(){
     hammerN:20, hammers:2,   // hammerN=일반 망치(드랍/일일퀘/상점) · hammers=전설 망치(일반 15 → 1 제작)
     wards:10,                // ★ B3/G-39: 하락 방지권 — 강화 실패 시 +단계 하락을 막는다
     invTab:'무기',           // ★ B3/G-43: 인벤토리 장비 탭 (무기 / 벨트)
-    settings:{ sound:true, vol:1, graphic:'상' },  // ★ B9/G-133 그래픽 품질(상/중/하) · ★ v5.200 마스터 볼륨(0~1, 기본 1)
+    settings:{ sound:true, vol:1, graphic:'상', fxShake:true, fxFlash:true, fxDmg:true },   // ★ 2026-09-25: 연출 줄이기 3종(기본 켜짐 — 기존 이용자 체감 불변)  // ★ B9/G-133 그래픽 품질(상/중/하) · ★ v5.200 마스터 볼륨(0~1, 기본 1)
     title:'newbie',          // ★ B9/G-119: N등급 기본 칭호를 착용한 채로 시작(해제 불가)
     attendLastDate:'',       // ★ B9/G-123: 출석 마지막 수령 날짜(1일 1회 검증)
     classTrait:'', costumeOn:'', raidOn:false, guildCoin:120,
@@ -1628,9 +1628,11 @@ function migrateNames(){
    컴백 훅은 세워지고 경제를 흔들지 않는다. 버프(마을·코스튬·칭호)는 인게임
    실전투에만 적용: 오프라인은 기본률 고정(보수적). */
 const OFFLINE_GPM = Math.round(18885*0.5);   // 분당
+/* ★ 2026-09-25: 오프라인 상한(시간) 단일 출처 — 종전엔 8 이 game.js 4곳(부팅 정산·복귀 정산·정산 화면 2곳)과 시뮬·스모크에\n   각각 박혀 있었다. 한 곳만 바꾸면 화면 문구·시뮬·검사가 조용히 어긋난다 → 전부 이 상수를 읽는다. */
+const OFFLINE_CAP_H = 8;
 function computeOffline(){
   const now=Date.now();
-  if(S.lastSeen){ const elapsed=(now-S.lastSeen)/1000, cap=8*3600; if(elapsed>60){ S.offlinePending=(S.offlinePending||0)+Math.floor(OFFLINE_GPM/60*Math.min(elapsed,cap)); } }
+  if(S.lastSeen){ const elapsed=(now-S.lastSeen)/1000, cap=OFFLINE_CAP_H*3600; if(elapsed>60){ S.offlinePending=(S.offlinePending||0)+Math.floor(OFFLINE_GPM/60*Math.min(elapsed,cap)); } }
   S.lastSeen=now;
 }
 // 깊은 병합: 중첩 객체 신규 하위키까지 기본값 채움 (세이브 마이그레이션 NaN 방지)
@@ -1892,6 +1894,12 @@ function bossBanner(name, col){
   setTimeout(()=>{ try{ b.remove(); }catch(e){} }, 1500);
   sfx('boss'); setTimeout(()=>sfx('boss'), 170);
 }
+/* ★ 2026-09-25: 연출 줄이기 — 설정 3종(흔들림·번쩍임·데미지 숫자) + OS '동작 줄이기'(prefers-reduced-motion)면 흔들림 자동 끔.
+   2026-09-24~25 에 흔들림·번쩍임·숫자 연출을 늘렸으므로 끌 수단을 함께 둔다(광과민·멀미·저사양). 모두 그리기 전용 —
+   꺼도 전투 계산·결정론은 같다. body.fx-noflash 는 CSS 쪽 번쩍임(레전더리 광원·강화 광선·보스 비네트)을 약하게 만든다. */
+const _reducedMotion=(()=>{ try{ return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }catch(e){ return false; } })();
+function fxOn(k){ const st=S&&S.settings; if(k==='fxShake' && _reducedMotion) return false; return !st || st[k]!==false; }
+function applyFxClass(){ try{ document.body.classList.toggle('fx-noflash', !fxOn('fxFlash')); }catch(e){} }
 /* ---- SFX (Web Audio 합성음, 외부 파일 없음) ---- */
 let _actx=null;
 function initAudio(){ if(_actx) return; try{ _actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} }
@@ -2724,7 +2732,7 @@ const Battle = (()=>{
      같은 대상이 250ms 안에 또 맞으면 16px 씩 위로 쌓는다(최대 3단) · 화면 동시 숫자는 24개로 묶고 넘치면 오래된 일반 숫자부터 뺀다.
      전부 연출 전용 값(벽시계·fx)이라 전투 결정론과 무관. */
   const DMG_CAP=24;
-  function dmgText(x,y,val,crit,color,kind){ _dmgSeq=(_dmgSeq+1)%3;
+  function dmgText(x,y,val,crit,color,kind){ if(!fxOn('fxDmg')) return; _dmgSeq=(_dmgSeq+1)%3;
     /* ⚠ splice 금지: dmgText 는 bolt 착탄(fx.forEach 안의 hitMob)에서도 불린다 — 순회 중 배열을 줄이면 다음 fx(착탄 대기 bolt 포함)의
        진행이 한 스텝 밀려 전투 결과가 바뀐다. 오래된 숫자는 t=1(수명 끝)로 표시만 하고 다음 filter 가 치운다(dmg 는 그리기 전용). */
     let n=0; for(const f of fx) if(f.type==='dmg' && f.t<1) n++;
@@ -3380,7 +3388,8 @@ const Battle = (()=>{
   }
   function drawScene(){
     ctx.clearRect(0,0,W,H);
-    const sx=shake>0?(Math.random()-0.5)*shake*36:0, sy=shake>0?(Math.random()-0.5)*shake*36:0;
+    const shk=(shake>0 && fxOn('fxShake'))?shake:0;   // ★ 2026-09-25: 흔들림 끄기·OS 동작 줄이기 존중(그리기 오프셋만 — shake 값 자체는 그대로)
+    const sx=shk>0?(Math.random()-0.5)*shk*36:0, sy=shk>0?(Math.random()-0.5)*shk*36:0;
     ctx.save(); ctx.translate(sx,sy);
     // ★ v5.23: 캔버스 배경 채우기 제거 — #stage-wrap 의 CSS 배경(bg_battle.jpg)이 보이게.
     //   어둡게 하려면 CSS 에서 배경 위에 overlay 를 주면 된다.
@@ -3454,7 +3463,7 @@ const Battle = (()=>{
         if(idx === 3){
           /* 궁극기 (35쿨) — 화면 전체 번쩍임 + 대형 3중 폭발 + 스킬명 */
           ctx.globalAlpha = clamp(1-e, 0, 1);
-          if(e < 0.15){ ctx.fillStyle = 'rgba(255,255,255,'+(0.5*(1-e/0.15))+')'; ctx.fillRect(0,0,W,H); }
+          if(e < 0.15 && fxOn('fxFlash')){ ctx.fillStyle = 'rgba(255,255,255,'+(0.5*(1-e/0.15))+')'; ctx.fillRect(0,0,W,H); }   // ★ 2026-09-25: 번쩍임 끄기 존중
           const r1 = R*(0.3+e*0.8);
           for(const [r,lw,a] of [[r1,4,0.6],[R*(0.2+e*0.6),3,0.5],[R*(0.1+e*0.4),2,0.4]]){
             ctx.globalAlpha = clamp(1-e,0,1)*a; ctx.strokeStyle = f.color; ctx.lineWidth = lw;
@@ -7168,7 +7177,7 @@ const MODALS = {
     5) 희귀에서 영웅(약 3일)·레전더리(약 6일) 장비로 오른다<br><br>
     <b style="color:#f0cd82">■ 병목과 해법</b><br>
     · 재료: 몬스터 도감(고정 드랍 몬스터) · 확정 합성 · 요일던전<br>
-    · 골드: 골드던전(일 3회) · 마을회관 · 오프라인 정산(최대 8시간)<br>
+    · 골드: 골드던전(일 3회) · 마을회관 · 오프라인 정산(최대 ${OFFLINE_CAP_H}시간)<br>
     · 창고: 하위 등급은 일괄분해로 골드 회수 (환급 90% 상한)<br><br>
     <b style="color:#f0cd82">■ 장기 목표 (레전더리 완성 이후)</b><br>
     · 강화 +11~25: 망치로 파괴를 막으며 도전 — +20까지 부위당 약 3.2억 골드, +21~25 극한(성공 30%)<br>
@@ -7210,11 +7219,11 @@ const MODALS = {
     cells.forEach(([ic,nm,v])=>{ const c=el('div','cell gframe'); c.innerHTML=`<div class="ei" style="font-size:19px">${eImg(ic,2)}</div><div class="cn">${nm}<br><b>${fmt(v||0)}</b></div>`; g.appendChild(c); });
     b.appendChild(g);
     // ⑤ 2분할 카드 — 1분당 획득 골드 / 오프라인 골드 (누적 시간 mm:ss)
-    const offSec=Math.min(8*3600, Math.floor((S.offlinePending||0)/OFFLINE_GPM*60));   /* ★ v5.196: 정본 비율로 환산 */
+    const offSec=Math.min(OFFLINE_CAP_H*3600, Math.floor((S.offlinePending||0)/OFFLINE_GPM*60));   /* ★ v5.196: 정본 비율로 환산 */
     const two=el('div'); two.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin:10px 0';
     two.innerHTML=`<div class="gframe" style="padding:10px;text-align:center"><div class="small mut">1분당 획득 골드</div><div style="font-size:15px;font-weight:800;color:var(--gold)">${fmt(rate)} G</div></div>
       <div class="gframe" style="padding:10px;text-align:center"><div class="small mut">오프라인 골드 ${mmss(offSec)}</div><div style="font-size:15px;font-weight:800;color:var(--gold)">${fmt(S.offlinePending||0)} G</div>
-      <div class="small mut" style="margin-top:2px">인게임 방치의 ${Math.round(OFFLINE_GPM/18885*100)}% · 최대 8시간</div></div>`;
+      <div class="small mut" style="margin-top:2px">인게임 방치의 ${Math.round(OFFLINE_GPM/18885*100)}% · 최대 ${OFFLINE_CAP_H}시간</div></div>`;
     b.appendChild(two);
     if(S.offlinePending>0){
       const btn=el('button','btn gold wide','수령'); btn.style.marginTop='6px';
@@ -7870,6 +7879,14 @@ const MODALS = {
       qb.onclick=()=>{ S.settings.graphic=q; toast(`그래픽 품질 · ${q}`); if(typeof Battle!=='undefined'&&Battle.resize) Battle.resize();   /* ★ v5.170: 픽셀비 상한 즉시 재적용 */
         openModal('settings'); }; gw.appendChild(qb); });
     gr.appendChild(gw); b.appendChild(gr);
+    /* ★ 2026-09-25: 연출 줄이기 — 흔들림·번쩍임·데미지 숫자 개별 끄기(fxOn). OS 동작 줄이기가 켜져 있으면 흔들림은 항상 꺼진다. */
+    const fr=el('div','pack'); fr.innerHTML=`<div class="pic">✨</div><div class="info"><div class="t">연출</div><div class="d">끄면 눈이 편해집니다${_reducedMotion?' · 기기 동작 줄이기 적용 중(흔들림 꺼짐)':''}</div></div>`;
+    const fw=el('div','optbtns');
+    [['fxShake','흔들림'],['fxFlash','번쩍임'],['fxDmg','숫자']].forEach(([k,lb])=>{ const on=fxOn(k);
+      const tb=el('button','btn sm'+(on?' gold':''), lb); tb.title=lb+(on?' 켜짐':' 꺼짐');
+      tb.onclick=()=>{ S.settings[k]=!(S.settings[k]!==false); applyFxClass(); sfx('tap'); toast(`${lb} ${S.settings[k]?'켜짐':'꺼짐'}`); save(); openModal('settings'); };
+      fw.appendChild(tb); });
+    fr.appendChild(fw); b.appendChild(fr);
     // ② 계정
     const ar=el('div','pack'); ar.innerHTML=`<div class="pic">👤</div><div class="info"><div class="t">계정</div><div class="d">${S.name} · ${S.server}</div></div>`;
     const ab=el('button','btn sm','로그아웃'); ab.onclick=()=>toast('로그아웃은 데모에서 지원하지 않습니다'); ar.appendChild(ab); b.appendChild(ar);
@@ -9235,7 +9252,7 @@ setInterval(()=>{ save(); refreshClaimBadges(); }, 5000);   /* ★ v5.162: 배�
 let _tabHideTs=0;
 function _visibilitySettle(hideTs, nowTs){
   if(!S || !hideTs) return 0;
-  const elapsed=(nowTs-hideTs)/1000, cap=8*3600;
+  const elapsed=(nowTs-hideTs)/1000, cap=OFFLINE_CAP_H*3600;
   const add = elapsed>60 ? Math.floor(OFFLINE_GPM/60*Math.min(elapsed,cap)) : 0;   /* ★ v5.196: 정본 상수 사용 */
   if(add>0){
     S.offlinePending=(S.offlinePending||0)+add;
@@ -9457,7 +9474,7 @@ window.addEventListener('error', (e)=>{ reportFatal('script', e.error || e); });
 window.addEventListener('unhandledrejection', (e)=>{ reportFatal('promise', e.reason || e); });
 
 window.addEventListener('DOMContentLoaded',()=>{
-  load(); wire(); refreshHUD();
+  load(); wire(); refreshHUD(); applyFxClass();
   scheduleUIScale();
   /* ★ v5.201: 접속 보상 토스트 플러시 — rollDaily 가 load() 안에서 돌아 이 시점에야
      #toast 상자가 살아 있다. 보상은 이미 지급됨(sysLog도 load 중 기록). */

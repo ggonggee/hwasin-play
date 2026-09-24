@@ -35,6 +35,8 @@ const CASUAL = process.argv.slice(3).some(a=>a==='casual');
    Battle.setSeed)이 같은 N을 쓴다. seed=0 금지(xorshift가 0에 갇힘). */
 const SEED = (()=>{ for(const a of process.argv.slice(3)){ const m=/^seed=(\d+)$/.exec(a||''); if(m){ const n=Number(m[1])>>>0; if(!n) throw new Error('seed=0 은 xorshift 붕괴 — 1 이상'); return n; } } return 42; })();
 const ACTIVE_WINDOWS_PER_DAY = 16;
+/* ★ 2026-09-25: 오프라인 상한 — 기본은 game.js 의 OFFLINE_CAP_H(단일 출처). 'offcap=N' 인자로 가정 실험(게임 코드 무수정). */
+const OFFCAP_ARG = (()=>{ for(const a of process.argv.slice(3)){ const m=/^offcap=(\d+)$/.exec(a||''); if(m) return Number(m[1]); } return null; })();
 
 /* ---- 최소 DOM 스텁 (smoke-test 의 것에서 전투 구동에 필요한 만큼만) ---- */
 class CL{ constructor(){this.s=new Set();}
@@ -675,7 +677,7 @@ while(simSec < MAX_HOURS*3600 && windows<51200){   // ★ v5.257: 창 상한 512
      8h 상한 적용(16h치 적립돼도 8h분만 — 정본 computeOffline 규칙). */
   if(CASUAL && (windows % 48)===1 && (windows>1)){
     const Sc=ev('S');
-    const cap=Math.floor(ev('OFFLINE_GPM')/60*8*3600);
+    const cap=Math.floor(ev('OFFLINE_GPM')/60*(OFFCAP_ARG||ev('OFFLINE_CAP_H'))*3600);
     const give=Math.min(Sc.offlinePending||0, cap);
     if(give>0){ ev('addGold')(give); Sc.offlinePending=0; }
   }

@@ -625,11 +625,11 @@ step('백그라운드 탭 복귀 정산 — 정본 비율 적립 · 30초 미만
    방치가 상한 없이 적립되면 '인게임 방치의 50%·최대 8시간' 약속과 어긋난다. 부팅 경로
    (computeOffline)와 백그라운드 복귀(_visibilitySettle) 양쪽의 min(elapsed, 8h) 상한과
    60초 엄격 임계(>60)를 실증한다. 방치 게임의 핵심 수급 경로 경계. */
-step('오프라인 정산 8h 상한 — 부팅·복귀 양 경로 + 60초 임계', ()=>{
-  const S=ev('S'), GPM=ev('OFFLINE_GPM');
+step('오프라인 정산 상한(OFFLINE_CAP_H) — 부팅·복귀 양 경로 + 60초 임계', ()=>{
+  const S=ev('S'), GPM=ev('OFFLINE_GPM'), CAPH=ev('OFFLINE_CAP_H');   // ★ 2026-09-25: 상한은 game.js 단일 상수에서 읽는다
   const errs=[];
-  const want8h=Math.floor(GPM/60*8*3600);
-  for(const hrs of [12, 48]){
+  const want8h=Math.floor(GPM/60*CAPH*3600);   // (이름은 이력상 want8h — 값은 현재 상한)
+  for(const hrs of [CAPH+4, 48]){
     const keep={ pending:S.offlinePending||0, lastSeen:S.lastSeen };
     S.offlinePending=0; S.lastSeen=Date.now()-hrs*3600e3;
     ev('computeOffline')();
@@ -642,7 +642,7 @@ step('오프라인 정산 8h 상한 — 부팅·복귀 양 경로 + 60초 임계
     if((S.offlinePending||0)!==0) errs.push('computeOffline 60초 경과분이 적립됐다(임계 >60 위반)');
     S.offlinePending=keep.pending; S.lastSeen=keep.lastSeen; }
   { const before=S.offlinePending||0;
-    const got=ev('_visibilitySettle')(Date.now()-12*3600e3, Date.now());
+    const got=ev('_visibilitySettle')(Date.now()-(CAPH+4)*3600e3, Date.now());
     if(got!==want8h) errs.push(`_visibilitySettle 12h → ${got}(기대 ${want8h})`);
     if((S.offlinePending||0)!==before+want8h) errs.push('_visibilitySettle 상한분 미적립');
     S.offlinePending=before; }
