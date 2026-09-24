@@ -677,7 +677,7 @@ while(simSec < MAX_HOURS*3600 && windows<51200){   // ★ v5.257: 창 상한 512
      8h 상한 적용(16h치 적립돼도 8h분만 — 정본 computeOffline 규칙). */
   if(CASUAL && (windows % 48)===1 && (windows>1)){
     const Sc=ev('S');
-    const cap=Math.floor(ev('OFFLINE_GPM')/60*(OFFCAP_ARG||ev('OFFLINE_CAP_H'))*3600);
+    const cap=Math.floor(ev('OFFLINE_GPM')/60*(OFFCAP_ARG!==null?OFFCAP_ARG:ev('OFFLINE_CAP_H'))*3600);   // offcap=0 도 유효한 실험값(|| 는 0 을 버린다)
     const give=Math.min(Sc.offlinePending||0, cap);
     if(give>0){ ev('addGold')(give); Sc.offlinePending=0; }
   }

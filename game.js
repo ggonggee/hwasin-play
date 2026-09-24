@@ -4962,7 +4962,9 @@ function openModal(key, arg){   // ★ B3/G-45: arg 전달 (예: openModal('equi
 }
 let _introActive=false;
 function closeModal(){ closeSub(); $('#modal-root').classList.remove('on'); currentModal=null; if(_introActive){ _introActive=false; startGuidedTutorial(); } tutFingerTick();
-  if(_wipePending!==null){ const t=_wipePending; _wipePending=null; setTimeout(()=>{ if(!currentModal) showWipeAdvice(t); }, 250); } }
+  /* 대기 중이던 전멸 분석을 띄운다. 250ms 사이 다른 화면이 열리면(closeModal(); openModal(X) 패턴 — 이 파일에 흔하다) 버리지 말고
+     다시 대기시켜 그 화면을 닫을 때 띄운다(코드리뷰 2026-09-25 발견: 종전엔 여기서 조용히 유실됐다 — queueWipeAdvice 와 대칭). */
+  if(_wipePending!==null){ const t=_wipePending; _wipePending=null; setTimeout(()=>{ if(!currentModal) showWipeAdvice(t); else if(_wipePending===null) _wipePending=t; }, 250); } }
 /* ★ 2026-09-25: 정체 계단 패널 — 홈 사냥 전멸 시 "왜 졌나(권장 대비 부족분)" 와 "무엇으로 풀리나(수단 3개의 전투력 +N)" 를
    숫자로 보여준다. 종전엔 토스트 한 줄 뒤 최하급으로 후퇴만 했다 — 무엇을 해야 다시 올라갈 수 있는지는 이용자가 알아서 찾아야 했다.
    (설계 종합 1순위 P2: 자료의 강의 규칙집 140강 + 8게임 실측에서 가장 일관된 원칙 — '벽이 아니라 계단'. 구조만 차용)
@@ -9326,7 +9328,7 @@ setInterval(()=>{ save(); refreshClaimBadges(); }, 5000);   /* ★ v5.162: 배�
 /* ★ v5.173: 백그라운드 탭 복귀 정산 — rAF 는 백그라운드에서 스로틀돼 방치 수입이 멈추는데,
    5초 저장 타이머는 살아 있어 lastSeen 이 계속 갱신된다 → 숨김 구간은 오프라인 정산
    (computeOffline, 세션 로드 시 1회)에도 못 들어가 완전히 증발했다.
-   숨김 구간을 오프라인과 같은 배율(분당 1,000G · 상한 8시간)로 offlinePending 에 쌓는다 —
+   숨김 구간을 오프라인과 같은 배율(OFFLINE_GPM · 상한 OFFLINE_CAP_H 시간 — 2026-09-25 부터 12h)로 offlinePending 에 쌓는다 —
    새 경제가 아니라 기존 오프라인 규칙의 사각만 메우는 것이다.
    _visibilitySettle(hideTs, nowTs) 를 나눈 건 스모크에서 시계 없이 검증하기 위해서다. */
 let _tabHideTs=0;
