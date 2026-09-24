@@ -652,6 +652,8 @@ function costumeHas(id){
   const li=COSTUME_LEGACY_IDX[id];
   return li!==undefined && ((S&&S.costumes)||0)>li;
 }
+/* ★ 2026-09-25: 아직 보유하지 않은 한정(비매품 레거시) 코스튬 id — 회색코인 '한정 코스튬' 상품이 준다. */
+function legacyCostumeNext(){ return Object.keys(COSTUME_LEGACY_IDX).find(id=>!costumeHas(id))||null; }
 // 착용 코스튬의 전투 스탯 배율 (공/체 +10%)
 // ★ 소유 재검증 필수: 착용 id가 표에 존재하기만 해도 버프가 나가면, 구세이브 이관 경로로
 //   "사지 않은 코스튬"의 효과가 새어나간다(v3.8 D1 오지급 버그와 같은 계열).
@@ -752,7 +754,9 @@ const GRAYSHOP = [
   { t:'영웅 재료 1개',      ic:'🟪', cost:35,   give:()=>{ matGainGrade('E',1); } },
   { t:'레전더리 재료 1개',  ic:'🟨', cost:90,   give:()=>{ matGainGrade('L',1); } },
   { t:'영웅 소환권(고급) 1장', ic:'🎟️', cost:300,  give:()=>{ S.tickHero+=1; } },
-  { t:'한정 코스튬(스탯효과)', ic:'👘', cost:1500, give:()=>{ S.costumes+=1; } },
+  /* ★ 2026-09-25: 종전 give 는 레거시 카운터 +1 뿐이라 카운터가 이미 3 이상(루비 구매로 올라간 경우)이면 코인만 빠지고 아무것도 안 줬다.
+     이제 아직 없는 한정 코스튬(작열·서리·황금 예복)을 하나 준다. 전부 보유면 목록에서 내린다(soldOut). */
+  { t:'한정 코스튬(스탯효과)', ic:'👘', cost:1500, soldOut:()=>!legacyCostumeNext(), give:()=>{ const id=legacyCostumeNext(); if(id){ S.costumeOwn=S.costumeOwn||{}; S.costumeOwn[id]=true; toast(`${(costumeById(id)||{}).name||'한정 코스튬'} 획득 — 코스튬 메뉴에서 착용`); } } },
   /* ★ v5.6: 하락 방지권은 초기 10개만 주고 재보급 경로가 0 이었다 —
      다 쓰면 '강화 실패 시 단계 하락'을 막을 방법이 영구히 사라졌다. 여기서 보급한다. */
   { t:'하락 방지권 3개',    ic:'🔮', cost:60,   give:()=>{ S.wards=(S.wards||0)+3; } },
@@ -5363,9 +5367,18 @@ function salvageValue(e){
 /* ★ v5.188: 일괄 분해 — 등급별 미장착 전체를 한 번에. 개별 분해(v5.187)로 60개를
    누르는 건 노동이다. 환급은 개별과 같은 salvageValue 총합 — 상한 논리도 동일하게 적용된다.
    doSalvageBulk 만 실행(차감·삭제), salvageBulk 는 계산만(스모크가 직접 검증). */
+/* ★ 2026-09-25: 보유형 효과 아이템(고서 — tomeMul · 물약 — potionRegenAdd)은 착용 없이 '보유만으로' 효과가 난다.
+   종전 일괄 분해는 미장착 전체를 지워 경고 없이 효과가 사라졌다(실측: N 일괄분해 한 번에 전투력 −3.3%). → 종류(이름)당 1개는 남긴다.
+   효과는 종류 수로 세므로 같은 이름의 여분은 분해해도 손실이 없다. 착용 중인 사본도 보유로 센다. */
+const HOLD_FX_RE=/고서|물약/;
 function salvageBulk(grade){
-  const list=S.equips.filter(e=>!e.equipped && e.grade===grade);
-  return { count:list.length, gold:list.reduce((a,e)=>a+salvageValue(e),0) };
+  const kept=new Set(S.equips.filter(e=>e.equipped && HOLD_FX_RE.test(e.slot||'')).map(e=>e.slot));
+  const keptNow=[];
+  const list=S.equips.filter(e=>!e.equipped && e.grade===grade).filter(e=>{
+    if(!HOLD_FX_RE.test(e.slot||'') || kept.has(e.slot)) return true;   // 효과 없음 · 이미 한 개 남김 → 분해 대상
+    kept.add(e.slot); keptNow.push(e.slot); return false;                // 그 종류의 마지막 1개 → 보존
+  });
+  return { list, count:list.length, gold:list.reduce((a,e)=>a+salvageValue(e),0), keptFx:keptNow };
 }
 function doSalvageBulk(grade){
   const {count,gold}=salvageBulk(grade);
@@ -5373,7 +5386,7 @@ function doSalvageBulk(grade){
   styledConfirm(`정말 일괄 분해하시겠습니까?`, ()=>{
     const again=salvageBulk(grade);                    // 차감 직전 재검증(같은 패턴)
     if(!again.count){ toast('이미 처리되었습니다.'); return; }
-    S.equips=S.equips.filter(e=>e.equipped||e.grade!==grade);
+    const kill=new Set(again.list); S.equips=S.equips.filter(e=>!kill.has(e));   // ★ 2026-09-25: 등급 일괄이 아니라 목록 동일성으로(보유 효과 1개 보존)
     /* ★ 2026-09-25: 환급은 raw — 견적(salvageValue)=지급. 골드 버프가 붙으면 제작가를 넘어 제작→분해 순환 이익이 생겼다
        (실측: L 제작가 1,200만 · 견적 600만 · 프리미엄+칭호 실지급 1,320만). v5.187 '분해는 항상 손실' 원칙 복원. */
     addGold(again.gold, true);
@@ -5381,7 +5394,7 @@ function doSalvageBulk(grade){
     toast(`${GRADES[grade].name} 등급 ${again.count}개 분해 · 골드 +${fmt(again.gold)}`);
     sysLog(`일괄 분해 — ${GRADES[grade].name} ${again.count}개 → 골드 ${fmt(again.gold)}`);
     sfx('coin'); openModal('inventory'); refreshHUD();
-  }, { title:'일괄 분해', sub:`${GRADES[grade].name} 미장착 ${count}개 → 골드 ${fmt(gold)} 회수` });
+  }, { title:'일괄 분해', sub:`${GRADES[grade].name} 미장착 ${count}개 → 골드 ${fmt(gold)} 회수${salvageBulk(grade).keptFx.length?' · 보유 효과(고서·물약)는 종류당 1개 남김':''}` });
 }
 /* ★ v5.151: 제작 시작 로직 — 종전엔 대장간 모달 클로저(startCraft) 안에만 있었다.
    결과 팝업의 [다시 제작] 이 같은 판정·차감 경로를 쓰게 하려고 밖으로 뺐다(내용은 이동일 뿐).
@@ -5443,6 +5456,19 @@ function rerollFix(){
   if(!Array.isArray(S.rerollLock) || S.rerollLock.length!==REROLL_ROWS.length) S.rerollLock=REROLL_ROWS.map(()=>false);
   if(!Array.isArray(S.rerollOpt)  || S.rerollOpt.length !==REROLL_ROWS.length) S.rerollOpt =REROLL_ROWS.map(()=>null);
   if(typeof S.rerollSpent!=='number' || !isFinite(S.rerollSpent) || S.rerollSpent<0) S.rerollSpent=0;
+}
+/* ★ 2026-09-25: 재설정 1행 실행(순수 상태 함수 — smoke 가 DOM 없이 검증). 반환 'ok'|'locked'|'sealed'|'short'|'bad'.
+   종전 결함(검증 워크플로 실측): ① 잠금(자물쇠)을 무시하고 잠긴 행도 재설정·과금 ② 사선(비활성) 표시된 레전더리 행도 클릭하면
+   주사위 50개가 빠졌다(CSS 가 클릭을 막지 않음). 표시와 동작을 맞춰 두 경우 모두 차감하지 않는다. */
+function rerollRow(i){
+  rerollFix();
+  const r=REROLL_ROWS[i]; if(!r) return 'bad';
+  if(S.rerollLock[i]) return 'locked';
+  if(r.g==='L') return 'sealed';
+  if(S.dice<r.cost) return 'short';
+  S.dice-=r.cost; S.rerollSpent=(S.rerollSpent||0)+r.cost;
+  S.rerollOpt[i]={ s:pick(REROLL_STATS), g:REROLL_RESULT_GRADE };
+  return 'ok';
 }
 
 /* 재료를 떨구는 몬스터 목록 팝업 — 같은 등급의 모든 몬스터 표시.
@@ -6157,6 +6183,9 @@ const MODALS = {
     b.appendChild(el('div','rr-have',`<span class="ri">${eImg("🎲",2)}</span><b>${fmtFull(S.dice)}</b>`));
     // ④ 소모 안내문 (적색 고정 문구 구성)
     b.appendChild(el('div','warn','*'+REROLL_ROWS.map((r,i)=>`${GRADES[r.g].name}${i?' ':' : '}${r.cost}개`).join(', ')+' 소요*'));
+    /* ★ 2026-09-25: 옵션은 아직 어떤 스탯에도 반영되지 않는다(S.rerollOpt 를 읽는 곳이 표시뿐 — 검증 워크플로 실측: 30회 재설정 후 전투력 불변).
+       모르고 주사위를 쓰지 않게 사실대로 알린다. 실효과 부여는 스탯 풀·확률 설계가 필요한 별도 과제(HANDOFF). */
+    b.appendChild(el('div','hint','※ 현재 옵션은 전투력에 반영되지 않습니다(준비 중) · 누적 소모는 칭호 [노름꾼] 조건(1,000개)에 집계됩니다'));
     // ⑤ 등급 4행
     const list=el('div','rr-list');
     REROLL_ROWS.forEach((r,i)=>{
@@ -6185,12 +6214,14 @@ const MODALS = {
       //   레전더리 행만 5장 전부에서 사선이다. 즉 부족과 무관한 별도 잠금 조건이 있다.
       //   확정 전까지 N/R/E는 항상 활성으로 두고(부족은 클릭 시 토스트로만 안내),
       //   L만 관측 그대로 사선을 유지한다. 필요 컷: 주사위 50개 이상 보유 상태의 이 화면.
-      const go=el('div','rr-go'+(r.g==='L'?' off':''),'↻');
+      const go=el('div','rr-go'+((r.g==='L'||locked)?' off':''),'↻');   // ★ 2026-09-25: 잠긴 행도 사선 — 표시 = 동작
       go.onclick=()=>{
-        if(S.dice<r.cost){ toast(`주사위가 부족합니다. (${r.cost}개 필요)`); return; }   // ← 차감 전 재검증
-        S.dice-=r.cost; S.rerollSpent=(S.rerollSpent||0)+r.cost;
-        S.rerollOpt[i]={ s:pick(REROLL_STATS), g:REROLL_RESULT_GRADE };
-        sfx('craft'); openModal('optionReroll', heroId); refreshHUD();
+        const res=rerollRow(i);   // ← 잠금·봉인·부족 판정과 차감이 한 함수(차감 전 재검증)
+        if(res==='locked'){ toast('잠긴 옵션입니다. 자물쇠를 열어야 재설정할 수 있습니다.'); return; }
+        if(res==='sealed'){ toast('레전더리 옵션 재설정은 아직 열리지 않았습니다.'); return; }
+        if(res==='short'){ toast(`주사위가 부족합니다. (${r.cost}개 필요)`); return; }
+        if(res!=='ok') return;
+        sfx('craft'); openModal('optionReroll', heroId); refreshHUD(); save();   // 주사위 차감 확정 즉시 저장(v5.309 원칙)
       };
       row.appendChild(go); list.appendChild(row);
     });
@@ -6654,7 +6685,7 @@ const MODALS = {
            길드 레이드·약탈·기여로 버는 재화이므로 길드 탭 하단에 교환소로 되붙인다. */
         grpLabel('회색코인 교환');
         curLine('gray');
-        GRAYSHOP.forEach(it=> mkBuy(it.ic,it.t,priceTxt('gray',it.cost),'gray',it.cost,it.give,'교환'));
+        GRAYSHOP.filter(it=>!(it.soldOut&&it.soldOut())).forEach(it=> mkBuy(it.ic,it.t,priceTxt('gray',it.cost),'gray',it.cost,it.give,'교환'));   // ★ 2026-09-25: 품절 상품은 숨긴다(과금 후 무지급 방지)
 
       /* ── ⑨ 코스튬 (G-101): COSTUMES 판매 5종, 루비 3,400 균일 ── */
       } else if(tab==='costume'){
@@ -6667,7 +6698,7 @@ const MODALS = {
           const ok=!owned&&S.ruby>=c.price;
           const btn=el('button','btn sm'+(ok?' gold':''), owned?'보유':'구매'); if(!ok) btn.disabled=true;
           btn.onclick=()=>{ if(costumeHas(c.id)) return; if(S.ruby<c.price){ toast('루비가 부족합니다.'); return; }
-            S.ruby-=c.price; S.costumeOwn=S.costumeOwn||{}; S.costumeOwn[c.id]=true; S.costumes=(S.costumes||0)+1;
+            S.ruby-=c.price; S.costumeOwn=S.costumeOwn||{}; S.costumeOwn[c.id]=true;   /* ★ 2026-09-25: 레거시 개수 카운터(S.costumes) 증가 삭제 — costumeHas 가 그 개수를 비매품 3종(flame·frost·gold) 보유로 읽어 루비 코스튬 3벌 구매 시 3벌을 공짜로 해금했다. 이미 해금된 기존 이용자 것은 그대로 둔다(U1). */
             sfx('craft'); toast(`${c.name} 획득 — 코스튬 메뉴에서 착용`); render(); refreshHUD(); save(); };   /* ★ v5.309: 구매 확정 즉시 저장 */
           card.mount(btn); });
       }
@@ -6701,7 +6732,7 @@ const MODALS = {
        제거가 버그 해소와 실측 일치를 동시에 만족한다. */
     const g=el('div','grid c4'); g.style.marginTop='8px';
     [['🪨','강화석',S.stones],['🔨','일반망치',S.hammerN||0],['🔨','전설망치',S.hammers||0],['🔮','하락방지',S.wards||0],
-     ['🎟️','영웅권',S.tickHero],['📦','재료권',S.tickMat],['👘','코스튬',S.costumes],['🎲','주사위',S.dice],
+     ['🎟️','영웅권',S.tickHero],['📦','재료권',S.tickMat],['👘','코스튬',COSTUMES.filter(c=>costumeHas(c.id)).length],   /* ★ 2026-09-25: 레거시 구매 카운터가 아니라 실제 보유 수 */['🎲','주사위',S.dice],
      ['📜','제작서',S.craftScroll],['🏘️','마을재료',S.villMat],['🎫','입장권',S.ticket],['📖','고서',S.equips.filter(e=>e.slot.indexOf('고서')>=0).length]]
       .forEach(([ic,nm,v])=>{ const c=el('div','cell gframe'); c.innerHTML=`<div class="ei">${eImg(ic,2)}</div><div class="cn">${nm} ${fmt(v)}</div>`; g.appendChild(c); });
     b.appendChild(g);
@@ -8615,7 +8646,9 @@ function itemDetail(e, heroId){ _itemDetailHeroId=heroId||null;
       sysLog(`장비 분해 — ${GRADES[e.grade].name} ${e.slot} → 골드 ${fmt(gold)}`);
       sfx('coin');
       openModal('inventory'); refreshHUD();
-    }, { title:'장비 분해', sub:`${GRADES[e.grade].name} ${e.slot}${e.enh?' +'+e.enh:''} → 골드 ${fmt(gold)} 회수` });
+    }, { title:'장비 분해', sub:`${GRADES[e.grade].name} ${e.slot}${e.enh?' +'+e.enh:''} → 골드 ${fmt(gold)} 회수`,
+         /* ★ 2026-09-25: 보유형 효과(고서·물약)의 마지막 1개면 경고 — 분해하면 효과(전투력·회복)가 사라진다 */
+         warn: (HOLD_FX_RE.test(e.slot||'') && S.equips.filter(x=>x.slot===e.slot).length===1) ? '*마지막 1개 — 분해하면 보유 효과가 사라집니다.*' : undefined });
   };
   row.append(eq,enh,sal); b.appendChild(row);
   const back=el('button','btn sm','◀ 장비 착용창'); back.style.marginTop='8px'; back.onclick=()=>openModal('equip'); b.appendChild(back);
@@ -8846,12 +8879,12 @@ function summonPityProb(f){
   return f>=70 ? 1 : f>=40 ? 0.01+(f-40)*0.02 : 0.01;
 }
 function summonRun(count, fixJob){
-  S.stats.summons++; const gained={}; let legend=false;
+  S.stats.summons++; const gained={}; let legend=false; const legendJobs=[];   // ★ 2026-09-25: 고급 조각(레전더리 판정)이 난 직업 — 결과 카드 표시용
   for(let i=0;i<count;i++){ const j = fixJob ? fixJob : pick(JOBS).id;
     S.summonFail=(S.summonFail||0)+1;
     const p=summonPityProb(S.summonFail);   // 소프트 40 / 하드 70 (★ v5.164 정본 공유)
     const r=Math.random(); let amt=1;
-    if(r<p){ legend=true; amt=3; S.summonFail=0; } else if(r<0.12){ amt=2; }
+    if(r<p){ legend=true; amt=3; S.summonFail=0; legendJobs.push(j); } else if(r<0.12){ amt=2; }   // 난수 호출 수·순서 불변(표시용 기록만 추가)
     S.shards[j]=(S.shards[j]||0)+amt; gained[j]=(gained[j]||0)+amt; }
   const unlocked=[];
   for(const cid in gained){
@@ -8860,7 +8893,7 @@ function summonRun(count, fixJob){
       const st=heroSlot(base.hero_id); st.own=true; st.level=st.level||1; unlocked.push(base);
     }
   }
-  Battle.refreshParty(); tutEvent('hsum'); save(); return { gained, legend, unlocked };   /* ★ v5.309: 소환 지급 확정 즉시 저장 */
+  Battle.refreshParty(); tutEvent('hsum'); save(); return { gained, legend, unlocked, legendJobs };   /* ★ v5.309: 소환 지급 확정 즉시 저장 */
 }
 /* ★ v5.4: 등급 공용풀 폐지(v4.3) 잔재 — `S.mats[g]++` (g='N'/'R'/'E') 로 적재하고 있었다.
    matAvail/matSpend 는 실제 재료명 키만 인식하므로, 이렇게 쌓인 값은 대장간에서 조회도 소비도 안 된다.
@@ -8894,27 +8927,27 @@ function playSummon(res){
       const allBtn=el('button','btn gold wide','모두 열기'); allBtn.style.marginTop='10px'; allBtn.onclick=()=>{ cells.forEach(openOne); allBtn.disabled=true; }; b.appendChild(allBtn);
     }
     else {
-      if(res.legend) b.appendChild(el('div','center legend-burst',`<div class="ei" style="font-size:56px">🌟</div><div class="big lgd">레전더리 조각 획득!</div>`));
+      /* ★ 2026-09-25: '레전더리' 판정의 실체는 해당 직업 조각 +3 이다 — 소환 화면 용어('고급 조각 확률 보정')와 맞춘다. */
+      if(res.legend) b.appendChild(el('div','center legend-burst',`<div class="ei" style="font-size:56px">🌟</div><div class="big lgd">고급 조각!</div>`));
       // ★ B4/G-60: 결과 그리드 5열 → 4열 (X20 = 4열 × 5행)
       const g=el('div','grid'); g.style.gridTemplateColumns='repeat(4,1fr)'; g.style.marginTop='8px';
       let _di=0;   // ★ 2026-09-25: 결과 카드가 한 장씩 뒤집히며 깔린다(90ms 간격 flip-in)
       for(const id in res.gained){ const j=JOBS.find(x=>x.id===id)||JOBS[0];
         const best=classBest(id); const gr=best?best.grade:'N';
-        const c=el('div','cell gframe grade-'+gr+' flip-in'); c.style.animationDelay=(_di++*90)+'ms';
-        c.innerHTML=`<div class="ei">${jobIcon(j.id)}</div><div class="cn">${j.name}<br>조각 ×${res.gained[id]}</div>`; g.appendChild(c); }
+        /* ★ 2026-09-25: 고급 조각이 난 직업 카드는 금테 + '🌟 +3'. 아직 영웅이 없는 직업은 해금까지의 조각 진행(현재/25)을 적어 진짜 목표를 가리킨다. */
+        const hit=(res.legendJobs||[]).includes(id);
+        const c=el('div','cell gframe grade-'+gr+' flip-in'+(hit?' lg-hit':'')); c.style.animationDelay=(_di++*90)+'ms';
+        c.innerHTML=`<div class="ei">${jobIcon(j.id)}</div><div class="cn">${j.name}<br>조각 ×${res.gained[id]}${hit?' <span class="lgd">🌟</span>':''}${best?'':`<br><span class="mut">${fmt(S.shards[id]||0)}/${HERO_SHARD_NEED.N}</span>`}</div>`; g.appendChild(c); }
       b.appendChild(g);
     }
     const btn=el('button','btn gold wide','확인'); btn.style.marginTop='10px'; btn.onclick=()=>openModal('summon'); b.appendChild(btn);
-    $('#modal-root').classList.add('on'); if(res.legend) sysLog('<span class="lgd">레전더리</span> 조각 소환 성공!');
-    // ★ B4/G-59: 2단계 연출 — 마법진 종료 후 '영웅 등장' 화면을 띄운다.
-    //   신규 해금 영웅이 있으면 그 영웅을, 없으면(레전더리 대박 시) 최다 획득 직업의 대표 영웅을 보여준다.
+    $('#modal-root').classList.add('on'); if(res.legend) sysLog('<span class="lgd">고급 조각</span> 소환 성공!');
+    // ★ B4/G-59: 2단계 연출 — 마법진 종료 후 '영웅 등장' 화면을 띄운다(신규 해금 영웅만).
+    /* ★ 2026-09-25: 종전엔 해금이 없어도 레전더리 판정이면 최다 획득 직업의 대표 영웅(보유 없으면 **미보유 N 영웅**)을 '영웅 등장'으로
+       띄우고 sysLog '… 획득!' 을 남겼다 — 실제 지급은 조각 +3 뿐이라 거짓 획득 표시였다(검증 워크플로 몬테카를로: 신규 계정 63% 노출).
+       이제 실제로 해금된 영웅에게만 등장 연출을 띄운다. 고급 조각의 기쁨은 위 배너·금테 카드가 맡는다. 폴백을 되살리지 마라. */
     if(res.gained){
-      let list = res.unlocked || [];
-      if(!list.length && res.legend){
-        const top=Object.keys(res.gained).sort((a,b)=>res.gained[b]-res.gained[a])[0];
-        const rep=classBest(top) || rosterOf(top)[0];
-        if(rep) list=[rep];
-      }
+      const list = res.unlocked || [];
       if(list.length) heroRevealFx(list, res.gained);
     }
   }, 1400);
@@ -9313,7 +9346,12 @@ function enterDungeonFight(cfg){
   closeModal(); sysLog(`${cfg.name} 입장`); sfx('tap');
   Battle.startDungeon({ name:cfg.name, col:cfg.col, foeCP:cfg.foeCP, kind:cfg.kind, count:cfg.count, dur:cfg.dur, waveDur:cfg.waveDur,
     soloSurvival:cfg.soloSurvival||false,
-    onEnd:(win,stats)=>showDungeonResult(cfg,win,stats) });
+    /* ★ 2026-09-25: 던전이 끝나면 홈 1인 사냥으로 되돌린다(Battle.refreshParty → layoutHeroes). 종전엔 endDungeon 이 mode 만 'hunt' 로
+       돌리고 재배치를 안 해 3인 파티(전투력 3배)가 홈 사냥을 계속했다(검증 워크플로 실측: 20초 처치 17→29). 투기장 arenaResult 의
+       setPartySource(null) 복귀와 같은 자리. 결과창(보상·resultExtra)을 먼저 만들고 재배치는 뒤에 — 예외가 나도 finally 로 복귀.
+       ⚠ endDungeon·loop 에서 부르지 마라: 결정론 검사(D 시나리오)는 startDungeon 을 직접 부르므로 거기서 부르면 기준 해시가 바뀌고,
+       loop 는 렌더 경로에서 시뮬 상태를 바꾸게 된다. */
+    onEnd:(win,stats)=>{ try{ showDungeonResult(cfg,win,stats); } finally { Battle.refreshParty(); } } });
 }
 /* ★ v4.5.1: 던전 결과창 "뭘 받았다" — 보상 함수를 하나하나 고치지 않고
    실행 전후 지갑을 비교해 실제 증가분만 칩으로 보여준다(투기장 델타와 같은 취지).

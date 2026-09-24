@@ -2255,6 +2255,63 @@ step('세이브·입력 문자열 HTML 제거 — 가져오기 세이브 태그 
   ev('load')();
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ 2026-09-25 회귀(검증 워크플로 #4·#3): ① 던전 종료 후 홈 사냥이 3인 파티(전투력 3배)로 남던 결함 — enterDungeonFight 의 onEnd 가
+   refreshParty 로 1인 복귀 ② 고급 조각(레전더리 판정)에 미보유 영웅 '영웅 등장'·'획득!' 거짓 표시 — 실제 해금만 연출. */
+step('던전 종료 홈 1인 복귀 · 고급 조각 거짓 획득 연출 제거', ()=>{
+  const errs=[];
+  const efd=js.slice(js.indexOf('function enterDungeonFight('), js.indexOf('function enterDungeonFight(')+1500);
+  if(!/finally\s*\{\s*Battle\.refreshParty\(\)/.test(efd)) errs.push('enterDungeonFight onEnd 에 refreshParty 복귀가 없다');
+  const B=ev('Battle'); B.setPartySource(null);
+  ev('globalThis.__oSDR=showDungeonResult; showDungeonResult=function(){}');
+  try{ ev('enterDungeonFight')({ name:'smoke', col:'#fff', foeCP:1, kind:'mobs', count:1, dur:5 }); B.runUntilDone(400); }
+  finally { ev('showDungeonResult=globalThis.__oSDR'); }
+  if(B.heroCount && B.heroCount()!==1) errs.push('던전 종료 후 홈 영웅 수 '+B.heroCount()+' (기대 1)');
+  // ② 미보유 직업에 고급 조각 판정 → heroRevealFx 가 호출되면 안 된다
+  const S=ev('S'); const keep={ fail:S.summonFail, tick:S.tickHero, shards:JSON.parse(JSON.stringify(S.shards)), heroes:JSON.parse(JSON.stringify(S.heroes)) };
+  let revealed=0; ev('globalThis.__oHR=heroRevealFx; heroRevealFx=function(){ globalThis.__hrN=(globalThis.__hrN||0)+1; }'); ev('globalThis.__hrN=0');
+  try{
+    const wind=ev('rosterOf')('wind'); wind.forEach(r=>{ if(S.heroes[r.hero_id]) S.heroes[r.hero_id].own=false; }); S.shards.wind=0;
+    S.summonFail=69; const res=ev('summonRun')(1,'wind');
+    if(!res.legend || !(res.legendJobs||[]).includes('wind')) errs.push('강제 고급 조각 판정 실패(테스트 전제)');
+    const tmr=ev("globalThis.__playSummonNow=(r)=>{ const o=setTimeout; setTimeout=(f)=>{ f(); }; try{ playSummon(r); } finally { setTimeout=o; } }");
+    ev('__playSummonNow')(res);
+    revealed=ev('globalThis.__hrN');
+  } finally { ev('heroRevealFx=globalThis.__oHR'); }
+  if(revealed!==0) errs.push('미보유 직업 고급 조각에 영웅 등장 연출 '+revealed+'회');
+  S.summonFail=keep.fail; S.tickHero=keep.tick; S.shards=keep.shards; S.heroes=keep.heroes; ev('closeModal')();
+  if(errs.length) throw new Error(errs.join(' | '));
+});
+/* ★ 2026-09-25 회귀(검증 워크플로 #20·#21): 옵션 재설정 잠금·봉인 무시 과금 / 일괄 분해가 보유형 효과(고서·물약) 삭제 /
+   루비 코스튬 구매가 비매품 레거시 3종을 공짜로 해금. */
+step('재설정 잠금·봉인 · 일괄분해 보유효과 보존 · 코스튬 레거시 누수', ()=>{
+  const errs=[], S=ev('S');
+  const keep={ dice:S.dice, lock:S.rerollLock?S.rerollLock.slice():null, opt:S.rerollOpt?S.rerollOpt.slice():null, spent:S.rerollSpent,
+    equips:S.equips, own:JSON.parse(JSON.stringify(S.costumeOwn||{})), cnt:S.costumes, ruby:S.ruby, gold:S.gold };
+  // 재설정
+  ev('rerollFix')(); S.dice=100; S.rerollLock=[true,false,false,false];
+  if(ev('rerollRow')(0)!=='locked' || S.dice!==100) errs.push('잠긴 행이 재설정·과금됨');
+  if(ev('rerollRow')(3)!=='sealed' || S.dice!==100) errs.push('봉인(레전더리) 행이 과금됨');
+  S.rerollLock[0]=false; const sp0=S.rerollSpent;
+  if(ev('rerollRow')(0)!=='ok' || S.dice!==95 || S.rerollSpent!==sp0+5) errs.push('정상 재설정 과금 오류 dice='+S.dice);
+  // 일괄 분해: 고서×2·물약×1(미장착) + 청류 고서(착용) + 단검 → N 일괄 대상 = 고서 여분 1 + 단검 1
+  S.equips=[{grade:'N',slot:'고서',enh:0,equipped:false},{grade:'N',slot:'고서',enh:0,equipped:false},{grade:'N',slot:'물약',enh:0,equipped:false},
+    {grade:'R',slot:'청류 고서',enh:0,equipped:true},{grade:'N',slot:'잿불 단검',enh:0,equipped:false}];
+  const tm0=ev('tomeMul')(), pr0=ev('potionRegenAdd')();
+  const bulk=ev('salvageBulk')('N'); if(bulk.count!==2) errs.push('일괄 분해 대상 '+bulk.count+'(기대 2 — 고서 여분·단검)');
+  ev('doSalvageBulk')('N'); const y=findBtnByText(ev("document.getElementById('modal-root')"),'예'); if(y) y.onclick();
+  if(ev('tomeMul')()!==tm0) errs.push('일괄 분해 후 고서 효과 감소');
+  if(ev('potionRegenAdd')()!==pr0) errs.push('일괄 분해 후 물약 효과 감소');
+  // 코스튬: 레거시 카운터 0 에서 루비 코스튬 구매 경로가 비매품 3종을 해금하지 않는다(카운터 불변)
+  S.costumes=0; S.costumeOwn={}; const legacyBefore=['flame','frost','gold'].filter(id=>ev('costumeHas')(id)).length;
+  const next=ev('legacyCostumeNext')(); if(next!=='flame') errs.push('legacyCostumeNext '+next);
+  if(legacyBefore!==0) errs.push('초기 레거시 보유 '+legacyBefore);
+  const gi=ev('GRAYSHOP').find(it=>/한정 코스튬/.test(it.t)); gi.give();
+  if(!ev('costumeHas')('flame')) errs.push('한정 코스튬 교환이 코스튬을 주지 않음');
+  S.costumeOwn={flame:true,frost:true,gold:true}; if(!gi.soldOut()) errs.push('전부 보유인데 한정 코스튬이 판매 중');
+  // 원복
+  S.dice=keep.dice; S.rerollLock=keep.lock; S.rerollOpt=keep.opt; S.rerollSpent=keep.spent; S.equips=keep.equips; S.costumeOwn=keep.own; S.costumes=keep.cnt; S.ruby=keep.ruby; S.gold=keep.gold;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ 2026-09-25 회귀: 투기장 '매일 티어 골드'·'주간 순위 주사위' — 표에만 있고 지급 코드가 없던 약속(검증 워크플로 실측 +0).
    표(ARENA_TIER_ROWS·ARENA_DICE_ROWS)가 곧 지급 정본인지, 주차가 지난 옛 티어는 브론즈로, 미참여 주는 0 인지 본다. */
 step('투기장 매일 티어 골드·주간 주사위 — 표 = 지급', ()=>{
