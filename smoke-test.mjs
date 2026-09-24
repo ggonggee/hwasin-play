@@ -2255,6 +2255,30 @@ step('세이브·입력 문자열 HTML 제거 — 가져오기 세이브 태그 
   ev('load')();
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ 2026-09-25 회귀(워크플로 #23·#9): ① 숨긴 채 창을 닫으면 숨김 구간 방치 수익이 증발(save 가 lastSeen 을 '지금'으로 밀었다)
+   ② 환영 우편(루비 100) 미수령 배지 없음 ③ 인트로 '7일 출석 1일차'가 실제 출석을 수령하지 않음. */
+step('숨김 중 저장 lastSeen · 우편 배지 · 인트로 출석 1일차 실수령', ()=>{
+  const errs=[], S=ev('S'), doc=ev('document');
+  const keep={ hidden:doc.hidden, ls:S.lastSeen, p:S.offlinePending, mail:JSON.parse(JSON.stringify(S.claimed.mail||{})), att:JSON.parse(JSON.stringify(S.claimed.attend||{})), ald:S.attendLastDate, stones:S.stones, tick:S.tickHero };
+  ev('_saveSealed = false; _tabLost = false');
+  const gNow=()=>ev('Date.now()');   // 게임 컨텍스트의 시계(스모크 하네스가 시각을 제어할 수 있다) — 테스트 파일의 Date 와 섞지 않는다
+  const hideAt=gNow()-3*3600e3;
+  doc.hidden=true; ev('_tabHideTs='+hideAt); ev('save')();
+  const saved=JSON.parse(store.get('hwasin_save_v1')).lastSeen;
+  if(saved!==hideAt) errs.push('숨김 중 저장 lastSeen='+saved+' (기대 숨김 시각)');
+  S.offlinePending=0; S.lastSeen=saved; ev('computeOffline')();
+  const want=Math.floor(ev('OFFLINE_GPM')/60*3*3600); if(Math.abs((S.offlinePending||0)-want)>ev('OFFLINE_GPM')) errs.push('숨김 3h 정산 '+S.offlinePending+' (기대 ~'+want+')');
+  doc.hidden=false; ev('_tabHideTs=0'); ev('save')();
+  if(Math.abs(JSON.parse(store.get('hwasin_save_v1')).lastSeen-gNow())>5000) errs.push('보이는 상태 저장 lastSeen 이 현재가 아님');
+  // 우편 배지
+  S.claimed.mail={}; if(!ev('mailPending')()) errs.push('미수령 우편인데 mailPending false');
+  S.claimed.mail={welcome:true,attend7:true,shard:true}; if(ev('mailPending')()) errs.push('전부 수령인데 mailPending true');
+  // 인트로 출석 1일차: 소스에 실제 출석 수령(ATTEND_DAYS[0][2]·attendLastDate) 이 있는지
+  const ir=js.slice(js.indexOf('function introRewards('), js.indexOf('function startGuidedTutorial('));
+  if(!/ATTEND_DAYS\[0\]\[2\]\(\)/.test(ir) || !/attendLastDate=today\(\)/.test(ir)) errs.push('인트로 출석 1일차가 실제 출석을 수령하지 않는다');
+  doc.hidden=keep.hidden; S.lastSeen=keep.ls; S.offlinePending=keep.p; S.claimed.mail=keep.mail; S.claimed.attend=keep.att; S.attendLastDate=keep.ald; S.stones=keep.stones; S.tickHero=keep.tick;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ 2026-09-25 회귀: 던전 래퍼(enterDungeonFight)가 hpMul 을 버려 용광로 시련 ×3 장기전이 라이브에 미적용이었다. */
 step('던전 래퍼 옵션 전달 — hpMul·overtime', ()=>{
   const B=ev('Battle'); let cap=null; const orig=B.startDungeon;

@@ -1768,9 +1768,15 @@ function loseTab(){
 if(typeof window!=='undefined' && window.addEventListener){
   window.addEventListener('storage', e=>{ if(e && e.key===OWNER_KEY && e.newValue && e.newValue!==TAB_ID) loseTab(); });
 }
+/* ★ 2026-09-25: 탭이 숨겨진 시각(visibilitychange). save() 가 참조하므로 여기서 선언한다(TDZ 방지 — 종전 선언은 파일 끝). */
+let _tabHideTs=0;
 function save(){ if(_saveSealed) return;
   if(!tabOwned()){ loseTab(); return; }
-  try{ S.lastSeen=Date.now(); localStorage.setItem(SAVE_KEY, JSON.stringify(S)); _saveFailFlag=false; }
+  /* ★ 2026-09-25: 숨김 중에는 lastSeen 을 '숨겨진 시각'으로 저장한다. 숨김 구간은 rAF 가 멈춰 수입이 없고 복귀(_visibilitySettle) 때만
+     정산되는데, 숨긴 채 창을 닫으면(beforeunload·탭 폐기·크래시) 5초 저장이 lastSeen 을 계속 '지금'으로 밀어 그 구간이 통째로 증발했다
+     (검증 워크플로 #23 실측: 3시간 숨김 후 닫기 → 정산 0). 이러면 다음 부팅의 computeOffline 이 숨긴 시각부터 정산한다.
+     복귀 분기가 _tabHideTs 를 먼저 0 으로 만들기 때문에 이중 정산은 없다. */
+  try{ S.lastSeen=(typeof document!=='undefined' && document.hidden && _tabHideTs) ? _tabHideTs : Date.now(); localStorage.setItem(SAVE_KEY, JSON.stringify(S)); _saveFailFlag=false; }
   catch(e){ if(!_saveFailFlag){ _saveFailFlag=true; try{ toast('⚠ 저장에 실패했습니다. 시크릿 모드이거나 저장 공간이 가득 찼을 수 있습니다.'); }catch(_){} } } }
 
 /* 일일 카운터 (실제 날짜 롤오버 리셋) */
@@ -1881,6 +1887,10 @@ function monthlyClaimable(){
   return MONTHLY_QUESTS.some(q=>{ const now=S.stats[q.stat]||0, base=(m.base&&m.base[q.stat])||0;
     return !m.claimed[q.id] && (now-base)>=q.goal; });
 }
+/* ★ 2026-09-25: 우편 목록 상수 + 미수령 배지. 루비 100(신규 이용자의 유일한 초기 루비)이 든 환영 우편에 배지가 없어 발견되지 않았다
+   (검증 워크플로 #9). '화염검사' → 직업명 '화염술사'. 판정은 이 목록의 id 만 본다(claimed.mail 엔 패키지 id 도 섞여 있다). */
+const MAIL_ITEMS=[['welcome','운영자 선물 · 루비 100','💎',()=>S.ruby+=100],['attend7','출석 보상 · 소환권 1','🎟️',()=>S.tickHero++],['shard','환영 조각 · 화염술사 30','🔥',()=>S.shards.flame+=30]];
+function mailPending(){ return !!(S && S.claimed) && MAIL_ITEMS.some(([id])=>!(S.claimed.mail && S.claimed.mail[id])); }
 function attendClaimable(){
   if(!S || S.attendLastDate===today()) return false;
   return ATTEND_DAYS.some((_,i)=>!(S.claimed&&S.claimed.attend&&S.claimed.attend[i]));
@@ -1907,7 +1917,9 @@ function refreshClaimBadges(){
   _setDot(document.querySelector('[data-modal="attend"]'), a);
   _setDot(document.querySelector('[data-modal="notice"]'), n);   // ★ v5.167: 공지 미열람
   _setDot(document.getElementById('timepod'), od);                 // ★ v5.269: 오프라인 정산(id 부여 — 클래스 쿼리가 스텁에서 노드별 새 인스턴스를 만드는 문제 회피)
-  _setDot(document.getElementById('btnMenuToggle'), q||a||n||od);
+  const m=mailPending();   // ★ 2026-09-25: 미수령 우편
+  _setDot(document.querySelector('[data-modal="mail"]'), m);
+  _setDot(document.getElementById('btnMenuToggle'), q||a||n||od||m);
   /* ★ v5.271: 칭호 개선 가능 — [data-modal="titles"] 항목(드로어 내 칭호). ☰ 합산. */
   const tu=titleUpgradeable();
   _setDot(document.querySelector('[data-modal="titles"]'), tu);
@@ -4604,7 +4616,7 @@ function tutEvent(key){
 }
 let _tutProg=0;
 function tutPoll(){
-  if(!S || S.seenTutorial) return;
+  if(!S || S.seenTutorial || _introRunning) return;   // ★ 2026-09-25: 인트로 중 기준선 캡처·진행 금지(되감김 방지)
   const home=$('#home'); if(!home || home.classList.contains('hidden')) return;  // 타이틀·로그인 화면에서는 동작하지 않는다
   tutWatch();
   const t=tutState();
@@ -4802,8 +4814,14 @@ function tutDockBox(box, t){
   if(box.classList.contains('ob-low')!==low) box.classList.toggle('ob-low', low);
 }
 /* ★ B1/G-02: 건너뛰기(.ob-skip) 마크업·핸들러 완전 삭제 — 강제 유도형으로 설계한다. */
+/* ★ 2026-09-25: 인트로(리안 대사·첫 보상) 진행 중 표식 — 저장하지 않는 모듈 변수.
+   종전엔 인트로 대사가 나오는 동안 STEP 1/9 박스가 먼저 떠 사냥 수를 세다가, 인트로가 끝나며 startGuidedTutorial 이 단계를
+   0 으로 되돌려 '1/20 → 0/20' 으로 되감겼다(검증 워크플로 #9). 인트로 동안은 박스·진행 폴링을 멈춘다(손가락은 계속 — 대사 ▶·[받기]).
+   해제: startGuidedTutorial 의 대사 콜백(정상 종료·✕ 닫기 모두 이 경로) · introDone 조기 반환. 새로고침하면 false 로 시작한다. */
+let _introRunning=false;
 function renderTutorial(){
   const box=$('#onboard'); if(!box) return;
+  if(_introRunning){ box.classList.add('hidden'); return; }
   if(S.seenTutorial || S.tutStep>=TUT.length){ box.classList.add('hidden'); clearFinger(); return; }
   const t=TUT[S.tutStep]; box.classList.remove('hidden');
   const prog=clamp(_tutProg,0,t.goal), pct=Math.round(prog/t.goal*100);
@@ -4868,7 +4886,13 @@ function introRewards(){
      introDone 은 '팝업까지 전부 처리됨' 표식으로만 남는다. */
   const _t=tutState(); if(!_t.introClaimed || typeof _t.introClaimed!=='object') _t.introClaimed={};
   const rewards=[ {t:'투기장 무쇠 랭크 보상',ic:'🏅',d:'골드 500,000',act:()=>addGold(500000)},
-    {t:'7일 출석 · 1일차',ic:'🗓️',d:'소환권 1',act:()=>S.tickHero++},
+    /* ★ 2026-09-25: 실제 7일 출석 1일차 수령으로 바꿨다. 종전엔 '7일 출석 · 1일차'라며 그리드에 1일 ✓·'내일 2일차가 열립니다'를
+       보여 주고 실제론 소환권 1만 주고 출석은 미수령(attendLastDate '')으로 남아, 출석 화면이 곧바로 1일차를 또 내밀었다(검증 워크플로 #9).
+       종전 소환권 1 은 환영 보너스로 유지(신규 지급 감소 없음). 드로어에서 먼저 받았으면 출석분은 건너뛴다(이중 지급 차단). */
+    {t:'7일 출석 · 1일차',ic:'🗓️',d:`${ATTEND_DAYS[0][0]} · 소환권 1`,act:()=>{ S.tickHero++;
+      const ca=(S.claimed.attend=S.claimed.attend||{});
+      if(ca[0] || S.attendLastDate===today()) return;
+      ATTEND_DAYS[0][2](); ca[0]=true; S.attendLastDate=today(); sysLog(`7일 출석 1일차 — ${ATTEND_DAYS[0][0]}`); }},
     {t:'첫 방치 보상',ic:'⏳',d:'희귀 재료 20',act:()=>{ matGainGrade('R',20); }} ];
   /* ★ v5.28: 튜토리얼 완료에 필요한 자원 사전 지급.
      9단계 튜토리얼(제작→장착→강화→소환→합성→편성)을 막힘없이 진행하려면:
@@ -4894,7 +4918,7 @@ function introRewards(){
       /* ★ v5.116: 이미 끝난 인트로를 다시 마무리하지 않는다. 완료 후에도 모달 본문의 [받기]
          노드가 남아 있어(closeModal 은 on 클래스만 뗀다) 비정상 경로로 재클릭되면
          startGuidedTutorial 이 다시 돌아 tutStep 을 0 으로 되돌릴 수 있었다. */
-      if(S.introDone){ closeModal(); return; }
+      if(S.introDone){ _introRunning=false; closeModal(); return; }
       S.introDone=true; save(); _introActive=false; startGuidedTutorial(); return; }
     const idx=i, r=rewards[i++]; setModalTitle('보상 획득'); const b=$('#modalBody'); b.innerHTML='';
     if(idx===1){
@@ -4927,7 +4951,7 @@ function startGuidedTutorial(){
   /* ★ v5.28.1: 튜토리얼 시작 시 자동전투 명시적 ON — 토글 표시 일치.
      전투는 항상 돌지만 Off로 표시되면 "왜 안 싸우지?" 혼란 유발. */
   S.autoBattle = true; syncAutoBat();
-  showDialogue(['먼저 몬스터를 사냥해 실력을 증명하세요. 하단 [몬스터]에서 사냥터를 고를 수 있습니다.','미션은 화면을 여는 것이 아니라 실제로 완료해야 진행됩니다.'], ()=>{ S.tutStep=0; _tutProg=0; tutState().base={}; renderTutorial(); });
+  showDialogue(['먼저 몬스터를 사냥해 실력을 증명하세요. 하단 [몬스터]에서 사냥터를 고를 수 있습니다.','미션은 화면을 여는 것이 아니라 실제로 완료해야 진행됩니다.'], ()=>{ _introRunning=false; S.tutStep=0; _tutProg=0; tutState().base={}; renderTutorial(); });
 }
 // --- 길잡이 배너 (제작 체인) ---
 /* ★ 길잡이 9단계 — 전부 '제작' 이벤트로만 진행되는 순수 제작 체인.
@@ -7945,7 +7969,7 @@ const MODALS = {
     b.appendChild(el('div','hint','파밍 순환: 현재 몬스터로 재료를 모아 장비 제작 → 강해지면 다음 몬스터 선택 → 상위 재료 파밍.'));
   }},
 
-  mail:{ title:'우편', render(b){ giftBox(b,[['welcome','운영자 선물 · 루비 100','💎',()=>S.ruby+=100],['attend7','출석 보상 · 소환권 1','🎟️',()=>S.tickHero++],['shard','환영 조각 · 화염검사 30','🔥',()=>S.shards.flame+=30]]); }},
+  mail:{ title:'우편', render(b){ giftBox(b, MAIL_ITEMS); }},   // ★ 2026-09-25: 목록을 상수로(배지 판정 mailPending 과 공유)
   /* ★ B9/G-127: 정해진 순서로 11항목만 노출.
      코스튬·각성·칭호는 캐릭터 스탯창으로, 점령전은 홀드 상태(길드)로, 광고 제거는 상점으로 이관했다. */
   buff:{ title:'버프', render(b){
@@ -9471,7 +9495,7 @@ setInterval(()=>{ save(); refreshClaimBadges(); try{ updateGuideBanner(); }catch
    숨김 구간을 오프라인과 같은 배율(OFFLINE_GPM · 상한 OFFLINE_CAP_H 시간 — 2026-09-25 부터 12h)로 offlinePending 에 쌓는다 —
    새 경제가 아니라 기존 오프라인 규칙의 사각만 메우는 것이다.
    _visibilitySettle(hideTs, nowTs) 를 나눈 건 스모크에서 시계 없이 검증하기 위해서다. */
-let _tabHideTs=0;
+/* (_tabHideTs 선언은 save() 위로 옮겼다 — 2026-09-25) */
 function _visibilitySettle(hideTs, nowTs){
   if(!S || !hideTs) return 0;
   const elapsed=(nowTs-hideTs)/1000, cap=OFFLINE_CAP_H*3600;
@@ -9487,6 +9511,7 @@ document.addEventListener('visibilitychange', ()=>{
   if(document.hidden){ _tabHideTs=Date.now(); return; }
   const ts=_tabHideTs; _tabHideTs=0;
   if(ts) _visibilitySettle(ts, Date.now());
+  if(S) S.lastSeen=Date.now();   // ★ 2026-09-25: 메모리만 갱신(설정 '마지막 저장'이 숨김 시각으로 보이지 않게) — 세이브는 다음 save 가 씀
 });
 
 function enterHome(){
@@ -9515,7 +9540,7 @@ function enterHome(){
   updateGuideBanner();
   /* ★ v5.113: 종전엔 '튜토리얼 미완료'이기만 하면 재접속할 때마다 인트로가 다시 돌아
      사전지급 자원이 무제한 중복 지급됐다(새로고침만으로 조각 파밍 가능). 1회로 못박는다. */
-  if(!S.seenTutorial && !S.introDone){ setTimeout(runIntro, 500); }
+  if(!S.seenTutorial && !S.introDone){ _introRunning=true; setTimeout(runIntro, 500); }   // 동기로 먼저 켠다 — 500ms 틈의 tutPoll 도 막는다
   else { renderTutorial(); if(S.offlinePending>0) setTimeout(()=>openModal('settle'), 450); }
 }
 /* ★ B1/G-06: START → 홈 직행이 아니라 로그인 목업 2단계(알약 버튼 → 계정 선택 시트)를 거친다.
