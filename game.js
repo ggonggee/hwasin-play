@@ -8428,6 +8428,29 @@ function itemDetail(e, heroId){ _itemDetailHeroId=heroId||null;
    ★ B3/G-39: 보호 토글 2종(파괴 보호 / 하락 방지)을 강화 레벨과 무관하게 상시 노출
    ★ B3/G-40: 패널 상단 3행 상시 카운터 (강화석 / 파괴방지 / 하락방지)
    ★ B3/G-41: 파괴 보호 비용 등급 분기 — N 일반망치5 / R 일반망치10 / E 전설망치5 / L 전설망치10 */
+/* ★ 2026-09-25: 강화 결과 연출 — 종전엔 토스트 한 줄뿐이라 '이번 강화로 무엇이 달라졌는가' 가 안 보였다.
+   성공: 방사 광선 + '+N 강화 성공' + 대표 스탯 전후('공격력 1,200 → 1,344 (+12.0%)', 초록) · 5단계마다 이정표 강조.
+   하락: 붉은 흔들림 + 전후 수치 · 파괴: 균열 흔들림 · 유지(하락방지·극한): 회색.
+   (자료 근거: 강의 규칙집 '강화 전후 차이를 숫자와 시각효과로 동시에' — 원리만 차용)
+   #modal-root 위 비차단 오버레이(pointer-events:none) · 1.4초 뒤 자동 제거 — 연타해도 이전 것을 지우고 새로 띄운다. */
+function enhBurst(e, e0, destroyed){
+  const root=$('#modal-root'); if(!root || !e) return;
+  root.querySelectorAll('.enh-burst').forEach(n=>n.remove());
+  const sc=slotSchema(e.slot), key=sc&&sc.stats&&sc.stats[0], d=key&&STAT_DEF[key], gm=(GRADES[e.grade]||GRADES.N).mult;
+  const val=k=>d ? (d.base+k*d.per)*gm : 0;
+  const f=v=>d && d.dec ? v.toFixed(d.dec) : fmt(Math.round(v));
+  const u=(d&&d.unit)||'';
+  let kind, title, line='';
+  if(destroyed){ kind='destroy'; title='장비 파괴'; line=`${GRADES[e.grade].name} ${e.slot} +${e0} 이(가) 부서졌습니다`; }
+  else if(e.enh>e0){ const a=val(e0), b=val(e.enh);
+    kind = e.enh%5===0 ? 'up eb-mile' : 'up'; title=`+${e.enh} 강화 성공`;
+    if(d) line=`${d.n} ${f(a)}${u} → <b>${f(b)}${u}</b> <span class="eb-pct">(+${a>0?((b-a)/a*100).toFixed(1):'—'}%)</span>`; }
+  else if(e.enh<e0){ kind='down'; title=`단계 하락 +${e0} → +${e.enh}`; if(d) line=`${d.n} ${f(val(e0))}${u} → ${f(val(e.enh))}${u}`; }
+  else { kind='keep'; title='강화 실패 · 단계 유지'; }
+  const b=el('div','enh-burst eb-'+kind, `<div class="eb-card">${kind.indexOf('up')===0?'<div class="eb-rays"></div>':''}<div class="eb-t">${title}</div>${line?`<div class="eb-l">${line}</div>`:''}</div>`);
+  root.appendChild(b);
+  setTimeout(()=>{ try{ b.remove(); }catch(_){} }, 1400);
+}
 function openEnhance(e){
   const b=subBody('강화');   // ★ v5.1 착용창 위 오버레이
   b.appendChild(el('div','center',`<div class="ei" style="font-size:52px">${equipImg(e.slot,2.5)}</div><div class="big" style="color:${GRADES[e.grade].color}">${GRADES[e.grade].name} ${e.slot} +${e.enh}</div>`));
@@ -8489,7 +8512,8 @@ function openEnhance(e){
   if(S.gold<cost||S.stones<stoneCost||e.enh>=25) btn.disabled=true;
   btn.onclick=()=>{ if(!S.equips.includes(e)){ closeSub(); toast('이미 처분된 장비입니다.'); return; }   /* ★ 2026-09-24: 파괴된 장비에 재화만 빠지는 것 방지 */
     if(S.gold<cost||S.stones<stoneCost){toast('재화 부족');return;} S.gold-=cost; S.stones-=stoneCost;
-    if(Math.random()<p){ e.enh++; sfx('craft'); toast(`강화 성공 +${e.enh}`); sysLog(`장비 강화 <span class="rar">+${e.enh}</span> 성공`); }
+    const e0=e.enh;   // ★ 2026-09-25: 결과 연출(enhBurst)의 전후 비교 기준
+    if(Math.random()<p){ e.enh++; sfx(e.enh%5===0?'legendary':'craft'); sysLog(`장비 강화 <span class="rar">+${e.enh}</span> 성공`); }
     else { sfx('fail');
       if(e.enh>=20){ toast('극한의 벼림 실패 — 단계 유지 (재화만 소모)'); }   // v5.236: +21~25은 파괴·하락 없음
       else if(e.enh>=11 && Math.random()<0.5){
@@ -8497,12 +8521,12 @@ function openEnhance(e){
           if(prot.cur==='hammerN') S.hammerN-=prot.n; else S.hammers-=prot.n;
           toast(`강화 실패 · ${prot.label} ${prot.n} 소모로 파괴 방지`);
         }
-        else { S.equips=S.equips.filter(x=>x!==e); toast('강화 실패 · 장비 파괴…'); Battle.refreshParty(); openModal('inventory'); refreshHUD(); save(); return; }   /* ★ v5.309: 파괴(장비 소멸)는 즉시 저장 */
+        else { S.equips=S.equips.filter(x=>x!==e); toast('강화 실패 · 장비 파괴…'); Battle.refreshParty(); openModal('inventory'); refreshHUD(); save(); enhBurst(e, e0, true); return; }   /* ★ v5.309: 파괴(장비 소멸)는 즉시 저장 */
       } else {
         if(useWard && (S.wards||0)>0){ S.wards--; toast('강화 실패 · 하락 방지권으로 단계 유지'); }
         else { e.enh=Math.max(0,e.enh-1); toast('강화 실패 · 단계 하락'); }
       } }
-    Battle.refreshParty(); openEnhance(e); refreshHUD(); save(); };   /* ★ v5.309: 강화 시도(성공/실패·망치 소모) 확정 즉시 저장 */
+    Battle.refreshParty(); openEnhance(e); refreshHUD(); save(); enhBurst(e, e0); };   /* ★ v5.309: 강화 시도(성공/실패·망치 소모) 확정 즉시 저장 */
   b.appendChild(btn);
   const back=el('button','btn sm','◀ 인벤토리'); back.style.marginTop='8px'; back.onclick=()=>openModal('inventory'); b.appendChild(back);
 }
