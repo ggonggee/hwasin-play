@@ -1897,6 +1897,24 @@ function pickN(arr, n){
 function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
 function toast(msg){ const box=$('#toast'); const t=el('div','toast',msg); box.appendChild(t); setTimeout(()=>t.remove(), 1900); }
 
+/* ★ 2026-09-25: 드랍 비행체 — 캔버스 좌표(cx,cy)의 금화/보석을 #device 좌표계 DOM 요소로 띄워 실제 재화 카운터(골드)나
+   인벤토리 버튼(재료)으로 날린다. 바깥 요소가 가로를 선형으로, 안쪽이 세로를 가속으로 움직여 곡선 궤적이 된다.
+   동시에 14개를 넘으면 비행을 생략하고 도착 반짝임만 준다(대량 처치 때 DOM 폭증 방지). 순수 연출. */
+function flyLoot(cv, cx, cy, kind){
+  const dev=$('#device'); if(!dev || !cv) return;
+  const tgt = kind==='gold' ? ($('#curGold')&&$('#curGold').closest('.cur')) : document.querySelector('.nav[data-modal="inventory"]');
+  if(!tgt) return;
+  const hit=()=>{ tgt.classList.remove('loot-hit'); void tgt.offsetWidth; tgt.classList.add('loot-hit'); };
+  if(dev.querySelectorAll('.fly-loot').length>=14){ hit(); return; }
+  const ui=(typeof UI_SCALE==='number'&&UI_SCALE>0)?UI_SCALE:1, dr=dev.getBoundingClientRect(), cr=cv.getBoundingClientRect(), tr=tgt.getBoundingClientRect();
+  const x0=(cr.left-dr.left)/ui+cx, y0=(cr.top-dr.top)/ui+cy;
+  const x1=(tr.left-dr.left+tr.width*(kind==='gold'?0.18:0.5))/ui, y1=(tr.top-dr.top+tr.height*0.5)/ui;
+  const o=el('div','fly-loot'+(kind==='gold'?'':' mat'), '<i></i>'); o.style.transform=`translate(${x0}px,${y0}px)`;
+  dev.appendChild(o);
+  const inner=o.firstChild;
+  requestAnimationFrame(()=>{ requestAnimationFrame(()=>{ o.style.transform=`translate(${x1}px,${y0}px)`; if(inner) inner.style.transform=`translateY(${y1-y0}px) scale(.75)`; }); });
+  setTimeout(()=>{ try{ o.remove(); }catch(_){} hit(); }, 540);
+}
 /* ★ 2026-09-25: 우두머리 등장 경고 배너 — 종전엔 토스트 한 줄('👑 … 출현!')이라 일반 알림과 구분이 안 됐다.
    가장자리 붉은 비네트 + 전장 중앙을 가로지르며 펼쳐지는 띠(이름) + 낮은 이중 타격음. 1.4초 뒤 스스로 사라진다.
    순수 DOM 연출 — 전투 상태·시드 난수를 건드리지 않는다(던전 결정론 경로에서도 불리지만 해시와 무관).
@@ -2763,6 +2781,18 @@ const Battle = (()=>{
   /* ★ M1: 파티클 물리(각도·속도)는 연출용 — 시뮬레이션 상태에 되먹임 없음. cosmetic 지대에서 전역 rnd() 유지 */
   function spark(x,y,color){ const q=gfxSpark(); if(q<=0) return;   /* ★ v5.170: 품질 '하'는 파티클 생략 — 유일한 발생 통로라 여기서 끊는다 */
     cosmetic(()=>{ const n=Math.max(1,Math.round(7*q)); for(let i=0;i<n;i++){ const a=rnd(0,6.28),s=rnd(30,80); fx.push({type:'spark',x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,t:0,color}); } }); }
+  function drawLoot(x,y,kind,s){   // 캔버스용 금화/보석(이모지 대신 직접 그린다 — 글꼴마다 모양이 달라지지 않게)
+    ctx.save(); ctx.translate(x,y); ctx.scale(s,s);
+    if(kind==='gold'){
+      const g=ctx.createRadialGradient(-2,-2,1,0,0,7); g.addColorStop(0,'#fff4b8'); g.addColorStop(0.45,'#ffd24a'); g.addColorStop(1,'#b8761a');
+      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(0,0,7,0,7); ctx.fill(); ctx.lineWidth=1.2; ctx.strokeStyle='#5a3a0a'; ctx.stroke();
+      ctx.strokeStyle='rgba(255,250,220,.7)'; ctx.beginPath(); ctx.arc(0,0,4,3.6,5.4); ctx.stroke();
+    } else {
+      ctx.rotate(Math.PI/4); const g=ctx.createLinearGradient(-6,-6,6,6); g.addColorStop(0,'#d8f0ff'); g.addColorStop(0.5,'#5aa0e8'); g.addColorStop(1,'#2c4f9a');
+      ctx.fillStyle=g; ctx.fillRect(-5.5,-5.5,11,11); ctx.lineWidth=1.2; ctx.strokeStyle='#1a2a4a'; ctx.strokeRect(-5.5,-5.5,11,11);
+    }
+    ctx.restore(); ctx.lineWidth=1;
+  }
   function drop(x,y,kind){ // 우상단 재화 아이콘으로 흡수(lerp)
     const tx = kind==='gold'? W*0.62 : W*0.5, ty = -H*0.02;
     drops.push({ x, y, sx:x, sy:y, tx, ty, t:0, kind });
@@ -3418,11 +3448,17 @@ const Battle = (()=>{
       _fx0.addColorStop(0,'rgba(255,130,50,.5)'); _fx0.addColorStop(1,'rgba(255,130,50,0)');
     }
     ctx.fillStyle=_fx0; ctx.beginPath(); ctx.arc(W*0.08,H*0.14,90,0,7); ctx.fill();
-    drops.forEach(d=>{ ctx.globalAlpha=clamp(1-d.t*0.6,0,1); ctx.font='16px serif'; ctx.textAlign='center'; ctx.fillText(d.kind==='gold'?'🪙':'📦', d.x, d.y); ctx.globalAlpha=1; });
     mobs.forEach(drawMob);
     heroes.forEach(drawHero);
     /* ★ v5.84: 투기장 적 영웅 우측 렌더링 */
     foes.forEach(drawFoe);
+    /* ★ 2026-09-25: 드랍 연출 — 종전엔 16px 이모지(🪙📦)가 캔버스 윗변으로 올라가 사라졌고, 몬스터보다 먼저 그려져 가려졌다.
+       재화 카운터(#curGold)는 캔버스 밖 DOM 이라 캔버스 그림으로는 끝내 닿을 수 없었다.
+       ① 캔버스: 처치 지점에서 금화/보석이 통 튀어 오른다(t 0~0.35) ② 그 뒤 DOM 비행체(flyLoot)로 넘겨 실제 재화 카운터(골드)·
+       인벤토리 버튼(재료)까지 날아가 도착 시 그 자리가 반짝인다. 그리기 경로에서만 넘긴다 — 시뮬 스텝과 무관(_flown 은 연출 표시). */
+    drops.forEach(d=>{ const e=d.t/0.35;
+      if(e<1){ drawLoot(d.sx, d.sy - Math.sin(e*Math.PI)*22, d.kind, 0.55+0.45*Math.min(1,e*3)); }
+      else if(!d._flown){ d._flown=true; try{ flyLoot(cv, d.sx, d.sy, d.kind); }catch(_){} } });
     fx.forEach(f=>{
       if(f.type==='bolt'){ const x=f.x+(f.tx-f.x)*Math.min(f.t,1), y=f.y+(f.ty-f.y)*Math.min(f.t,1);
         ctx.fillStyle=f.color; ctx.globalAlpha=.9; ctx.beginPath(); ctx.arc(x,y,4,0,7); ctx.fill();
