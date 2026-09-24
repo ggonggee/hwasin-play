@@ -2403,6 +2403,30 @@ step('퀘스트 기본 탭(주간 우선) · 길드 레이드 결과 뒤 복귀'
   S.guideStep=keep.gs;
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ 2026-09-25(워크플로 #12): 영웅 강화 — 전 등급 · 조각 300/단계 · 전투력 +1%/단계 · 최대 +20 · 즉시 저장 · 칭호 재매핑. */
+step('영웅 강화 — 전 등급 개방 · +1%/단계 · 상한 20 · 칭호', ()=>{
+  const errs=[], S=ev('S'), root=ev("$('#modal-root')");
+  const lead=ev('party')()[0]||ev('ownedHeroes')()[0], hid=lead.hero_id;
+  const keep={ enh:JSON.parse(JSON.stringify(S.heroEnh||{})), sh:JSON.parse(JSON.stringify(S.shards||{})), hs:JSON.parse(JSON.stringify(S.heroShards||{})), tab:ev('_heroTab') };
+  S.heroEnh={}; S.shards[lead.job.id]=1000;
+  const p0=ev('heroPower')(lead);
+  ev("_heroTab='강화'"); ev('heroDetail')(hid);
+  const btn=findBtnByText(root,'강화',true);
+  if(!btn) errs.push('강화 버튼 없음'); else if(btn.disabled) errs.push(lead.grade+' 등급 영웅 강화 버튼이 비활성(전 등급 개방 아님)');
+  else { const a0=ev('heroShardAvail')(hid); btn.onclick();
+    if(ev('heroEnhLv')(hid)!==1) errs.push('강화 단계 '+ev('heroEnhLv')(hid));
+    if(a0-ev('heroShardAvail')(hid)!==300) errs.push('조각 차감 '+(a0-ev('heroShardAvail')(hid)));
+    const p1=ev('heroPower')(lead); if(Math.abs(p1/p0-1.01)>0.006) errs.push('전투력 배율 '+(p1/p0).toFixed(4)+' (기대 1.01)');
+    if(JSON.parse(store.get('hwasin_save_v1')).heroEnh[hid]!==1) errs.push('강화 즉시 저장 안 됨'); }
+  S.heroEnh[hid]=25; if(ev('heroEnhLv')(hid)!==20 || Math.abs(ev('heroEnhMul')(hid)-1.2)>1e-9) errs.push('상한 20 미적용');
+  S.heroEnh[hid]=20; ev('heroDetail')(hid); const mx=findBtnByText(root,'최대 강화',true); if(!mx || !mx.disabled) errs.push('최대 강화 버튼 상태');
+  const T=id=>ev('TITLE_BY_ID')[id];
+  S.heroEnh={ [hid]:5 }; if(!T('instructor').have()) errs.push('화로의 스승(+5 1명) 미달성');
+  if(T('tactician').have()) errs.push('책략가 조건 과달성');
+  if(/미판독|⚠/.test(T('champion').cond)) errs.push('정점의 지배자 조건에 개발 메모 노출');
+  ev('closeSub')(); S.heroEnh=keep.enh; S.shards=keep.sh; S.heroShards=keep.hs; ctx.__ht=keep.tab; ev('_heroTab=__ht');
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ 2026-09-25(검증 발견): heroPower 를 객체 리터럴로 부를 땐 hero_id 필수 — 빠지면 영웅 귀속 장비가 통째로 빠진 전투력이 된다
    (전투 중 레벨업 직후 partyCP 160 vs 정본 239 실측). */
 step('heroPower 호출 — 귀속 장비 누락 경로 없음', ()=>{

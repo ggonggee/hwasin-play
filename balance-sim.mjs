@@ -356,7 +356,13 @@ function dailyStep(){
      ★ v5.305: 주사위 잔여 → 소환서 교환(GOLD_SHOP dice 라인 90개=3장) — 리롤 예산
      200개(L등급 전 부위 리롤 수회분)을 남기고 초과분을 교환. 리롤 자체는 시뮬 정책
      범위 밖이지만 예산 보존으로 '리롤할 플레이어'의 행동도 보존된다. */
+  /* ★ 2026-09-25(워크플로 #12): 영웅 강화(전 등급 · 조각 300/단계 · 전투력 +1%/단계 · 최대 +20)가 조각의 세 번째 소비처가 됐다 —
+     리더 강화가 +20 미만이면 소환서를 계속 산다(게임의 실제 이용자 선택과 곡선을 맞춘다). 강화 지출은 heroEnhStep. */
   while(S.gold>=16000000 && (ev('ownedHeroes')().length<9 || (S.awaken||0)<12)){ S.gold-=15000000; S.tickHero+=10; }
+  /* 강화 목적 구매는 '여유 골드'에서만 창당 1팩 — 종전(잔액 16M 까지 전부)은 망치·결정 가호·기록서 구매를 밀어냈다(시뮬 실측).
+     예약 120M = 결정 가호 문턱(61M)·망치 1묶음(40M)·소환서 1팩 위. */
+  { const _lead=ev('party')()[0];
+    if(_lead && ev('ownedHeroes')().length>=9 && (S.awaken||0)>=12 && ev('heroEnhLv')(_lead.hero_id)<ev('HERO_ENH_MAX') && S.gold>=135000000){ S.gold-=15000000; S.tickHero+=10; acts+='강화용 소환서 '; } }
   {
     const d0=S.dice||0;
     let ex=d0-200;
@@ -513,6 +519,22 @@ function buffStep(){
    heroPower의 aw=1+lv×0.015가 곡선에 자동 반영된다.
    ★ v5.240: 기록서 골드 구매(3천만/권) 정책 추가 — awakenTally.gold에 지출 누적. */
 const awakenTally={gold:0};
+/* ★ 2026-09-25(워크플로 #12): 영웅 강화 정책 — 로스터 완성·기본 각성 12 이후 남는 조각을 리더 → 파티 2·3번 순으로 +20 까지.
+   정본 heroShardSpend(전용 조각 → 직업 공용 순 차감)·heroEnhLv 를 그대로 쓴다. 다음 R 재합성 대비 여유는 각성과 같은 200. */
+const enhTally={ups:0};
+function heroEnhStep(){
+  const S=ev('S'); if(S.guideStep<ev('GUIDE_CHAIN').length) return 0;
+  if(ev('ownedHeroes')().length<9 || (S.awaken||0)<12) return 0;
+  const MAX=ev('HERO_ENH_MAX'); let ups=0;
+  for(const h of ev('party')().slice(0,3)){
+    let guard=0;
+    while(ev('heroEnhLv')(h.hero_id)<MAX && ev('heroShardAvail')(h.hero_id)>=ev('heroEnhCost')(ev('heroEnhLv')(h.hero_id))+200 && guard++<40){
+      if(!ev('heroShardSpend')(h.hero_id,ev('heroEnhCost')(ev('heroEnhLv')(h.hero_id)))) break;
+      S.heroEnh=S.heroEnh||{}; S.heroEnh[h.hero_id]=ev('heroEnhLv')(h.hero_id)+1; ups++;
+    }
+  }
+  enhTally.ups+=ups; return ups;
+}
 function awakenStep(){
   const S=ev('S');  if(S.guideStep<ev('GUIDE_CHAIN').length) return 0;
   const owned=ev('ownedHeroes')().length;
@@ -684,6 +706,7 @@ while(simSec < MAX_HOURS*3600 && windows<51200){   // ★ v5.257: 창 상한 512
   const dailyActs=dailyStep();   // ★ v5.245: 일일 루프(탑·던전)도 액션 이벤트로
   const buffActs=buffStep();         // ★ v5.247: 결정 가호(골드 버프) 구매
   const awakenUps=awakenStep();
+  const enhUps=heroEnhStep();   // ★ #12 영웅 강화
   const fusedName=summonStep();
   const synthGot=synthStep();
 
@@ -693,6 +716,7 @@ while(simSec < MAX_HOURS*3600 && windows<51200){   // ★ v5.257: 창 상한 512
      텍스트가 붙는다")과 코드가 어긋난 종전 결함. 각성 축의 창이 재미 밀도·종류 분포 모두에서
      누락돼 밀도가 과소 측정됐다(600h 기준 실측으로 아래 커밋 참조). */
   if(awakenUps>0) did+=`각성+${awakenUps} `;
+  if(enhUps>0) did+=`영웅강화+${enhUps} `;
   if(fusedName) did+=`영웅 합성[${fusedName}] `;
   if(synthGot>0) did+=`상급재료+${synthGot} `;
   let c=bestCraftable();
@@ -847,6 +871,7 @@ log(`\n총 시뮬: ${(simSec/3600).toFixed(1)}h · 창 ${windows}회 · 최종 C
      부위당 기대 비용은 hammerGold/파괴 재제작까지 합쳐 실측된다(종전 몬테카를로 479M 갱신). */
   log(`[진단] 위험강화: 시도 ${riskTally.tries} · 성공 ${riskTally.success} · 하락 ${riskTally.drop} · 보호 ${riskTally.saved} · 파괴 ${riskTally.destroyed} · +25도달 ${riskTally.max20}부위 · 망치구매 골드 ${(riskTally.hammerGold/1e6).toFixed(0)}M + 강화석 ${riskTally.hammerStone}개`);
   log(`[진단] 보유 영웅별 CP:`, ev('ownedHeroes')().map(h=>`${h.name.slice(0,5)}(${h.grade})=${ev('heroPower')(h)}`).join(' · '));
+  log(`[진단] 영웅 강화(#12): 총 ${enhTally.ups}단계 ·`, ev('ownedHeroes')().map(h=>`${h.name.slice(0,5)}+${ev('heroEnhLv')(h.hero_id)}`).join(' · '));
   log('[진단] 결정 가호: '+buffTally.n+'회('+(buffTally.gold/1e6).toFixed(0)+'M) · 골드 보유 '+Math.floor(S.gold));
   // E 아이템 첫 후보 왜 안 되는지 — recipeOk/gold 각각 출력
   const FS2=ev('FORGE_SLOTS');

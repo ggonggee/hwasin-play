@@ -1213,7 +1213,7 @@ const TITLES = [
   { id:'inter',      g:'R',  n:'중견 대장장이', fx:'몬스터 골드 획득량 +15%', e:{gold:0.15},
     cond:'레전더리 보스(몽마·수호거상) 처치',               have:()=>titleStat('bossTop')>=1 },
   { id:'instructor', g:'R',  n:'화로의 스승',  fx:'몬스터 경험치 획득량 +15%', e:{exp:0.15},
-    cond:'레전더리 등급 영웅 1명 이상 보유',                have:()=>heroGradeOwnCount('L')>=1 },
+    cond:'영웅 1명 +5강화 이상 달성',                       have:()=>{ try{ return Object.keys(S.heroEnh||{}).some(k=>(S.heroEnh[k]|0)>=5); }catch(e){ return false; } } },   // ★ #12: 종전 '레전더리 영웅 보유'는 로스터(N5+R4)상 영구 달성 불가
   /* ⚠추정 — 조건 원문은 "필요 골드가 충족될 때까지 제작 버튼을 연속으로 누르면 획득"으로 **임계 횟수가 아예 없다**(N3 실측).
      수치가 없어 확정할 수 없으므로 데모는 5회를 잠정 임계로 둔다. */
   { id:'beggar',     g:'R',  n:'빈털터리',     fx:'몬스터 골드 획득량 +15%', e:{gold:0.15},
@@ -1241,7 +1241,7 @@ const TITLES = [
   /* 실측 확정 조건 = '레전더리 등급 영웅 **6명 이상** 보유'(N3 칭호창 실측).
      결정의 시대 로스터의 L등급은 직업당 1명 = 총 5명이 상한이라 6명이 원천적으로 불가능 → 상한(전원 5명)으로 치환한다. */
   { id:'tactician',  g:'E',  n:'책략가',       fx:'몬스터 경험치 획득량 +20%', e:{exp:0.20},
-    cond:'레전더리 등급 영웅 5명 전원 보유',                have:()=>heroGradeOwnCount('L')>=5 },
+    cond:'영웅 3명 +10강화 이상 달성',                      have:()=>{ try{ return Object.keys(S.heroEnh||{}).filter(k=>(S.heroEnh[k]|0)>=10).length>=3; }catch(e){ return false; } } },   // ★ #12: 종전 '레전더리 5명'은 영구 달성 불가
   { id:'dirthand',   g:'E',  n:'무딘 손',      fx:'제작 시간 -10%',       e:{ctime:-0.10},
     cond:'제작 7연속 실패',                                 have:()=>titleStat('craftFailBest')>=7 },
   { id:'vip',        g:'E',  n:'귀빈',         fx:'제작 확률 +5%p',       e:{crate:0.05},
@@ -1262,7 +1262,7 @@ const TITLES = [
      조건 구간이 통째로 빠졌다. 효과(몬스터 경험치 +30%)만 확정. 조건은 기존 추정을 그대로 유지한다.
      필요 컷: '절대자' 등급 칭호 카드의 조건 줄이 온전히 보이는 스크롤 위치 1장. */
   { id:'champion',   g:'L',  n:'정점의 지배자', fx:'몬스터 경험치 획득량 +30%', e:{exp:0.30},
-    cond:'⚠ 영웅 +20강화 2명 이상 달성 (추정 — 정확한 조건 미판독)',
+    cond:'영웅 2명 +20강화(최대) 달성',   // ★ #12: 개발 메모('추정 — 미판독')가 이용자 화면에 노출되던 문구 정리 · 강화 상한 20 과 정합
     have:()=>{ try{ return Object.keys(S.heroEnh||{}).filter(k=>(S.heroEnh[k]|0)>=20).length>=2; }catch(e){ return false; } } },
   { id:'ironhand',   g:'L',  n:'황금 대장장이', fx:'몬스터 골드 획득량 +30%', e:{gold:0.30},
     cond:'루비 75,000개 보유',                              have:()=>S.ruby>=75000 },
@@ -1373,6 +1373,13 @@ const ATTEND_DAYS = [
 ];
 /* ★ B9/G-134: 공지 — 제목 밴드 + 양피지 서술형 본문 (목록 → 상세 2단) */
 const NOTICES = [
+  /* ★ v5.347: 영웅 강화 전 등급 개방 — 사장돼 있던 조각·소환권의 새 쓰임새. 칭호 조건 변경(달성 불가 → 강화 기반)도 숨기지 않고 알린다. */
+  { cat:'[업데이트]', ic:'⚒️', t:'영웅 강화가 열렸습니다 — 모든 영웅, 조각으로 전투력 +1%씩', d:'2026-09-25',
+    body:'군주들에게 알립니다.<br><br>그동안 레전더리 영웅만 가능해 사실상 쓸 수 없던 <b>영웅 강화</b>를 모든 등급에 열었습니다.<br><br>'+
+      '· <b>⚒️ 효과</b> — 강화 1단계마다 그 영웅의 전투력 +1% (최대 20단계). 영웅 화면 → 영웅 선택 → [강화] 탭.<br>'+
+      '· <b>💠 비용</b> — 그 영웅의 조각(전용 + 직업 공용). 첫 단계 300개에서 단계마다 조금씩 늘어납니다. 모든 영웅을 모은 뒤 남던 조각과 소환권의 새 쓰임새입니다.<br>'+
+      '· <b>🏅 칭호</b> — 달성할 수 없던 칭호 2종의 조건을 영웅 강화로 바꿨습니다: 화로의 스승(영웅 1명 +5강화) · 책략가(영웅 3명 +10강화). 정점의 지배자는 영웅 2명 +20강화입니다.<br><br>'+
+      '같은 직업의 윗 등급 영웅을 아직 합성하지 않았다면 합성을 먼저 권장합니다(강화 화면에서 안내합니다).' },
   /* ★ v5.339: 즉시 결과·결과 뒤 복귀·모험 남은 횟수 — 후반 일일 루틴 시간 단축(워크플로 #11·#13). 보상 규칙은 그대로라 [업데이트]. */
   { cat:'[업데이트]', ic:'⏩', t:'이미 이긴 던전은 바로 결과를 받으세요 — 즉시 결과 · 모험 남은 횟수', d:'2026-09-25',
     body:'군주들에게 알립니다.<br><br>매일 반복하는 던전 전투를 더 빨리 끝낼 수 있게 했습니다.<br><br>'+
@@ -2185,6 +2192,18 @@ function tomeMul(){
    새 축을 넣으면 세 곳이 어긋날 수 있었다 — 관문 하나로 정합을 강제한다. */
 function awMul(){ return 1 + S.awaken*0.015 + (S.awakenCrystal||0)*0.005; }
 
+/* ★ 2026-09-25(워크플로 #12): 영웅 강화 — 전 등급 개방 · 효과 = 이 영웅 전투력 +1%/단계(최대 +20) · 조각 300/단계(전용+직업 공용).
+   종전엔 '레전더리 이상'만 강화 가능했는데 로스터가 N5+R4 라 **아무도 강화할 수 없었고**(탭 전원 비활성), 효과(4강화당 발사 횟수)도
+   heroPower·전투 어디에도 반영되지 않았다. 9/9·기본 각성 12 이후 조각 소비처가 0 이라 소환권·조각 상품이 사장됐다(2400h 캐주얼 잔여 조각 3,001).
+   발사 횟수를 실제 전투에 넣으면 RNG 소모 수가 바뀌어 결정론(D1)이 깨진다(v5.216 선례) → heroPower 의 순수 배율 항으로 구현한다.
+   상한 +20 = 영웅당 6,000조각 — 장기 싱크이되 영웅당 +20% 로 묶인다(캡 단조 U5). */
+const HERO_ENH_MAX = 20, HERO_ENH_PCT = 0.01;
+function heroEnhLv(hid){ return Math.min(HERO_ENH_MAX, Math.max(0, (S && S.heroEnh && S.heroEnh[hid])|0)); }
+function heroEnhMul(hid){ return 1 + heroEnhLv(hid)*HERO_ENH_PCT; }
+/* 단계 비용 = 300 × (1 + 0.25 × 현재 단계) → 300·375·…·1,725, 영웅당 +20 까지 약 20,250 조각.
+   시뮬 근거(balance-sim, 시드 42): 고정 300(영웅당 6,000)이면 풀 플레이 600h 에 파티 3명이 +19 로 소진돼 '장기 싱크'가 아니었고
+   (최종 CP +12%), 골드가 소환서로 쏠려 망치·결정 가호 지출을 밀어냈다(망치 1,480M → 80M). 체증 비용은 초반 단계를 싸게 두고 뒤를 늘린다. */
+function heroEnhCost(lv){ return Math.round(HERO_ENH_COST * (1 + 0.25*Math.max(0, lv|0))); }
 function heroPower(h){
   const g = GRADES[h.grade].mult;
   /* 착용 중이고 이 영웅에게 귀속된 장비만 합산 */
@@ -2194,7 +2213,7 @@ function heroPower(h){
   const aw = awMul();
   const costume = costumeStatMul();
   const setm = setDamageMul();
-  return Math.round((100 + h.level*30) * g * aw * (1 + eq*0.05) * (S&&S.classTrait?1.02:1) * costume * setm * tomeMul());
+  return Math.round((100 + h.level*30) * g * aw * (1 + eq*0.05) * (S&&S.classTrait?1.02:1) * costume * setm * tomeMul() * heroEnhMul(heroId));
 }
 function totalCP(){ const hs=ownedHeroes(); if(!hs.length) return 0; return hs.reduce((a,h)=>a+heroPower(h),0); }
 /* ★ v5.220: 전투력 구성 상세 — 각 성장축이 몇 %를 기여하는지. heroPower 정본 공식:
@@ -2212,13 +2231,14 @@ function openCPBreakdown(fromHome){   // fromHome: 홈 전투력 칩에서 열�
   const setm=setDamageMul();
   const tome=tomeMul();
   const trait=(S&&S.classTrait)?1.02:1;
-  const final=Math.round(base*g*aw*eqMul*trait*costume*setm*tome);
+  const enhM=heroEnhMul(h.hero_id);   // ★ #12 영웅 강화
+  const final=Math.round(base*g*aw*eqMul*trait*costume*setm*tome*enhM);
   const row=(label,contrib,pct)=>`<div class="stat-line"><span>${label}</span><span class="v">${contrib} <span class="mut small">(${pct}%)</span></span></div>`;
   const total=final;
   const pct=v=>((v/total)*100).toFixed(1);
   // 각 팩터 기여도 = 최종값 - 그 팩터를 제거했을 때의 값
   const without=(f)=>Math.round(base* (f==='g'?1:g) * (f==='aw'?1:aw) * (f==='eq'?1:eqMul)
-    * (f==='trait'?1:trait) * (f==='costume'?1:costume) * (f==='setm'?1:setm) * (f==='tome'?1:tome));
+    * (f==='trait'?1:trait) * (f==='costume'?1:costume) * (f==='setm'?1:setm) * (f==='tome'?1:tome) * (f==='enh'?1:enhM));
   setModalTitle('전투력 구성');
   const b=$('#modalBody'); b.innerHTML='';
   b.appendChild(el('div','center',`<div class="big" style="color:var(--g-legend)">${fmt(totalCP())}</div><div class="small mut">총 전투력 (보유 영웅 ${ownedHeroes().length}명 합계) · 아래는 리더 [${h.name}] 기준</div>`));
@@ -2228,6 +2248,7 @@ function openCPBreakdown(fromHome){   // fromHome: 홈 전투력 칩에서 열�
   b.appendChild(el('div','',row('장비 (eq '+eq.toFixed(1)+')', '×'+eqMul.toFixed(2), pct(final-without('eq')))));
   b.appendChild(el('div','',row('세트 효과', '×'+setm.toFixed(2), pct(final-without('setm')))));
   b.appendChild(el('div','',row('고서 보유', '×'+tome.toFixed(2), pct(final-without('tome')))));
+  if(enhM>1) b.appendChild(el('div','',row('영웅 강화 +'+heroEnhLv(h.hero_id), '×'+enhM.toFixed(2), pct(final-without('enh')))));
   if(trait>1) b.appendChild(el('div','',row('직업 특성', '×'+trait.toFixed(2), pct(final-without('trait')))));
   if(costume>1) b.appendChild(el('div','',row('코스튬', '×'+costume.toFixed(2), pct(final-without('costume')))));
   const bk=el('button','btn wide','닫기'); bk.style.marginTop='8px';
@@ -8719,15 +8740,8 @@ function assignFormation(slot){
    ⚠비전미확인 — 촬영대기: 단계가 오를수록 300이 스케일업하는지(단계별 요구량 표)는 미확인이다.
    현행은 전 단계 300 고정으로 둔다. 확인되면 이 상수를 단계 함수로 바꾸면 된다. */
 const HERO_ENH_COST = 300;
-/* ★ A3-2: 4강화당 발사 횟수 +N.
-   ⚠미확정: N 값(4강화당 몇 회 증가하는지)과 강화 상한 단계는 아직 판독되지 않았다.
-   현행값 N=1 · 상한 없음을 그대로 유지한다(칭호 '영웅 +20강화 2명' 조건과의 정합 때문에 상한을 넣지 않는다). */
-const HERO_ENH_N = 1;
-function heroEnhShots(enh){ return Math.floor(((enh|0)/4)) * HERO_ENH_N; }
-/* ★ A3-2: 효과 문구에 치환되는 '해당 영웅 스킬명'.
-   ⚠미확정: 참고 자료가 4스킬 중 어느 슬롯을 가리키는지 미확인. 강화 자격(레전더리)에서
-   정확히 해금되는 4번째 스킬(궁극)을 잠정 사용한다. 확정되면 이 함수 한 곳만 바꾸면 된다. */
-function heroEnhSkillName(j){ const L=SKILLS[j&&j.id]; return (L && L[3] && L[3][0]) || '스킬'; }
+/* ★ 2026-09-25(#12): 종전 '4강화당 발사 횟수(heroEnhShots)'·스킬명 치환(heroEnhSkillName)은 표시 전용이었고 어디에도 효과가 없었다 — 제거.
+   효과·상한은 heroPower 곁 HERO_ENH_MAX/HERO_ENH_PCT(전투력 +1%/단계, 최대 +20). */
 let _heroTab='스탯';
 function heroDetail(hidOrJob){
   const key = (hidOrJob && hidOrJob.id) ? hidOrJob.id : hidOrJob;   // 구코드가 JOBS 엔트리를 넘기는 경우 방어
@@ -8783,28 +8797,32 @@ function heroDetail(hidOrJob){
     });
   }
   else if(_heroTab==='강화'){
-    const enh=(S.heroEnh&&S.heroEnh[hid])||0;
-    const canGrade = GORDER.indexOf(e.grade) >= GORDER.indexOf('L');
-    const sh=heroShardAvail(hid), cost=HERO_ENH_COST;   // ★ B7/F1: 전용 조각 + 직업 공용 조각
-    body.appendChild(el('div','center',`<div class="big" style="color:${G.color}">${enh}강화</div>`));
-    /* ★ A3-2: 효과 문구는 영웅마다 스킬명이 치환된다 — "4강화당 (스킬명) 발사 횟수 증가" (실측 확정).
-       0강화 구간은 증가량 0 → "0회 증가"로 표기한다(4강화 미만은 증가 없음). */
-    body.appendChild(el('div','kv',`<span>효과</span><b>4강화당 ${heroEnhSkillName(j)} 발사 횟수 증가</b>`));
-    body.appendChild(el('div','kv',`<span>현재 효과</span><b>${heroEnhShots(enh)}회 증가</b>`));
-    body.appendChild(el('div','kv',`<span>조건</span><b>레전더리 이상의 등급 강화 가능</b>`));
+    const enh=heroEnhLv(hid), maxed=enh>=HERO_ENH_MAX;
+    const sh=heroShardAvail(hid), cost=heroEnhCost(enh);   // ★ B7/F1: 전용 조각 + 직업 공용 조각 · #12 단계별 체증
+    body.appendChild(el('div','center',`<div class="big" style="color:${G.color}">${enh}강화 <span class="small mut">/ ${HERO_ENH_MAX}</span></div>`));
+    const nextCP = maxed ? 0 : Math.round(heroPower(e)*(1+(enh+1)*HERO_ENH_PCT)/(1+enh*HERO_ENH_PCT));
+    body.appendChild(el('div','kv',`<span>효과</span><b>단계당 전투력 +${Math.round(HERO_ENH_PCT*100)}% (최대 ${HERO_ENH_MAX}단계)</b>`));
+    body.appendChild(el('div','kv',`<span>현재 효과</span><b>전투력 +${enh}%</b>`));
+    if(!maxed) body.appendChild(el('div','kv',`<span>다음 단계</span><b>전투력 ${fmt(heroPower(e))} → ${fmt(nextCP)}</b>`));
     body.appendChild(el('div','kv',`<span>보유 조각 (전용 ${fmt(heroShardOwn(hid))} + ${j.name} 공용)</span><b>${fmt(sh)}</b>`));
-    body.appendChild(el('div','warn',`*${HERO_ENH_COST}개의 조각 소모*`));
-    const eb=el('button','btn gold wide','강화'); eb.style.marginTop='8px';
-    if(!canGrade || sh<cost) eb.disabled=true;
+    body.appendChild(el('div','warn',`*${fmt(cost)}개의 조각 소모*`));
+    const eb=el('button','btn gold wide', maxed?'최대 강화':'강화'); eb.style.marginTop='8px';
+    if(maxed || sh<cost) eb.disabled=true;
     eb.onclick=()=>{
-      if(!canGrade){ toast('레전더리 이상의 등급만 강화할 수 있습니다.'); return; }
-      if(!heroShardSpend(hid,cost)){ toast('조각이 부족합니다.'); return; }
-      S.heroEnh[hid]=((S.heroEnh&&S.heroEnh[hid])||0)+1;
-      sfx('awaken'); toast(`${e.name} ${S.heroEnh[hid]}강화`); sysLog(`${e.name} <span class="lgd">${S.heroEnh[hid]}강화</span> 달성`);
-      heroDetail(hid); refreshHUD();
+      if(heroEnhLv(hid)>=HERO_ENH_MAX){ toast('최대 강화입니다.'); return; }
+      const p0=heroPower(e), c=heroEnhCost(heroEnhLv(hid));   // 클릭 시점 재조회(화면이 오래 떠 있던 경우)
+      if(!heroShardSpend(hid,c)){ toast('조각이 부족합니다.'); return; }
+      if(!S.heroEnh || typeof S.heroEnh!=='object') S.heroEnh={};
+      S.heroEnh[hid]=heroEnhLv(hid)+1;
+      const p1=heroPower(e);
+      sfx('awaken'); toast(`${e.name} ${S.heroEnh[hid]}강화 · ${cpDeltaLine(p0,p1)}`); sysLog(`${e.name} <span class="lgd">${S.heroEnh[hid]}강화</span> 달성`);
+      Battle.refreshParty(); heroDetail(hid); refreshHUD(); save();   /* ★ #12: 조각 차감 확정 즉시 저장(v5.309 원칙) — 종전엔 save·refreshParty 가 없었다(도달 불가라 무해했을 뿐) */
     };
     body.appendChild(eb);
-    if(!canGrade) body.appendChild(el('div','center small mut','⚠ 이 영웅은 레전더리 미만이라 강화할 수 없습니다.'));
+    if(!maxed && sh<cost) body.appendChild(el('div','center small mut',`조각 ${fmt(cost-sh)}개 더 필요 — 영웅 소환·상점 영웅 조각으로 모읍니다`));
+    /* 조각은 합성과 같은 주머니(직업 공용)다 — 강화로 같은 직업 윗 등급 합성 조각이 모자라게 되면 먼저 알린다(합성은 등급 배율이라 강화보다 훨씬 크다). */
+    { const ng=GORDER[GORDER.indexOf(e.grade)+1], nx=ng && rosterOf(j.id).find(r=>r.grade===ng && !heroOwned(r.hero_id));
+      if(nx && !maxed && sh>=cost && sh-cost < heroFuseNeed(nx.hero_id)) body.appendChild(el('div','center small warn',`⚠ 지금 강화하면 ${nx.name} 합성 조각이 모자랍니다 — 합성을 먼저 권장합니다`)); }
   }
   else { // 각성
     body.appendChild(el('div','center',`<div class="big" style="margin:4px 0">계정 각성 +${S.awaken}</div>`));
@@ -8827,7 +8845,12 @@ function heroDetail(hidOrJob){
       btn.onclick=()=>{ if(heroFuse(nx.hero_id)){ sfx('craft'); toast(`${nx.name} 합성 성공!`);
         sysLog(`${gradeBadge(nextG)} ${nx.name} 합성 성공`); guideCheck('fuse'); heroDetail(nx.hero_id); refreshHUD(); } };
       b.appendChild(btn);
-    } else b.appendChild(el('div','center small mut',`${GRADES[nextG].name} 영웅을 모두 보유 중입니다.`));
+    } else {
+      /* ★ 2026-09-25(#12): 그 직업에 윗 등급 영웅이 아예 없으면 '모두 보유 중' 은 거짓이다(R 영웅 → '영웅 영웅을 모두 보유', wind N → 윗 등급 부재).
+         로스터에 있는데 다 가졌을 때만 '모두 보유', 없으면 '다음 등급 영웅이 아직 없습니다' + 강화 탭 안내. */
+      const exists=rosterOf(j.id).some(r=>r.grade===nextG);
+      b.appendChild(el('div','center small mut', exists ? `${GRADES[nextG].name} 영웅을 모두 보유 중입니다.` : '이 직업의 다음 등급 영웅은 아직 없습니다 — [강화] 탭에서 조각으로 이 영웅을 강하게 만드세요.'));
+    }
   } else b.appendChild(el('div','center warn','최고 등급 · 스킬 전부 해금'));
 
   const back=el('button','btn sm','◀ 영웅 목록'); back.style.marginTop='8px'; back.onclick=()=>openModal('hero'); b.appendChild(back);
