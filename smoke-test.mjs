@@ -2270,6 +2270,30 @@ step('영웅 소환 여러 회 — 집계 보존 · 소환권 한도', ()=>{
   S.tickHero=keep.tick; S.stats.summons=keep.sum; S.shards=keep.shards; S.heroes=keep.heroes; S.summonFail=keep.fail; S.heroShards=keep.hs;
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ 2026-09-25(워크플로 #13): 모험 타일 남은 횟수 배지 — 각 모달의 게이트 키와 같은 값 · 읽기 전용(카운트 불변). */
+step('모험 타일 배지 — 게이트 키 일치 · 읽기 전용', ()=>{
+  const errs=[], S=ev('S'), B=ev('advLeftBadge'), ms=ev('monthlyState')();
+  ev('rollDaily')();
+  const keep={ counts:JSON.parse(JSON.stringify(S.daily.counts)), tw:S._tower, gs:S.guideStep, fc:ms.claimed.forgeTrial };
+  S.daily.counts={}; S._tower=0; delete ms.claimed.forgeTrial;
+  if(B('golddungeon').t!=='3/3') errs.push('골드던전 새날 '+B('golddungeon').t);
+  if(B('tower').t!=='1/1') errs.push('탑(기록 0 — 소탕 잠김) '+B('tower').t);
+  S._tower=5; if(B('tower').t!=='2/2') errs.push('탑(소탕 열림) '+B('tower').t);
+  if(B('forgetrial').t!=='1/1') errs.push('용광로 미도전 '+B('forgetrial').t);
+  if(B('boss')!==null) errs.push('보스(횟수 없음)에 배지');
+  S.daily.counts={ daily:5, gold:1, wb:1, ember:1, tower:1 };
+  const before=JSON.stringify(S.daily.counts);
+  if(!(B('dailydungeon').done && B('dailydungeon').t==='완료')) errs.push('요일던전 소진 '+B('dailydungeon').t);
+  if(B('golddungeon').t!=='2/3') errs.push('골드던전 1회 사용 '+B('golddungeon').t);
+  if(!B('worldboss').done || !B('embermaze').done) errs.push('월드보스/미궁 소진 미표시');
+  if(B('tower').t!=='1/2') errs.push('탑 도전만 사용 '+B('tower').t);
+  S.guideStep=0; if(B('raid').t!=='잠김') errs.push('길잡이 중 약탈 '+B('raid').t);
+  ms.claimed.forgeTrial=true; if(!/^D-\d+$/.test(B('forgetrial').t)) errs.push('용광로 소진 후 '+B('forgetrial').t);
+  if(JSON.stringify(S.daily.counts)!==before) errs.push('배지 계산이 일일 카운트를 바꿈');
+  S.daily.counts=keep.counts; S._tower=keep.tw; S.guideStep=keep.gs;
+  if(keep.fc===undefined) delete ms.claimed.forgeTrial; else ms.claimed.forgeTrial=keep.fc;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ 2026-09-25 회귀(워크플로 #19): 1위 NPC 길드 [신청] 한 번으로 레전더리 칭호 2종 / 조건형 칭호 달성 후 조건을 잃으면 보유 목록에서
    사라지는데 착용 효과는 남던 불일치 / 옛 조건으로 이미 얻은 이용자 보존(1회 이관). */
 step('칭호 — 길드 1클릭 차단 · 달성 보유 기록 · 기존 획득 이관', ()=>{

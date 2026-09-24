@@ -5271,6 +5271,21 @@ function monthlyState(){
   if(S.monthly.key!==k){ S.monthly.key=k; S.monthly.base={ kills:S.stats.kills||0, crafts:S.stats.crafts||0, summons:S.stats.summons||0, towerTries:S.stats.towerTries||0 }; S.monthly.claimed={}; save(); }
   return S.monthly;
 }
+/* 모험 타일 배지(워크플로 #13) — 읽기 전용: dailyLeft 는 rollDaily 만, monthlyState 는 월 경계
+   초기화만 한다(각 모달 render 가 이미 부르는 것과 같은 부작용). 지급·차감을 여기에 넣지 마라. */
+function advLeftBadge(k){
+  const f=(n,max)=>{ n=Math.max(0,n|0); return n>0 ? { t:`${n}/${max}`, done:false } : { t:'완료', done:true }; };
+  switch(k){
+    case 'dailydungeon': return f(dailyLeft('daily',5),5);
+    case 'golddungeon':  return f(dailyLeft('gold',3),3);
+    case 'worldboss':    return f(dailyLeft('wb',1),1);
+    case 'tower':        return (S._tower||0)>0 ? f(dailyLeft('tower',1)+dailyLeft('towerSweep',1),2) : f(dailyLeft('tower',1),1);   /* 소탕은 1 Wave 도달 후에만 열린다 */
+    case 'raid':         return S.guideStep<GUIDE_CHAIN.length ? { t:'잠김', done:true } : f(dailyLeft('raid',1),1);
+    case 'embermaze':    return f(dailyLeft('ember',1),1);
+    case 'forgetrial':   return monthlyState().claimed.forgeTrial ? { t:`D-${Math.ceil(daysToMonthlyReset())}`, done:true } : { t:'1/1', done:false };
+  }
+  return null;
+}
 const MONTHLY_REWARD_TXT={ m1:'영웅 기록서 X10', m2:'전설 망치 X30', m3:'골드 1억', m4:'영웅 기록서 X5' };
 const MONTHLY_QUESTS=[
   { id:'m1', icon:'⚔️', txt:'몬스터 30,000마리 처치', stat:'kills',  goal:30000, give:()=>{ S.records=(S.records||0)+10; return '영웅 기록서 X10'; } },
@@ -7362,6 +7377,11 @@ const MODALS = {
     };
     c.appendChild(btn); b.appendChild(c);
   }},
+  /* ★ 2026-09-25(워크플로 #13): 타일마다 남은 횟수 배지. 종전에는 요일던전·골드던전·월드보스·탑·
+     미궁의 '오늘 남았는지'를 알려면 타일을 하나씩 열어봐야 했다(매일 5~7탭 확인 노동).
+     표기는 각 모달의 '오늘 남은 n/max' 와 같은 게이트 키를 그대로 읽는다 — 별도 계산을 만들면
+     모달과 어긋난다. 입장권 보유는 반영하지 않는다(모달의 가능 횟수 표기와 같은 의미 유지).
+     보스는 재료 소모형이라 일일 횟수가 없어 배지를 달지 않는다. */
   adventure:{ title:'모험', render(b){
     b.appendChild(el('div','hint','던전·보스·약탈 — 전투 콘텐츠를 한 곳에서.'));
     const g=el('div','adv-grid');
@@ -7371,7 +7391,9 @@ const MODALS = {
       ['embermaze','잔불의 미궁','skill_flame'],
       ['forgetrial','용광로 시련','nav_forge'] ].forEach(([k,n,ic])=>{
       const c=el('div','cell gframe adv-item');
-      c.innerHTML=`<div class="ei"><img src="assets/icons/ui/${ic}.webp" style="width:34px;height:34px;object-fit:contain" alt="${n}"></div><div class="cn">${n}</div>`;
+      const lb=advLeftBadge(k);
+      c.innerHTML=`<div class="ei"><img src="assets/icons/ui/${ic}.webp" style="width:34px;height:34px;object-fit:contain" alt="${n}"></div><div class="cn">${n}</div>`+
+        (lb?`<div class="adv-left${lb.done?' done':''}">${lb.t}</div>`:'');
       c.onclick=()=>{ sfx('tap'); openModal(k); };
       g.appendChild(c);
     });
@@ -7481,7 +7503,10 @@ const MODALS = {
   /* ---------- 간이/정보 모달 ---------- */
   /* ★ B9/G-122: 3탭 [임무목록][일일][업적] — 별도 quest2 모달을 '업적' 탭으로 흡수(모달 폐지). */
   quest:{ title:'퀘스트', render(b){
-    let tab='임무목록'; const TB=['임무목록','일일','주간','월간','업적'];   // ★ v5.249 주간 · ★ v5.256 월간
+    /* ★ 2026-09-25: 기본 탭 — 길잡이 진행 중이면 임무목록, 끝났으면 받을 것이 있는 탭(일일→주간→월간), 없으면 일일.
+       종전엔 길잡이 9/9 완료 후에도 매번 완료된 9줄 화면(임무목록)부터 열려 쓸모없는 첫 화면이었다. 판정은 읽기 전용. */
+    let tab = S.guideStep<GUIDE_CHAIN.length ? '임무목록' : questClaimable() ? '일일' : weeklyClaimable() ? '주간' : monthlyClaimable() ? '월간' : '일일';
+    const TB=['임무목록','일일','주간','월간','업적'];   // ★ v5.249 주간 · ★ v5.256 월간
     const tabs=el('div','tabrow'); TB.forEach(t=>{ const x=el('div','tab'+(t===tab?' on':''),t); x.onclick=()=>{ tab=t; render(); [...tabs.children].forEach((c,i)=>c.classList.toggle('on',TB[i]===tab)); }; tabs.appendChild(x); });
     b.appendChild(tabs); const body=el('div'); b.appendChild(body);
     function render(){ body.innerHTML='';
@@ -7515,7 +7540,7 @@ const MODALS = {
           if(q.noBtn){ row.appendChild(el('div','dq-prog',`${Math.min(c,goal)}/${goal}`)); }
           else {
             const btn=el('button','btn sm'+(met&&!done?' gold':''),done?'완료':'받기'); btn.disabled=!met||done;
-            btn.onclick=()=>{ if(!met||dailyLeft('dqc'+i,1)<=0)return; S.dice+=q.rw; dailyUse('dqc'+i); toast(`주사위 X${q.rw} 수령`); openModal('quest'); refreshHUD(); };
+            btn.onclick=()=>{ if(!met||dailyLeft('dqc'+i,1)<=0)return; S.dice+=q.rw; dailyUse('dqc'+i); toast(`주사위 X${q.rw} 수령`); render(); refreshHUD(); };   /* ★ 2026-09-25: 제자리 갱신 — 종전 openModal('quest') 는 기본 탭(임무목록)으로 튕겨 5건 수령에 10탭(워크플로 #13) */
             row.appendChild(btn);
           }
           body.appendChild(row); });
@@ -9419,7 +9444,7 @@ function enterGoldDungeon(d, auto){
 function towerExchange(){
   const root=$('#modal-root'); if(!root) return;
   root.querySelectorAll('.b5-ovl').forEach(n=>n.remove());
-  const ov=el('div','b5-ovl'), pop=el('div','b5-pop');
+  const ov=el('div','b5-ovl'), pop=el('div','b5-pop b5-wide');   /* 교환 행(.pack 3단)이 250px 에선 품목명이 두 줄로 꺾였다 */
   pop.appendChild(el('div','b5-head','웨이브 상자 교환'));
   pop.appendChild(el('div','b5-msg',`보유 상자 <b style="color:var(--g-legend)">${S.towerBox||0}</b>개`));
   /* ★ v5.8: 재료 외 교환품 — 탑 상자의 소비처를 넓히고, 기록서·고급권의 두 번째 획득 경로가 된다. */
@@ -9432,14 +9457,14 @@ function towerExchange(){
     const r=el('div','pack'); r.innerHTML=`<div class="pic">${ic}</div><div class="info"><div class="t">${nm} X${gain}</div><div class="d">웨이브 상자 ${cost}개 소모</div></div>`;
     const bt=el('button','btn sm'+((S.towerBox||0)>=cost?' gold':''),'교환');
     bt.onclick=()=>{ if((S.towerBox||0)<cost){ toast('상자가 부족합니다'); return; }
-      S.towerBox-=cost; give(); toast(`${nm} +${gain}`); ov.remove(); openModal('tower'); refreshHUD(); };
+      S.towerBox-=cost; give(); toast(`${nm} +${gain}`); openModal('tower'); towerExchange(); refreshHUD(); save(); };   /* ★ 2026-09-25: 교환 창 유지(연속 교환) — 종전엔 1회마다 닫혀 기록서 18권 = 36탭 */
     r.appendChild(bt); pop.appendChild(r);
   });
   [['흑염석',1,20],['차원석',2,10],['심연광석',5,4],['금강석',12,2]].forEach(([mk,cost,gain])=>{
     const r=el('div','pack'); r.innerHTML=`<div class="pic">${matIcon(mk)}</div><div class="info"><div class="t">${mk} X${gain}</div><div class="d">웨이브 상자 ${cost}개 소모</div></div>`;
     const bt=el('button','btn sm'+((S.towerBox||0)>=cost?' gold':''),'교환');
     bt.onclick=()=>{ if((S.towerBox||0)<cost){ toast('상자가 부족합니다'); return; }
-      S.towerBox-=cost; matGain(mk,gain); toast(`${mk} +${gain}`); ov.remove(); openModal('tower'); refreshHUD(); };
+      S.towerBox-=cost; matGain(mk,gain); toast(`${mk} +${gain}`); openModal('tower'); towerExchange(); refreshHUD(); save(); };   /* ★ 2026-09-25: 교환 창 유지 */
     r.appendChild(bt); pop.appendChild(r);
   });
   const cl=el('button','btn wide','닫기'); cl.style.marginTop='6px'; cl.onclick=()=>ov.remove(); pop.appendChild(cl);
