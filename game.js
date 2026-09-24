@@ -1889,10 +1889,15 @@ function _dc(key){ return (S && S.daily && S.daily.counts && S.daily.counts[key]
 /* ★ v5.162: 수령 가능 보상 배지 — 일일 미션(받기 가능)과 7일 출석(금일 미수령)을 ☰ 메뉴와
    해당 항목의 빨간 점으로 알린다. 5초 저장 타이머에 묻어가 전투 중 달성도 최대 5초 안에 켜진다.
    DOM 표시 전용 — 상태 변경·경제 영향 없음. 부팅 직후(S=null) 5초 틱에 닿지 않게 가드. */
+/* ★ 2026-09-25(리뷰 확정): 일일 전용 판정 — questClaimable 은 주간·월간을 OR 로 포함하므로 퀘스트 기본 탭 선택에 쓰면
+   '주간'·'월간' 분기가 영영 선택되지 않는다(주간만 받을 게 있어도 전부 '완료'인 일일 탭이 열렸다). */
+function dailyClaimable(){
+  if(!S) return false;
+  return DAILY_QUESTS.some((q,i)=> !q.noBtn && q.cnt()>=q.goal && dailyLeft('dqc'+i,1)>0);
+}
 function questClaimable(){
   if(!S) return false;
-  return DAILY_QUESTS.some((q,i)=> !q.noBtn && q.cnt()>=q.goal && dailyLeft('dqc'+i,1)>0)
-    || weeklyClaimable() || monthlyClaimable();   // ★ v5.265: 주간·월간 의뢰
+  return dailyClaimable() || weeklyClaimable() || monthlyClaimable();   // ★ v5.265: 주간·월간 의뢰
 }
 /* ★ v5.265: 주간·월간 의뢰 수령 가능 판정 — questClaimable(일일)과 같은 패턴.
    진행 완료 && 미수령. questClaimable 의 or 에 합쳐 퀘스트 아이콘 점이 켜진다. */
@@ -2894,6 +2899,30 @@ const Battle = (()=>{
     return m._dsN*16;
   }
   /* ★ M1: 파티클 물리(각도·속도)는 연출용 — 시뮬레이션 상태에 되먹임 없음. cosmetic 지대에서 전역 rnd() 유지 */
+  /* ★ 2026-09-25(워크플로 #15): 타격 임팩트 — 일반 타격엔 숫자·붉은 틴트·넉백 5px 뿐이라 '닿는 순간'이 없었다(불꽃 입자는 치명·처치에서만).
+     접촉점에 흰 코어 4각 별(치명이면 크게 + 방사선). 각도는 순번(_impSeq)으로 — 시드·비시드 난수 모두 쓰지 않는다(D5).
+     수명 0.24초: 같은 스텝의 fx 갱신이 t 를 한 번 먼저 올려 0.12초면 1~2프레임만 보였다(검증 실측). 품질 '하'는 생략, 동시 16개 상한. */
+  let _impSeq=0;
+  function impact(x,y,crit,col){
+    if(gfxSpark()<=0) return;
+    let n=0; for(const e of fx){ if(e.type==='impact' && ++n>=16) return; }
+    fx.push({ type:'impact', x, y, t:0, crit:!!crit, col:col||'#ffd9a0', ang:(_impSeq++%8)*0.3927 });
+  }
+  /* ★ 2026-09-25(#15): 실루엣 번쩍임 — 스프라이트(또는 시트의 한 칸)를 오프스크린에 그려 source-in 으로 단색화해 현재 변환(반전·넉백) 그대로 얹는다.
+     종전 source-atop 사각형 칠하기는 같은 사각형 안의 이웃 몹·영웅 빛무리까지 물들였다(검증 실측). 그리기 전용. */
+  let _silCv=null, _silCx=null;
+  function silhouette(img, sx, sy, sw, sh, dx, dy, dw, dh, color, a){
+    try{
+      if(!_silCv){ _silCv=document.createElement('canvas'); _silCx=_silCv.getContext('2d'); }
+      if(!_silCx) return;
+      const pw=Math.max(1,Math.ceil(dw*dpr)), ph=Math.max(1,Math.ceil(dh*dpr));
+      if(_silCv.width<pw) _silCv.width=pw; if(_silCv.height<ph) _silCv.height=ph;
+      const c=_silCx; c.setTransform(1,0,0,1,0,0); c.globalCompositeOperation='source-over'; c.globalAlpha=1; c.clearRect(0,0,pw,ph);
+      if(sw) c.drawImage(img, sx,sy,sw,sh, 0,0,pw,ph); else c.drawImage(img, 0,0,pw,ph);
+      c.globalCompositeOperation='source-in'; c.fillStyle=color; c.fillRect(0,0,pw,ph); c.globalCompositeOperation='source-over';
+      ctx.save(); ctx.globalAlpha=ctx.globalAlpha*(a==null?1:a); ctx.drawImage(_silCv, 0,0,pw,ph, dx,dy,dw,dh); ctx.restore();
+    }catch(e){}
+  }
   function spark(x,y,color){ const q=gfxSpark(); if(q<=0) return;   /* ★ v5.170: 품질 '하'는 파티클 생략 — 유일한 발생 통로라 여기서 끊는다 */
     cosmetic(()=>{ const n=Math.max(1,Math.round(7*q)); for(let i=0;i<n;i++){ const a=rnd(0,6.28),s=rnd(30,80); fx.push({type:'spark',x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,t:0,color}); } }); }
   function drawLoot(x,y,kind,s){   // 캔버스용 금화/보석(이모지 대신 직접 그린다 — 글꼴마다 모양이 달라지지 않게)
@@ -2943,7 +2972,7 @@ const Battle = (()=>{
         else if(f.type==='skillfx'){ f.t += dt*2; f.frame = Math.floor(f.t * 15) % 15; }
         else f.t += dt;
       });
-      fx = fx.filter(f=> f.type==='bolt' ? f.t<1.05 : (f.type==='aoe' ? f.t<0.4 : (f.type==='lvup' ? f.t<1.2 : (f.type==='skill' ? f.t<1.0 : (f.type==='skillfx' ? f.t<1.0 : f.t<1)))));
+      fx = fx.filter(f=> f.type==='bolt' ? f.t<1.05 : f.type==='impact' ? f.t<0.24 : (f.type==='aoe' ? f.t<0.4 : (f.type==='lvup' ? f.t<1.2 : (f.type==='skill' ? f.t<1.0 : (f.type==='skillfx' ? f.t<1.0 : f.t<1)))));
       drops.forEach(d=>{ d.t+=dt*1.1; const e=clamp(d.t,0,1); d.x=d.sx+(d.tx-d.sx)*Math.pow(e,1.6); d.y=d.sy+(d.ty-d.sy)*Math.pow(e,1.6); });
       drops = drops.filter(d=> d.t<1);
       if(shake>0) shake-=dt;
@@ -3148,7 +3177,7 @@ const Battle = (()=>{
       else if(f.type==='skillfx'){ f.t += dt*2; f.frame = Math.floor(f.t * 15) % 15; }  /* ★ v5.43: 발사체 애니메이션 */
       else f.t += dt;
     });
-    fx = fx.filter(f=> f.type==='bolt' ? f.t<1.05 : (f.type==='aoe' ? f.t<0.4 : (f.type==='lvup' ? f.t<1.2 : (f.type==='skill' ? f.t<1.0 : (f.type==='skillfx' ? f.t<1.0 : f.t<1)))));
+    fx = fx.filter(f=> f.type==='bolt' ? f.t<1.05 : f.type==='impact' ? f.t<0.24 : (f.type==='aoe' ? f.t<0.4 : (f.type==='lvup' ? f.t<1.2 : (f.type==='skill' ? f.t<1.0 : (f.type==='skillfx' ? f.t<1.0 : f.t<1)))));
     mobs.forEach(m=>{
       /* ★ 홈 서바이벌: 몹이 영웅을 '에워싸며' 멈추는 flocking-style 이동.
          ① Arrival 감속 — 목표 거리(STANDOFF)에 가까워질수록 속도를 선형 줄여 급정거 방지.
@@ -3226,6 +3255,7 @@ const Battle = (()=>{
             return;
           }
           f.atkT -= dt;
+          if(f.flash>0) f.flash-=dt; if(f.kb>0) f.kb-=dt;   // ★ 2026-09-25(#15): 피격 연출 감쇠(그리기 전용)
           f.animT = (f.animT||0) + dt;
           if(f.animT > 0.15){ f.animT = 0; f.animFrame = (f.animFrame||0) + 1; }
           /* ★ v5.87: 공격 애니메이션 타이머 감소 */
@@ -3326,6 +3356,7 @@ const Battle = (()=>{
        여기서 돌아가도 전투 결과(결정론 해시)는 같다. */
     if(!(dmg>0)) return;
     m.hp -= dmg; dmgText(m.x, m.y-m.r-4-stackY(m), dmg, crit, txtColor||null, txtColor?'skill':''); m.flash = 0.12; m.kb = 0.12;   // kb = 넉백 연출(그리기 전용 — drawMob)
+    impact(m.x, m.y - m.r*0.4, crit, color);
     if(crit){ shake=Math.max(shake,0.14); spark(m.x,m.y,color); }
     hitSfx(crit);
     if(m.hp<=0){ const mx=m.x,my=m.y,boss=m.boss; mobs = mobs.filter(x=>x!==m); spark(mx,my,boss?'#ffd36a':'#ff8a3c');
@@ -3344,6 +3375,9 @@ const Battle = (()=>{
     const hpDmg = dmg / Math.max(1, f.cp) * 0.08;
     f.hp = Math.max(0, f.hp - hpDmg);
     dmgText(f.x, f.y-30-stackY(f), dmg, crit, null);   // ★ 2026-09-25: 숫자는 흰/금 위계(직업색은 파티클에만)
+    /* ★ 2026-09-25(#15): 투기장 적도 맞으면 반응한다 — 종전엔 번쩍임·넉백·타격음이 전혀 없어 숫자만 쌓였다(검증: 35회 피격 동안 flash 미설정).
+       flash·kb 는 그리기 전용 값(foes 루프에서 감쇠) — 승패·보상·RNG 해시 항목과 무관. */
+    f.flash=0.12; f.kb=0.12; impact(f.x, f.y-8, crit, color); hitSfx(crit);
     if(crit){ shake=Math.max(shake,0.14); spark(f.x,f.y,color); }
     if(f.hp<=0){
       f.dead=true; f.respT=3; f.dieAnimT=0;
@@ -3525,7 +3559,7 @@ const Battle = (()=>{
        · 시뮬 상태는 그리기 전후로 한 비트도 안 바뀐다 — 결정론 검증(D1~D5)은 draw 를 부르지도 않는다.
        · 60px 넘게 한 스텝에 옮긴 것(스폰·순간이동·편성 재배치)은 보간하지 않는다(가로지르는 잔상 방지).
      ⚠ drawScene 안에서 x,y,t 를 '쓰면' 안 된다 — 보간값이 되돌려지며 사라진다(읽기 전용). */
-  const FX_RATE = { dmg:1, die:1, aoe:1, lvup:2, skill:2.5, spark:3, bolt:4 };
+  const FX_RATE = { dmg:1, die:1, aoe:1, lvup:2, skill:2.5, spark:3, bolt:4, impact:1 };
   function snapPositions(){
     for(const a of [mobs, heroes, foes]) for(const e of a){ if(e){ e._px=e.x; e._py=e.y; } }
   }
@@ -3579,6 +3613,14 @@ const Battle = (()=>{
         ctx.fillStyle=f.color; ctx.globalAlpha=.9; ctx.beginPath(); ctx.arc(x,y,4,0,7); ctx.fill();
         ctx.globalAlpha=.35; ctx.beginPath(); ctx.arc(x,y,8,0,7); ctx.fill(); ctx.globalAlpha=1;
       } else if(f.type==='spark'){ ctx.globalAlpha=clamp(1-f.t,0,1); ctx.fillStyle=f.color; ctx.beginPath(); ctx.arc(f.x,f.y,2.2,0,7); ctx.fill(); ctx.globalAlpha=1;
+      } else if(f.type==='impact'){
+        /* ★ #15: 4각 별 — 0.06초 동안 커지고(팝) 이후 줄며 사라짐. 흰 코어 + 직업색 테두리, 치명은 크게 + 방사선 6줄. */
+        const e=clamp(f.t/0.24,0,1), grow=Math.min(1,f.t/0.06), L=(f.crit?18:12)*(0.55+0.45*grow)*(1-0.35*e), w=L*0.28;
+        ctx.save(); ctx.translate(f.x,f.y); ctx.rotate(f.ang); ctx.globalAlpha=clamp(1-e*e,0,1);
+        ctx.beginPath(); for(let k=0;k<4;k++){ const a=k*Math.PI/2; ctx.lineTo(Math.cos(a)*L, Math.sin(a)*L); ctx.lineTo(Math.cos(a+Math.PI/4)*w, Math.sin(a+Math.PI/4)*w); } ctx.closePath();
+        ctx.fillStyle='#fffaf0'; ctx.strokeStyle=f.col; ctx.lineWidth=1.6; ctx.fill(); ctx.stroke();
+        if(f.crit){ ctx.strokeStyle='rgba(255,236,190,.85)'; ctx.lineWidth=1.4; ctx.beginPath(); for(let k=0;k<6;k++){ const a=k*Math.PI/3+0.26, r0=L*0.9, r1=L*0.9+22*(0.4+0.6*grow)*(1-e); ctx.moveTo(Math.cos(a)*r0,Math.sin(a)*r0); ctx.lineTo(Math.cos(a)*r1,Math.sin(a)*r1); } ctx.stroke(); }
+        ctx.restore();
       } else if(f.type==='dmg'){
         /* ★ 2026-09-25: 외곽선(배경 위 가독성) + 치명타 팝(1.6배→1배, 첫 0.15초) + 후반 0.6초부터 페이드.
            종전엔 전 구간 선형 페이드라 떠오르자마자 흐려져 숫자를 읽을 틈이 없었다. */
@@ -3605,7 +3647,7 @@ const Battle = (()=>{
         if(spr && spr.complete && spr.naturalWidth>0){
           if(f.flip){ ctx.translate(f.x+sz/2,0); ctx.scale(-1,1); ctx.translate(-f.x+sz/2,0); }
           ctx.drawImage(spr, f.x-sz/2, dy, sz, sz);
-          if(f.t<0.08){ ctx.globalCompositeOperation='source-atop'; ctx.fillStyle='rgba(255,255,255,.85)'; ctx.fillRect(f.x-sz/2,dy,sz,sz); }
+          if(f.t<0.08) silhouette(spr,0,0,0,0, f.x-sz/2,dy,sz,sz, '#ffffff', 0.85);   // ★ #15: 사각 칠하기 → 실루엣(이웃 번짐 제거)
         } else { ctx.fillStyle=f.t<0.08?'#fff':(f.col||'#8a8f96'); ctx.beginPath(); ctx.arc(f.x, f.y-e*10, f.r*(1+0.3*e), 0, 7); ctx.fill(); }
         ctx.restore(); } }
       /* ★ 홈 1인 광역(AoE) 이펙트 — "광역 화염 이펙트로 다수 동시 타격" 재현.
@@ -3787,7 +3829,7 @@ const Battle = (()=>{
      내부에서 피봇 오프셋을 빼서 셀 좌상단을 계산한다.
      발(footX, footY)이 영웅의 (dx, dy)에 정렬되므로, 방향 전환 시 발이 고정되고
      몸통만 회전하는 자연스러운 모션이 됨. */
-  function drawHeroSheet(h, animName, frame, row, dx, dy, sz, alpha){
+  function drawHeroSheet(h, animName, frame, row, dx, dy, sz, alpha, tint){   // tint=[색, 알파] — 피격 실루엣(#15)
     const dir = HERO_SPRITE_DIR[h.hid];
     if(!dir) return false;
     const sheet = HERO_SHEETS[dir+'/'+animName];
@@ -3803,13 +3845,14 @@ const Battle = (()=>{
     ctx.save();
     ctx.globalAlpha = alpha||1;
     ctx.drawImage(sheet, sx, sy, CELL, CELL, ox, oy, sz, sz);
+    if(tint) silhouette(sheet, sx, sy, CELL, CELL, ox, oy, sz, sz, tint[0], tint[1]);
     ctx.restore();   /* ★ v5.94: save/restore로 globalAlpha 완전 복구 */
     return true;
   }
 
   function drawHero(h){
     ctx.globalAlpha = 1;   /* ★ v5.94: 이전 hero/foe의 alpha 잔류 방지 */
-    const lx = h.lungeT>0 ? 10 : 0;
+    let lx = 0, ly = 0;   // 돌진 오프셋 — 아래 h._row 확정 뒤 대상 방향으로 계산(#15)
     const sz = 144;
 
     /* ★ v5.78: 타겟 락온 — 방향 요동 방지.
@@ -3846,6 +3889,11 @@ const Battle = (()=>{
       row = angleToRow(ang);
     }
     h._row = row;
+    /* ★ 2026-09-25(#15): 돌진 — 종전 'lungeT>0 ? +10px' 은 이징 없는 계단이고 대상과 무관하게 늘 오른쪽으로 밀었다.
+       가장 가까운 대상 방향 × 10px × sin(π·진행) — 나갔다 돌아온다. lungeT 는 읽기만(그리기 오프셋). */
+    if(h.lungeT>0){ const k=Math.sin(Math.PI*clamp(1-h.lungeT/0.18,0,1)); let ux=1, uy=0;
+      if(allTargets.length){ const tg=allTargets.reduce((a,b)=> Math.hypot(b.x-h.x,b.y-h.y)<Math.hypot(a.x-h.x,a.y-h.y)?b:a, allTargets[0]); const d=Math.hypot(tg.x-h.x,tg.y-h.y)||1; ux=(tg.x-h.x)/d; uy=(tg.y-h.y)/d; }
+      lx=ux*10*k; ly=uy*10*k; }
 
     if(h.dead){
       const respPct = clamp(h.respT / 3, 0, 1);
@@ -3866,19 +3914,33 @@ const Battle = (()=>{
     }
 
     /* 그림자 */
-    ctx.fillStyle='rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(h.x+lx, h.y+20, 16, 5, 0,0,7); ctx.fill();
+    ctx.fillStyle='rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(h.x+lx, h.y+20+ly, 16, 5, 0,0,7); ctx.fill();
 
     const animName = heroAnimName(h);
+    /* ★ 2026-09-25(#15): 모션 프레임 — ① 스킬: skillAnimT 로 0번부터(종전 animFrame 은 계속 도는 값이라 매번 임의 프레임에서 시작 — 실측 2,3,7,10,12…).
+       ② 일반 공격: 시트의 접촉 프레임(6)을 실제 타격 순간에 맞춘다 — 타격 0.4초 전부터 0→6 감아 올리고(atkT 읽기 = 다음 타격까지 남은 시간),
+       타격 뒤 7→14 휘둘러 마무리(벽시계). 종전엔 1.5초 주기 반복이라 타격과 스윙이 따로 놀았다. 전부 읽기 전용 — 시뮬 값을 쓰지 않는다. */
+    let fr = h.animFrame||0;
+    if(h.skillAnim) fr = Math.min(14, Math.floor((h.skillAnimT||0)*15));
+    else if(animName==='Melee' || animName==='Attack1'){
+      const now=(typeof performance!=='undefined'&&performance.now)?performance.now():Date.now(), FD=1000/15, CONTACT=6;
+      if(typeof h._atkPrev==='number' && h.atkT > h._atkPrev + 0.05) h._hitW = now;   // atkT 가 다시 차오름 = 방금 타격
+      h._atkPrev = h.atkT;
+      const since = h._hitW ? now - h._hitW : 1e9;
+      if(since < (14-CONTACT)*FD) fr = CONTACT + 1 + Math.floor(since/FD);
+      else if(h.atkT <= CONTACT*FD/1000) fr = clamp(Math.floor(CONTACT - h.atkT*1000/FD), 0, CONTACT);
+      else fr = 0;
+    }
     /* 스킬 발동 중 글로우 */
     if(h.skillAnim){
-      const glow = ctx.createRadialGradient(h.x+lx,h.y,2,h.x+lx,h.y,40);
+      const glow = ctx.createRadialGradient(h.x+lx,h.y+ly,2,h.x+lx,h.y+ly,40);
       glow.addColorStop(0,h.color+'aa'); glow.addColorStop(1,h.color+'00');
-      ctx.fillStyle=glow; ctx.beginPath(); ctx.arc(h.x+lx,h.y,40,0,7); ctx.fill();
+      ctx.fillStyle=glow; ctx.beginPath(); ctx.arc(h.x+lx,h.y+ly,40,0,7); ctx.fill();
     }
 
     /* ★ v5.79: 발 피봇 정렬 — 발을 그림자 중심(h.x+lx, h.y+20)에 고정.
        lx(lungeT 오프셋)도 발에 적용해서 돌진 시 발이 미끄러지듯 이동. */
-    const drew = drawHeroSheet(h, animName, h.animFrame||0, row, h.x+lx, h.y+20, sz, 1);
+    const drew = drawHeroSheet(h, animName, fr, row, h.x+lx, h.y+20+ly, sz, 1);
     /* ★ v5.93: 시트 로드 전 폴백 도형 제거 — 더미 캐릭터 안 보이게.
        시트가 로드 중이면 그림자만 그리고 스프라이트는 생략. */
     if(!drew){
@@ -3962,7 +4024,9 @@ const Battle = (()=>{
       if(m.flash>0){ ctx.globalAlpha=0.85; }
       if(flip){ ctx.translate(m.x+sz/2, 0); ctx.scale(-1,1); ctx.translate(-m.x+sz/2, 0); }
       ctx.drawImage(spr, m.x-sz/2, dy, sz, sz);
-      if(m.flash>0){ ctx.globalCompositeOperation='source-atop'; ctx.fillStyle='rgba(255,80,80,.5)'; ctx.fillRect(m.x-sz/2,dy,sz,sz); }
+      /* ★ 2026-09-25(#15): 맞은 직후는 흰 실루엣, 이어 붉은 기 — flash>0.05 기준(같은 스텝에서 한 번 감쇠돼 처음 그려질 때 0.07 — 검증 실측).
+         연출 줄이기(fxFlash 끔)면 흰 단계 생략. 실루엣은 오프스크린 합성이라 이웃 스프라이트로 번지지 않는다. */
+      if(m.flash>0){ const wht = m.flash>0.05 && fxOn('fxFlash'); silhouette(spr,0,0,0,0, m.x-sz/2,dy,sz,sz, wht?'#ffffff':'rgb(255,80,80)', wht?0.85:0.5); }
       ctx.restore();
     } else {
       ctx.fillStyle = m.flash>0 ? '#fff' : (m.col||'#8a8f96');
@@ -4028,7 +4092,12 @@ const Battle = (()=>{
     const isMelee = !f.ranged;   /* ★ v5.97: 스킨 기준 (f.ranged는 생성 시 heroRanged로 설정) */
     const atkAnim = isMelee ? 'Melee' : 'Attack1';
     const animName = f._moving ? 'Run' : ((f.atkAnimT>0) ? atkAnim : 'Idle');
-    const drew = drawHeroSheet(f, animName, f.animFrame||0, row, f.x, f.y+20, sz, 1);
+    /* ★ 2026-09-25(#15): 피격 반응 — 흰→붉은 실루엣 + 아군 반대쪽으로 최대 5px 넉백(그리기 오프셋만, f.x 불변). */
+    const fl = f.flash>0 ? ((f.flash>0.05 && fxOn('fxFlash')) ? ['#ffffff',0.85] : ['rgb(255,80,80)',0.5]) : null;
+    const kbx = f.kb>0 ? (f.x >= ((heroes[0]&&heroes[0].x)||0) ? 1 : -1)*5*(f.kb/0.12) : 0;
+    if(kbx){ ctx.save(); ctx.translate(kbx,0); }
+    const drew = drawHeroSheet(f, animName, f.animFrame||0, row, f.x, f.y+20, sz, 1, fl);
+    if(kbx) ctx.restore();
     /* ★ v5.93: 시트 로드 전 폴백 도형 제거 — 더미 안 보이게. 지연 로드만. */
     if(!drew){
       const dir = HERO_SPRITE_DIR[f.hid];
@@ -7585,7 +7654,7 @@ const MODALS = {
   quest:{ title:'퀘스트', render(b){
     /* ★ 2026-09-25: 기본 탭 — 길잡이 진행 중이면 임무목록, 끝났으면 받을 것이 있는 탭(일일→주간→월간), 없으면 일일.
        종전엔 길잡이 9/9 완료 후에도 매번 완료된 9줄 화면(임무목록)부터 열려 쓸모없는 첫 화면이었다. 판정은 읽기 전용. */
-    let tab = S.guideStep<GUIDE_CHAIN.length ? '임무목록' : questClaimable() ? '일일' : weeklyClaimable() ? '주간' : monthlyClaimable() ? '월간' : '일일';
+    let tab = S.guideStep<GUIDE_CHAIN.length ? '임무목록' : dailyClaimable() ? '일일' : weeklyClaimable() ? '주간' : monthlyClaimable() ? '월간' : '일일';
     const TB=['임무목록','일일','주간','월간','업적'];   // ★ v5.249 주간 · ★ v5.256 월간
     const tabs=el('div','tabrow'); TB.forEach(t=>{ const x=el('div','tab'+(t===tab?' on':''),t); x.onclick=()=>{ tab=t; render(); [...tabs.children].forEach((c,i)=>c.classList.toggle('on',TB[i]===tab)); }; tabs.appendChild(x); });
     b.appendChild(tabs); const body=el('div'); b.appendChild(body);
@@ -9600,7 +9669,11 @@ function towerExchange(){
      기존 이용자는 이미 있는 최고 기록(탑·요일·미궁)으로 소급 인정.
    · 투기장(Battle.startDungeon 직접 호출)은 대상 아님 — _dgCfg 가 없으면 버튼이 뜨지 않는다. */
 let _dgCfg=null, _dgResultSfx=null, _dgLastBack=null;
-const DG_BACK_OK = new Set(['dailydungeon','golddungeon','boss','worldboss','tower','embermaze','forgetrial','raid','conquest']);
+const DG_BACK_OK = new Set(['dailydungeon','golddungeon','boss','worldboss','tower','embermaze','forgetrial','raid','conquest','guildRaid']);
+/* ★ 2026-09-25(리뷰 확정): 길드 레이드·점령전은 길드 모달 위 하위 오버레이(openSub)라 currentModal 은 'guild' 로 남는다 —
+   currentModal 만 보면 'conquest' 항목은 한 번도 맞지 않는 죽은 항목이었고 두 콘텐츠 모두 홈으로 튕겼다.
+   입장 시 _subKey 를 먼저 보고, 복귀는 부모 모달 → 하위 오버레이 순으로 다시 연다(openModal('guildRaid') 직접 호출은 독립 모달이라 원래 화면과 다르다). */
+const DG_BACK_PARENT = { guildRaid:'guild', conquest:'guild' };
 function dgFamily(name){ return String(name||'').split(' · ')[0].replace(/\s*\d+단계$/,'').trim(); }
 function dgSkipOK(cfg){
   if(!cfg || !S) return false;
@@ -9623,7 +9696,8 @@ function tickDgSkip(){
 function enterDungeonFight(cfg){
   if(busyFight()) return;
   /* 결과 뒤 복귀할 콘텐츠 화면 — 길잡이를 마친 뒤에만(초반 흐름은 홈으로 돌아가 배너·길잡이를 보게 둔다). closeModal 전에 캡처. */
-  cfg._back = S.guideStep<GUIDE_CHAIN.length ? null : DG_BACK_OK.has(currentModal) ? currentModal
+  const _bk = (_subKey && DG_BACK_OK.has(_subKey)) ? _subKey : currentModal;
+  cfg._back = S.guideStep<GUIDE_CHAIN.length ? null : DG_BACK_OK.has(_bk) ? _bk
     : currentModal==='dgResult' ? _dgLastBack : null;   // 골드던전 '자동 입장' 연전은 결과창에서 재입장한다 — 첫 판의 복귀처를 잇는다
   _dgLastBack = cfg._back;
   closeModal(); sysLog(`${cfg.name} 입장`); sfx('tap');
@@ -9690,7 +9764,8 @@ function showDungeonResult(cfg, win, stats){
   setTimeout(()=>{ if(currentModal!=='dgResult') return;
     if(cfg.autoNext && cfg.autoNext()) return;   // ★ B5/G-67: 골드던전 '자동 입장' 연전
     /* ★ 2026-09-25(워크플로 #11): 들어온 콘텐츠 화면으로 복귀(연속 입장 2탭 절감) — 길잡이 중이거나 목록 밖이면 종전대로 홈 */
-    if(cfg._back && MODALS[cfg._back] && !Battle.inDungeon()){ openModal(cfg._back); return; }
+    if(cfg._back && MODALS[cfg._back] && !Battle.inDungeon()){ const par=DG_BACK_PARENT[cfg._back];
+      if(par){ openModal(par); openSub(cfg._back); } else openModal(cfg._back); return; }
     closeModal(); }, 3000);
   refreshHUD();
 }

@@ -2381,6 +2381,40 @@ step('결과 연출 — 투기장 카드·승급 배너 · 제작 결과 카드 
   S.arenaPts=keep.pts; S.arenaTier=keep.tier; S.arenaStreak=keep.st; S.arenaRank=keep.rank; S.dice=keep.dice; S.arenaSession=keep.sess; S.stats.arenaWins=keep.wins; S.seenTutorial=keep.seen; S.equips=keep.eq;
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ 2026-09-25(리뷰 확정): ① 퀘스트 기본 탭 — 주간만 받을 게 있으면 '주간' 탭(종전 questClaimable 이 주간을 OR 로 포함해 주간·월간 분기가 죽어 있었다)
+   ② 길드 하위 오버레이(길드 레이드) 입장 → 결과 뒤 길드 모달 + 해당 하위 오버레이로 복귀. */
+step('퀘스트 기본 탭(주간 우선) · 길드 레이드 결과 뒤 복귀', ()=>{
+  const errs=[], S=ev('S'), M=ev('MODALS');
+  const keep={ gs:S.guideStep, wc:ev('weeklyClaimable'), dc:ev('dailyClaimable') };
+  S.guideStep=ev('GUIDE_CHAIN').length;
+  ev('dailyClaimable = ()=>false'); ev('weeklyClaimable = ()=>true');
+  const b=new Node2('div'); M.quest.render(b);
+  let on=null; const rec=n=>{ if(!n||typeof n!=='object') return; if(/\btab\b.*\bon\b/.test(String(n.className||''))) on=on||String(n._html||n._text||''); (n.children||[]).forEach(rec); }; rec(b);
+  if(on!=='주간') errs.push('주간만 받을 게 있는데 기본 탭 '+on);
+  ctx.__wc=keep.wc; ctx.__dc=keep.dc; ev('weeklyClaimable = __wc; dailyClaimable = __dc');   // vm 컨텍스트 전역(ctx)으로 원복 — 테스트 파일 globalThis 는 다른 영역
+  if(typeof ev('dailyClaimable')!=='function') errs.push('스텁 원복 실패');
+  // 길드 레이드(하위 오버레이) — 입장 시 복귀처는 guildRaid, 부모는 guild
+  ev("currentModal='guild'; _subKey='guildRaid'");
+  const cfg={ name:'길드 레이드 · 스모크', col:'#fff', foeCP:1, kind:'mobs', count:1, dur:5 };
+  ev('enterDungeonFight')(cfg);
+  if(cfg._back!=='guildRaid') errs.push('길드 레이드 복귀처 '+cfg._back);
+  if(ev('DG_BACK_PARENT').guildRaid!=='guild') errs.push('부모 모달 매핑 없음');
+  ev('Battle').finishNow(); ev('closeModal')();
+  S.guideStep=keep.gs;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
+/* ★ 2026-09-25(워크플로 #15): 피격 연출 — source-atop 사각 칠하기(이웃 스프라이트로 번짐) 재발 금지 · 투기장 적 피격 반응 · 임팩트 상한. */
+step('피격 연출 — 실루엣 번쩍임 · 투기장 적 반응 · 임팩트', ()=>{
+  const errs=[];
+  if(/globalCompositeOperation='source-atop'/.test(js)) errs.push('source-atop 사각 칠하기 잔존(이웃 스프라이트 번짐)');
+  const hf=js.slice(js.indexOf('  function hitFoe('), js.indexOf('  function doWipe('));
+  if(!hf.includes('f.flash=0.12; f.kb=0.12; impact(')) errs.push('투기장 적 피격 반응(flash·kb·impact) 없음');
+  const im=js.slice(js.indexOf('  function impact('), js.indexOf('  let _silCv'));
+  if(/Math\.random|rnd\(|bRnd\(/.test(im)) errs.push('임팩트가 난수를 쓴다(결정론·D5)');
+  if(!im.includes('>=16')) errs.push('임팩트 동시 상한 없음');
+  if(js.split("f.type==='impact' ? f.t<0.24").length-1 < 2) errs.push('임팩트 수명 필터(2곳) 없음');
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 step('잠긴 창 복귀 정산 차단 · 배경 로드 탭 숨김 시각 포착', ()=>{
   const errs=[], S=ev('S'), doc=ev('document'), vis=doc._ev && doc._ev.visibilitychange;
   if(typeof vis!=='function') throw new Error('visibilitychange 핸들러 미등록');
@@ -2493,7 +2527,7 @@ step('던전 래퍼 옵션 전달 — hpMul·overtime', ()=>{
    refreshParty 로 1인 복귀 ② 고급 조각(레전더리 판정)에 미보유 영웅 '영웅 등장'·'획득!' 거짓 표시 — 실제 해금만 연출. */
 step('던전 종료 홈 1인 복귀 · 고급 조각 거짓 획득 연출 제거', ()=>{
   const errs=[];
-  const efd=js.slice(js.indexOf('function enterDungeonFight('), js.indexOf('function enterDungeonFight(')+1500);
+  const _e0=js.indexOf('function enterDungeonFight('), efd=js.slice(_e0, js.indexOf('\nfunction ', _e0+10));   // 고정 길이 슬라이스는 앞에 코드가 늘면 잘린다 — 다음 함수까지
   if(!/finally\s*\{\s*Battle\.refreshParty\(\)/.test(efd)) errs.push('enterDungeonFight onEnd 에 refreshParty 복귀가 없다');
   const B=ev('Battle'); B.setPartySource(null);
   ev('globalThis.__oSDR=showDungeonResult; showDungeonResult=function(){}');
