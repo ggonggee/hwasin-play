@@ -2403,6 +2403,32 @@ step('퀘스트 기본 탭(주간 우선) · 길드 레이드 결과 뒤 복귀'
   S.guideStep=keep.gs;
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ 2026-09-25(워크플로 #26): 복귀 적립 — 부재 일 수(로컬 자정 반올림)·7일 상한·시계 앞뒤 반복 적립 차단(hi)·적립 시점 금액 확정·수령 1회. */
+step('복귀 적립 — 일 수·7일 상한·시계 조작 차단·금액 확정·수령', ()=>{
+  const errs=[], S=ev('S'), acc=ev('awayAccrue'), di=ev('dayIdx');
+  const keep={ ab:JSON.parse(JSON.stringify(S.awayBank||{})), tw:S._tower, eb:S.stats.emberBest, gold:S.gold, st:S.stones, bx:S.towerBox };
+  if(di('Sun Mar 29 2026')-di('Sat Mar 28 2026')!==1 || di('Sun Nov 01 2026')-di('Sat Oct 31 2026')!==1) errs.push('dayIdx 하루 간격');
+  if(!isNaN(di('demo'))) errs.push("'demo' 날짜가 NaN 이 아님");
+  const D=n=>new Date(2026,8,1+n).toDateString();
+  S._tower=20; S.stats.emberBest=2; S.awayBank={ days:0, gold:0, stones:0, box:0, hi:0 };
+  const d=ev('EMBER_MAZE')[1], perG=20*200000+d.gold, perS=30+d.stones, perB=5;
+  acc(D(0), D(5));   // 1~4일 부재 = 4일
+  if(S.awayBank.days!==4 || S.awayBank.gold!==perG*4 || S.awayBank.stones!==perS*4 || S.awayBank.box!==perB*4) errs.push('4일 적립 '+JSON.stringify(S.awayBank));
+  acc(D(5), D(2)); acc(D(2), D(5)); if(S.awayBank.days!==4) errs.push('시계 되감기→앞으로 재적립 '+S.awayBank.days);
+  S._tower=40; acc(D(5), D(20)); if(S.awayBank.days!==7) errs.push('7일 상한 '+S.awayBank.days);
+  if(S.awayBank.gold!==perG*4+(40*200000+d.gold)*3) errs.push('추가분은 그 시점 진행도로 확정돼야 함');
+  // 수령: 정산 화면 [수령]
+  const g0=S.gold, s0=S.stones, b0=S.towerBox, ab=JSON.parse(JSON.stringify(S.awayBank));
+  const box=new Node2('div'); ev('MODALS').settle.render(box);
+  const bt=findBtnByText(box,'수령'); if(!bt) errs.push('정산 화면 적립 수령 버튼 없음');
+  else { bt.onclick();
+    if(Math.abs((S.gold-g0)-ab.gold)>=1 || S.stones-s0!==ab.stones || S.towerBox-b0!==ab.box) errs.push('수령 금액 '+[S.gold-g0,S.stones-s0,S.towerBox-b0].join('/'));   // 골드는 부동소수(버프 누적) — 1 미만 오차 허용
+    if(S.awayBank.days!==0 || S.awayBank.hi!==ab.hi) errs.push('수령 후 초기화/hi 보존 '+JSON.stringify(S.awayBank));
+    const g1=S.gold; bt.onclick(); if(S.gold!==g1) errs.push('재수령'); }
+  S._tower=0; S.stats.emberBest=0; S.awayBank={ days:0, gold:0, stones:0, box:0, hi:0 }; acc(D(0),D(5)); if(S.awayBank.days!==0) errs.push('탑·미궁 기록 없는데 적립');
+  S.awayBank=keep.ab; S._tower=keep.tw; S.stats.emberBest=keep.eb; S.gold=keep.gold; S.stones=keep.st; S.towerBox=keep.bx;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ 2026-09-25(워크플로 #24): 시련의 탑 순위 — 재스케일(영구 꼴찌 해소) · 표 = 지급 · 월 경계 정산(지난달 도전한 경우 1회) · 기록 유지. */
 step('시련의 탑 순위·월간 정산 — 표 = 지급 · 도전한 달만 · 1회', ()=>{
   const errs=[], S=ev('S'), rk=ev('towerRank'), dz=ev('towerRankDice');

@@ -283,6 +283,11 @@ body{
 @media (prefers-reduced-motion: reduce){ .pbar.run::after{ display:none; } }
 .empty-state{ grid-column:1/-1; text-align:center; padding:14px 8px; color:var(--txt-dim); font-size:var(--fs-sm); line-height:1.5; word-break:keep-all; }
 .empty-state .btn{ margin-top:8px; }
+/* ★ 2026-09-25(워크플로 #26): 방치 정산 화면 부재 적립 카드 */
+.away-bank{ display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px 8px; align-items:center; padding:9px 10px; margin:0 0 8px; }
+.away-bank .ab-t{ grid-column:1; font-weight:700; color:#f0d59a; }
+.away-bank .ab-d{ grid-column:1; color:var(--txt-dim); line-height:1.45; word-break:keep-all; }
+.away-bank .btn{ grid-column:2; grid-row:1 / span 2; }
 
 /* ===== 모달 ===== */
 #modal-root{ position:absolute; inset:0; z-index:20; display:none; }

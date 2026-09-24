@@ -1385,6 +1385,13 @@ const ATTEND_DAYS = [
 ];
 /* ★ B9/G-134: 공지 — 제목 밴드 + 양피지 서술형 본문 (목록 → 상세 2단) */
 const NOTICES = [
+  /* ★ v5.350: 복귀 적립 — 며칠 비워도 일일 콘텐츠 몫을 일부 지켜 준다. */
+  { cat:'[업데이트]', ic:'🏠', t:'며칠 비워도 괜찮습니다 — 부재 적립(최대 7일)', d:'2026-09-25',
+    body:'군주들에게 알립니다.<br><br>바쁜 날이 이어져 접속하지 못해도, 그동안 매일 받을 수 있었던 몫의 일부를 적립해 드립니다.<br><br>'+
+      '· <b>🏠 적립 내용</b> — 비운 날마다 시련의 탑 소탕 몫과 잔불의 미궁 최고 문 몫(골드·강화석·웨이브 상자). 최대 7일분까지 쌓입니다.<br>'+
+      '· <b>⏳ 수령</b> — 좌상단 시계(방치 정산)에서 [수령]. 적립 금액은 비우기 직전의 기록 기준입니다.<br>'+
+      '· <b>📌 대상</b> — 탑이나 미궁에 한 번 이상 도전한 군주.<br><br>'+
+      '매일 접속하는 군주가 받는 몫을 넘지 않도록 설계했습니다. 접속 보상 알림도 이제 게임 화면에 들어온 뒤에 보여 드립니다.' },
   /* ★ v5.348: 시련의 탑 순위 보상 실제 지급·순위 재조정 — 표에만 있던 약속 이행과 '매월 15일 초기화' 문구 정정을 숨기지 않고 알린다. */
   { cat:'[업데이트]', ic:'🗼', t:'시련의 탑 순위 보상이 매월 지급됩니다 — 순위표 재조정', d:'2026-09-25',
     body:'군주들에게 알립니다.<br><br>시련의 탑 [랭킹 보상] 표에 안내만 되고 지급되지 않던 보상을 이제 실제로 드립니다.<br><br>'+
@@ -1568,6 +1575,7 @@ function freshState(){
     _tower:0,         // 시련의 탑 최고 도달 웨이브
     towerBox:0,       // 웨이브 도달 상자 — [교환] 으로 재료 환전
     dgSeen:{},        // ★ 2026-09-25(워크플로 #11): 던전 계열별 첫 클리어 기록 — [즉시 결과] 노출 조건(dgSkipOK)
+    awayBank:{ days:0, gold:0, stones:0, box:0, hi:0 },   // ★ 2026-09-25(워크플로 #26): 복귀 적립(부재 최대 7일분 탑 소탕·잔불 몫) — awayAccrue
     _wbdmg:0,        // 월드보스 누적 데미지(서버 랭킹 반영)
     wbScore:0,        // ★ v4.1 A1-2: 월드보스 누적 점수(정수 'N점') — 보상과 무관한 별도 적립
     ddDay:null,       // 요일던전에서 선택 중인 요일(null=오늘)
@@ -1859,9 +1867,37 @@ function loginRewardGive(day){
   r.give();
   return r.txt;
 }
+/* ★ 2026-09-25(워크플로 #26): 복귀 적립 — 며칠 비우고 돌아오면 그 사이 매일 할 수 있었던 '탑 소탕 + 잔불의 미궁 최고 문' 몫을 최대 7일까지 쌓아 둔다.
+   종전엔 복귀해도 입장권·방치 골드(12시간 상한)만 늘고 일일 콘텐츠 몫은 0 이었다(검증: 5일 부재 재현). 가치는 '돌아와도 다 잃지 않는다'는 체감이다
+   (14일 부재 격차의 약 9% 회복 — 과장 금지). 매일 하는 이용자를 절대 넘지 않는다(그들은 같은 몫을 매일 이미 받는다 — 천장 불변식).
+   ⚠ 설계상 지킬 것(검증 반박 반영):
+   · 날짜 차이는 로컬 자정끼리의 간격을 반올림한 일 수(dayIdx) — ms/86400000 을 내림하면 서머타임 주에 하루가 빠진다.
+   · 최고 처리 일자(hi) 이후의 날만 센다 — 시계를 앞뒤로 돌려 7일씩 반복 적립하는 구멍 차단.
+   · 금액은 적립 시점(부재 전) 진행도로 확정해 쌓는다 — 수령 시점 진행도로 계산하면 복귀 후 기록을 올리고 받아 천장이 샌다.
+   · 지급은 방치 정산 화면 [수령]에서만(원시 골드 — 버프 중첩 없음). 매일 콘텐츠를 한 번도 안 한 이용자(탑 0·미궁 0)는 몫이 없다. */
+const AWAY_MAX_DAYS = 7;
+function dayIdx(ds){ const t=new Date(ds).getTime(); return isFinite(t) ? Math.round(t/864e5) : NaN; }
+function awayAccrue(prevDs, nowDs){
+  try{
+    const p=dayIdx(prevDs), n=dayIdx(nowDs); if(!isFinite(p) || !isFinite(n)) return 0;
+    if(!S.awayBank || typeof S.awayBank!=='object') S.awayBank={ days:0, gold:0, stones:0, box:0, hi:0 };
+    const b=S.awayBank, from=Math.max(p, b.hi|0), missed=n-from-1;
+    b.hi=Math.max(b.hi|0, n);
+    if(!(missed>=1)) return 0;
+    const add=Math.min(missed, AWAY_MAX_DAYS-(b.days|0)); if(add<=0) return 0;
+    const best=S._tower|0, eb=(S.stats && S.stats.emberBest)|0, d=(eb>0 && EMBER_MAZE[eb-1]) || null;
+    const perGold=(best>=1 ? Math.floor(best*400000*0.5) : 0) + (d ? d.gold : 0);
+    const perStones=(best>=1 ? Math.floor(best*3*0.5) : 0) + (d ? d.stones : 0);
+    const perBox=best>=1 ? Math.max(1, Math.floor(best/4)) : 0;
+    if(perGold+perStones+perBox<=0) return 0;
+    b.days=(b.days|0)+add; b.gold=(b.gold||0)+perGold*add; b.stones=(b.stones|0)+perStones*add; b.box=(b.box|0)+perBox*add;
+    return add;
+  }catch(e){ return 0; }
+}
 function rollDaily(){
   const t=today(); if(S.daily.date===t) return;
   const first = !S.daily.date;
+  if(!first) awayAccrue(S.daily.date, t);   // ★ #26 — S.daily.date 를 덮어쓰기 전에(직전 접속일 기준)
   if(!first) S.day=(S.day||1)+1;   // 최초 1회(빈 문자열)는 신규 접속이라 일차를 올리지 않는다
   S.daily.date=t; S.daily.counts={};
   /* ★ N2: 안내문 'ⓘ 매일 입장권 5개가 자동충전 됩니다.' — 날짜가 실제로 바뀐 경우에만 배치 지급한다.
@@ -1974,7 +2010,7 @@ function refreshClaimBadges(){
   /* ★ v5.269: 미수령 오프라인 정산 배지 — offlinePending(방치 골드)이 쌓여 있어도
      timepod 을 누르기 전엔 표시가 없어 보상 존재를 몰랐다. 점으로 상시 알리고
      수령(offlinePending=0)과 함께 소등한다. */
-  const od=(S && (S.offlinePending||0))>0;
+  const od=(S && ((S.offlinePending||0)>0 || ((S.awayBank && S.awayBank.days)|0)>0));   // ★ #26: 부재 적립도 같은 시계 점
   const q=questClaimable(), a=attendClaimable(), n=noticeUnseen()>0;
   _setDot(document.querySelector('[data-modal="quest"]'), q);
   _setDot(document.querySelector('[data-modal="attend"]'), a);
@@ -5474,7 +5510,7 @@ function monthlyState(){
     /* ★ 2026-09-25(#24): 시련의 탑 월간 순위 정산 — 지난 달(마지막으로 기록된 달) 1회 이상 도전했으면 현재 순위로 주사위. 여러 달 비웠어도 1회만(그 달 기준). */
     if(prevKey && prevBase && ((S.stats.towerTries||0)-(prevBase.towerTries||0))>0){
       const rk=towerRank(S._tower||0), d=towerRankDice(rk);
-      if(d>0){ S.dice=(S.dice||0)+d; (S._pendingLoginToast=S._pendingLoginToast||[]).push(`시련의 탑 월간 정산 ${rk}위 · 주사위 ${fmt(d)}`); try{ sysLog(`시련의 탑 월간 정산 — ${rk}위 · 주사위 +${fmt(d)}`); }catch(e){} }
+      if(d>0){ S.dice=(S.dice||0)+d; (S._pendingLoginToast=S._pendingLoginToast||[]).push({ msg:`🗼 시련의 탑 월간 정산 — ${rk}위 · 주사위 +${fmt(d)}` }); /* 객체 = 접속 보상 머리말 없이 */ try{ sysLog(`시련의 탑 월간 정산 — ${rk}위 · 주사위 +${fmt(d)}`); }catch(e){} }
     }
     save();
   }
@@ -7693,6 +7729,20 @@ const MODALS = {
     // ③ 배터리 + 대형 시계
     b.appendChild(el('div','center',`<div class="small mut">🔋 100%</div>
       <div class="settle-clock">${$('#clock')?$('#clock').textContent:'--:--'}</div>`));
+    /* ★ 2026-09-25(워크플로 #26): 복귀 적립 카드(화면 위쪽 — 아래에 두면 360×640 에서 접혀 안 보였다) — 금액은 적립 때 확정된 값(awayAccrue). 수령은 원시 지급(골드 버프 중첩 없음) + 즉시 저장. */
+    const ab=S.awayBank;
+    if(ab && (ab.days|0)>0){
+      const card=el('div','away-bank gframe', `<div class="ab-t">🏠 부재 적립 <b>${ab.days}일</b> <span class="small mut">(최대 ${AWAY_MAX_DAYS}일)</span></div>`
+        + `<div class="ab-d small">비운 날의 시련의 탑 소탕·잔불의 미궁 몫 — 골드 <b>${fmt(ab.gold||0)}</b> · 강화석 <b>${fmt(ab.stones||0)}</b> · 웨이브 상자 <b>${fmt(ab.box||0)}</b></div>`);
+      const abt=el('button','btn gold sm','수령');
+      abt.onclick=()=>{ const a=S.awayBank; if(!a || !((a.days|0)>0)) return;
+        addGold(a.gold||0, true); S.stones=(S.stones||0)+(a.stones|0); S.towerBox=(S.towerBox||0)+(a.box|0);
+        toast(`부재 적립 ${a.days}일 수령 — 골드 +${fmt(a.gold||0)} · 강화석 +${fmt(a.stones|0)} · 상자 +${fmt(a.box|0)}`);
+        sysLog(`부재 적립 ${a.days}일 수령 — 골드 +${fmt(a.gold||0)} · 강화석 +${fmt(a.stones|0)} · 웨이브 상자 +${fmt(a.box|0)}`);
+        S.awayBank={ days:0, gold:0, stones:0, box:0, hi:a.hi|0 };
+        openModal('settle'); refreshHUD(); refreshClaimBadges(); save(); };
+      card.appendChild(abt); b.appendChild(card);
+    }
     // ④ 3행×4열 = 12칸 획득 재화 그리드
     b.appendChild(el('div','small mut','획득 재화'));
     const g=el('div','grid c4'); g.style.marginTop='6px';
@@ -7703,7 +7753,7 @@ const MODALS = {
     const offSec=Math.min(OFFLINE_CAP_H*3600, Math.floor((S.offlinePending||0)/OFFLINE_GPM*60));   /* ★ v5.196: 정본 비율로 환산 */
     const two=el('div'); two.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin:10px 0';
     two.innerHTML=`<div class="gframe" style="padding:10px;text-align:center"><div class="small mut">1분당 획득 골드</div><div style="font-size:15px;font-weight:800;color:var(--gold)">${fmt(rate)} G</div></div>
-      <div class="gframe" style="padding:10px;text-align:center"><div class="small mut">오프라인 골드 ${mmss(offSec)}</div><div style="font-size:15px;font-weight:800;color:var(--gold)">${fmt(S.offlinePending||0)} G</div>
+      <div class="gframe" style="padding:10px;text-align:center"><div class="small mut">오프라인 골드 ${offSec>=3600 ? `${Math.floor(offSec/3600)}시간 ${String(Math.floor(offSec%3600/60)).padStart(2,'0')}분` : mmss(offSec)}</div><div style="font-size:15px;font-weight:800;color:var(--gold)">${fmt(S.offlinePending||0)} G</div>
       <div class="small mut" style="margin-top:2px">인게임 방치의 ${Math.round(OFFLINE_GPM/18885*100)}% · 최대 ${OFFLINE_CAP_H}시간</div></div>`;
     b.appendChild(two);
     if(S.offlinePending>0){
@@ -9896,6 +9946,13 @@ document.addEventListener('visibilitychange', ()=>{
   if(S) S.lastSeen=Date.now();   // ★ 2026-09-25: 메모리만 갱신(설정 '마지막 저장'이 숨김 시각으로 보이지 않게) — 세이브는 다음 save 가 씀
 });
 
+/* 접속 보상(rollDaily 가 load 중 지급하고 큐에 쌓은 알림) 표시. {msg} 객체는 머리말 없이 — 접속 보상이 아닌 알림(탑 월간 정산 등)에
+   '🎁 N일차 접속 보상 —' 이 붙던 것(검증 지적). 보상은 이미 지급됐으므로 여기서 지급하지 않는다. */
+function flushLoginToasts(){
+  if(!Array.isArray(S._pendingLoginToast)) return;
+  const q=S._pendingLoginToast; S._pendingLoginToast=null;
+  q.forEach((rw,i)=>{ setTimeout(()=>toast(rw && typeof rw==='object' ? String(rw.msg||'') : `🎁 ${S.day}일차 접속 보상 — <b>${rw}</b>`), 500+i*400); });
+}
 function enterHome(){
   $('#title').classList.add('hidden');
   const lm=$('#login-mock'); if(lm) lm.classList.add('hidden');
@@ -9903,6 +9960,9 @@ function enterHome(){
   const sc=$('#server-confirm'); if(sc) sc.classList.add('hidden');
   $('#home').classList.remove('hidden');
   Battle.resize(); Battle.start(); refreshHUD(); tickClock();
+  /* ★ 2026-09-25(#26): 복귀 적립 안내·접속 보상 토스트는 홈 진입 때 — 부팅(load 직후)에 띄우면 타이틀 화면에서 사라져 보지 못한다(실물 확인). */
+  flushLoginToasts();
+  if(S.awayBank && (S.awayBank.days|0)>0) setTimeout(()=>toast(`🏠 돌아오셨군요 — 비운 ${S.awayBank.days}일분 탑·미궁 몫을 적립했습니다 · 좌상단 시계에서 수령`), 900);
   for(let i=0;i<5;i++) pushChat(pick(CHAT_LINES)(), '전체');
   sysLog('결정의 시대에 오신 것을 환영합니다, 군주여.');
   /* ★ v5.272: 의뢰 주간·월간 스냅샷을 접속 즉시 확정 — 종전엔 퀘스트 탭을 열어야
@@ -10116,10 +10176,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   scheduleUIScale();
   /* ★ v5.201: 접속 보상 토스트 플러시 — rollDaily 가 load() 안에서 돌아 이 시점에야
      #toast 상자가 살아 있다. 보상은 이미 지급됨(sysLog도 load 중 기록). */
-  if(Array.isArray(S._pendingLoginToast)){
-    S._pendingLoginToast.forEach((rw,i)=>{ setTimeout(()=>toast(`🎁 ${S.day}일차 접속 보상 — <b>${rw}</b>`), 600+i*400); });
-    S._pendingLoginToast=null;
-  }
+  /* ★ 2026-09-25: 플러시는 홈 진입(enterHome → flushLoginToasts)으로 옮겼다 — 여기(부팅 직후)는 타이틀 화면이라 토스트가 보이지 않고 사라졌다(실물 확인). */
   setTimeout(()=>{ if(!$('#home').classList.contains('hidden')) Battle.resize(); }, 100);
 });
 window.addEventListener('resize', scheduleUIScale);
