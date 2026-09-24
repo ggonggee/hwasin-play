@@ -637,7 +637,8 @@ step('백그라운드 탭 복귀 정산 — 정본 비율 적립 · 30초 미만
   const S=ev('S'), settle=ev('_visibilitySettle'), GPM=ev('OFFLINE_GPM');
   const want=Math.floor(GPM*60);
   const before=S.offlinePending||0;
-  if(settle(Date.now()-3600e3, Date.now())!==want) throw new Error(`1시간 정산액 ${settle(Date.now()-3600e3,Date.now())} ≠ ${want}`);
+  S.offHi=0;   // #16 고수위 — 과거 시각을 만들어 넣는 검사는 '이미 정산한 최고 시각'을 비우고 시작한다(안 비우면 되감기로 판정돼 0)
+  if(settle(Date.now()-3600e3, Date.now())!==want) throw new Error(`1시간 정산액 ≠ ${want}`);
   if((S.offlinePending||0)!==before+want) throw new Error('offlinePending 에 적립되지 않았다');
   if(settle(Date.now()-30e3, Date.now())!==0) throw new Error('30초 미만 숨김에 적립됐다');
 });
@@ -651,17 +652,17 @@ step('오프라인 정산 상한(OFFLINE_CAP_H) — 부팅·복귀 양 경로 + 
   const want8h=Math.floor(GPM/60*CAPH*3600);   // (이름은 이력상 want8h — 값은 현재 상한)
   for(const hrs of [CAPH+4, 48]){
     const keep={ pending:S.offlinePending||0, lastSeen:S.lastSeen };
-    S.offlinePending=0; S.lastSeen=Date.now()-hrs*3600e3;
+    S.offlinePending=0; S.lastSeen=Date.now()-hrs*3600e3; S.offHi=0;
     ev('computeOffline')();
     if((S.offlinePending||0)!==want8h) errs.push(`computeOffline ${hrs}h → ${S.offlinePending}(기대 ${want8h})`);
     S.offlinePending=keep.pending; S.lastSeen=keep.lastSeen;
   }
   { const keep={ pending:S.offlinePending||0, lastSeen:S.lastSeen };
-    S.offlinePending=0; S.lastSeen=Date.now()-60e3;   // 정확히 60초 — >60 엄격
+    S.offlinePending=0; S.lastSeen=Date.now()-60e3; S.offHi=0;   // 정확히 60초 — >60 엄격
     ev('computeOffline')();
     if((S.offlinePending||0)!==0) errs.push('computeOffline 60초 경과분이 적립됐다(임계 >60 위반)');
     S.offlinePending=keep.pending; S.lastSeen=keep.lastSeen; }
-  { const before=S.offlinePending||0;
+  { const before=S.offlinePending||0; S.offHi=0;
     const got=ev('_visibilitySettle')(Date.now()-(CAPH+4)*3600e3, Date.now());
     if(got!==want8h) errs.push(`_visibilitySettle 12h → ${got}(기대 ${want8h})`);
     if((S.offlinePending||0)!==before+want8h) errs.push('_visibilitySettle 상한분 미적립');
@@ -2491,7 +2492,7 @@ step('절전 간격 정산 · 숨김 날짜 전환 부재 적립 · 합성 가�
   const errs=[], S=ev('S'), doc=ev('document');
   const keep={ hidden:doc.hidden, p:S.offlinePending, ab:JSON.parse(JSON.stringify(S.awayBank||{})), af:S._awayFrom, dd:S.daily.date, tw:S._tower, st:S.seenTutorial, sh:JSON.parse(JSON.stringify(S.shards)) };
   ev('_saveSealed = false; _tabHideTs = 0'); doc.hidden=false;
-  const now=ev('Date.now()'); S.offlinePending=0;
+  const now=ev('Date.now()'); S.offlinePending=0; S.offHi=0;   // #16 고수위 비움(과거 시각 주입 검사)
   const add=ev('_wallGapCheck')(now-3*3600e3, now);
   const want=Math.floor(ev('OFFLINE_GPM')/60*3*3600); if(Math.abs(add-want)>1 || S.offlinePending!==add) errs.push('보이는 절전 3시간 정산 '+add+' (기대 '+want+')');
   doc.hidden=true; if(ev('_wallGapCheck')(now-3*3600e3, now)!==0) errs.push('숨김 중 절전 간격이 정산됨(숨김 경로와 이중)');
@@ -2603,6 +2604,50 @@ step('리뷰 반영 — 교환 클릭 시점 품절 · 긴 토스트 · 가져�
   try{ ev('computeOffline')(); if(typeof S.lastSeen!=='number' || typeof (S.offlinePending||0)!=='number') errs.push('비정상 lastSeen 정리 안 됨'); }
   catch(e){ errs.push('비정상 lastSeen 에 computeOffline throw: '+e.message); }
   S.mats=keep.mats; S.gray=keep.gray; S.lastSeen=keep.ls; S.offlinePending=keep.op;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
+/* ★ 2026-09-25(워크플로 2차 #16): 기기 시계 되감기 — 일일·출석·주·월·투기장 주차·오프라인 정산이 '나중일 때만' 넘어간다(반복 지급 차단). 앞으로 가는 롤오버는 그대로. */
+step('시계 되감기 무지급 — 일일·출석·주·월·투기장·오프라인 · 앞으로는 정상', ()=>{
+  const errs=[], S=ev('S');
+  const keep=JSON.parse(JSON.stringify({ daily:S.daily, day:S.day, ticket:S.ticket, dice:S.dice, att:S.claimed.attend, ald:S.attendLastDate, weekly:S.weekly, monthly:S.monthly,
+    aw:S.arenaWeek, ar:S.arenaRank, ae:S.stats.arenaEnters, tt:S.stats.towerTries, tw:S._tower, ls:S.lastSeen, op:S.offlinePending, hi:S.offHi, gold:S.gold, sess:S.arenaSession }));
+  const DS=d=>ev(`new Date(Date.now()+(${d})*864e5).toDateString()`);
+  // ① 일일: 저장일이 내일(= 시계를 하루 되돌림) → 초기화·지급 없음, 그날 카운터 유지
+  S.daily={ date:DS(1), counts:{ gold:3, tower:1 } }; const d0=S.day, t0=S.ticket, g0=S.gold;
+  ev('rollDaily')();
+  if(S.day!==d0 || S.ticket!==t0 || S.daily.counts.gold!==3 || S.daily.date!==DS(1) || S.gold!==g0) errs.push('되감은 날 일일 초기화/지급 '+JSON.stringify([S.day-d0,S.ticket-t0,S.daily.counts.gold,S.gold-g0]));
+  S.daily={ date:DS(-1), counts:{ gold:3 } }; ev('rollDaily')();
+  if(S.day!==d0+1 || (S.daily.counts.gold|0)!==0 || S.daily.date!==ev('today')()) errs.push('앞으로 간 날 초기화 안 됨');
+  // ② 출석: 마지막 수령일이 내일이면 받을 수 없음
+  S.claimed.attend={}; S.attendLastDate=DS(1); if(ev('attendClaimable')()) errs.push('되감은 날 출석 수령 가능');
+  S.attendLastDate=DS(-1); if(!ev('attendClaimable')()) errs.push('다음 날 출석 불가');
+  // ③ 월: 저장 키가 다음 달 → 리셋·탑 정산 없음
+  const mk=ev('getMonthKey')(), [yy,mm]=mk.split('-').map(Number), nextM=(mm===12?(yy+1)+'-1':yy+'-'+(mm+1));
+  S._tower=22; S.stats.towerTries=9; S.monthly={ key:nextM, base:{ kills:0, crafts:0, summons:0, towerTries:1 }, claimed:{ forgeTrial:true } };
+  const dc0=S.dice; ev('monthlyState')();
+  if(S.monthly.key!==nextM || S.dice!==dc0 || !S.monthly.claimed.forgeTrial) errs.push('되감은 달 월간 리셋/정산 '+JSON.stringify([S.monthly.key,S.dice-dc0]));
+  // ④ 주: 저장 키가 다음 주 → 리셋 없음
+  const wk=ev('getWeekKey')(), [wy,wn]=wk.split('-W').map(Number), nextW=wy+'-W'+(wn+1);
+  S.weekly={ key:nextW, base:{ kills:0 }, claimed:{ w1:true } }; ev('weeklyState')();
+  if(S.weekly.key!==nextW || !S.weekly.claimed.w1) errs.push('되감은 주 주간 리셋');
+  // ⑤ 투기장 주차: 저장 주차가 다음 주 월요일 → 주간 주사위·초기화 없음
+  const ak=ev('arenaWeekKey')(), [ay,am,ad]=ak.split('-').map(Number), nd=new Date(ay,am-1,ad+7), nextA=nd.getFullYear()+'-'+(nd.getMonth()+1)+'-'+nd.getDate();
+  S.arenaWeek=nextA; S.arenaRank=3; S.arenaSession={ w:5, l:0, t:0 }; const dc1=S.dice;
+  if(ev('arenaWeekRoll')()!==false || S.dice!==dc1 || S.arenaRank!==3 || S.arenaWeek!==nextA) errs.push('되감은 주차 투기장 정산');
+  // ⑥ 오프라인: 앞당겨 정산한 뒤(offHi=내일) 되돌린 세션(lastSeen 3시간 전)을 다시 열어도 0 · 켠 채 되돌렸다 제자리 0 · 정상 3시간은 그대로
+  const now=ev('Date.now()');
+  S.offlinePending=0; S.offHi=now+864e5; S.lastSeen=now-3*3600e3; ev('computeOffline')();
+  if((S.offlinePending||0)!==0) errs.push('되감은 뒤 재접속 오프라인 재정산 '+S.offlinePending);
+  if(S.offHi!==now+864e5) errs.push('고수위가 과거로 내려감');
+  ev('_saveSealed = false; _tabHideTs = 0'); const doc=ev('document'), hd=doc.hidden; doc.hidden=false;
+  S.offlinePending=0; S.offHi=now; ev('_wallGapCheck')(now, now-3*3600e3); ev('_wallGapCheck')(now-3*3600e3, now);
+  if((S.offlinePending||0)!==0) errs.push('켠 채 3시간 되돌렸다 제자리에 절전 간격 정산 '+S.offlinePending);
+  S.offlinePending=0; S.offHi=now-5*3600e3; S.lastSeen=now-3*3600e3; ev('computeOffline')();
+  const want=Math.floor(ev('OFFLINE_GPM')/60*3*3600); if(Math.abs((S.offlinePending||0)-want)>ev('OFFLINE_GPM')) errs.push('정상 3시간 부재 정산 '+S.offlinePending+' (기대 ~'+want+')');
+  doc.hidden=hd;
+  Object.assign(S, { daily:keep.daily, day:keep.day, ticket:keep.ticket, dice:keep.dice, attendLastDate:keep.ald, weekly:keep.weekly, monthly:keep.monthly, arenaWeek:keep.aw, arenaRank:keep.ar,
+    _tower:keep.tw, lastSeen:keep.ls, offlinePending:keep.op, offHi:keep.hi, gold:keep.gold, arenaSession:keep.sess });
+  S.claimed.attend=keep.att; S.stats.arenaEnters=keep.ae; S.stats.towerTries=keep.tt;
   if(errs.length) throw new Error(errs.join(' | '));
 });
 /* ★ 2026-09-25(워크플로 #26): 복귀 적립 — 부재 일 수(로컬 자정 반올림)·7일 상한·시계 앞뒤 반복 적립 차단(hi)·적립 시점 금액 확정·수령 1회. */
@@ -2813,7 +2858,7 @@ step('숨김 중 저장 lastSeen · 우편 배지 · 인트로 출석 1일차 �
   doc.hidden=true; ev('_tabHideTs='+hideAt); ev('save')();
   const saved=JSON.parse(store.get('hwasin_save_v1')).lastSeen;
   if(saved!==hideAt) errs.push('숨김 중 저장 lastSeen='+saved+' (기대 숨김 시각)');
-  S.offlinePending=0; S.lastSeen=saved; ev('computeOffline')();
+  S.offlinePending=0; S.lastSeen=saved; S.offHi=hideAt-5000; ev('computeOffline')();   // 실제 흐름: 숨긴 뒤엔 고수위가 오르지 않아 숨김 시각 이하(#16)
   const want=Math.floor(ev('OFFLINE_GPM')/60*3*3600); if(Math.abs((S.offlinePending||0)-want)>ev('OFFLINE_GPM')) errs.push('숨김 3h 정산 '+S.offlinePending+' (기대 ~'+want+')');
   doc.hidden=false; ev('_tabHideTs=0'); ev('save')();
   if(Math.abs(JSON.parse(store.get('hwasin_save_v1')).lastSeen-gNow())>5000) errs.push('보이는 상태 저장 lastSeen 이 현재가 아님');

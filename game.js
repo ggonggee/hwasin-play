@@ -1417,6 +1417,12 @@ const ATTEND_DAYS = [
 ];
 /* ★ B9/G-134: 공지 — 제목 밴드 + 양피지 서술형 본문 (목록 → 상세 2단) */
 const NOTICES = [
+  /* ★ v5.357: 기기 시계 되감기 반복 지급 차단(#16) — 시계가 틀렸다가 교정된 이용자는 초기화가 늦게 열리므로(이미 앞당겨 쓴 날) 숨기지 않고 알린다. */
+  { cat:'[수정]', ic:'🕰️', t:'기기 날짜를 되돌려도 초기화·보상이 반복되지 않습니다', d:'2026-09-25',
+    body:'군주들에게 알립니다.<br><br>'+
+      '· 기기 날짜·시간을 앞뒤로 바꿀 때마다 일일 초기화·접속 보상·출석·투기장 티어 골드·주간/월간 정산·오프라인 골드가 반복해서 지급되던 오류를 바로잡았습니다.<br>'+
+      '· 이제 날짜는 <b>마지막으로 처리된 날보다 뒤일 때만</b> 넘어갑니다. 기기 시계가 앞서 있다가 바로잡힌 경우, 실제 날짜가 그날을 지난 뒤에 다음 초기화가 열립니다(앞선 날의 보상은 이미 받은 상태입니다).<br>'+
+      '· 평소처럼 하루가 지나 접속하는 경우에는 달라지는 것이 없습니다.' },
   /* ★ v5.356: 투기장 순위 버프 주차 가드(이용자 불리 정정 포함 — v5.330 관례대로 숨기지 않고 알린다) · 주간 정산 자동 · 교환 경합 · 긴 안내 표시 시간. */
   { cat:'[수정]', ic:'🏟️', t:'투기장 주간 정산이 화면을 열지 않아도 진행됩니다', d:'2026-09-25',
     body:'군주들에게 알립니다.<br><br>'+
@@ -1613,7 +1619,7 @@ function freshState(){
     //   [저장/사용] 을 눌러야 draft 가 커밋된다. party() 는 formActive 진영을 읽는다.
     formations:{ '1':{}, '2':{}, pvp:{} },
     formActive:'1',
-    day:1, playSec:0, lastSeen:0, offlinePending:0,
+    day:1, playSec:0, lastSeen:0, offlinePending:0, offHi:0,   /* offHi: 오프라인 정산을 마친 최고 벽시계(#16 — computeOffline 주석). 이관 판정 플래그 아님(0 = 기록 없음) */
     summonFail:0, arenaAuto:false,
     // ★ B5 던전 신규 상태 (G-67 자동입장 / G-73·G-75 탑 기록·상자 / G-70·G-72 월드보스 기록)
     goldAuto:false,   // 골드던전 '자동 입장' 토글
@@ -1815,8 +1821,11 @@ function computeOffline(){
   const ls=(typeof S.lastSeen==='number' && isFinite(S.lastSeen)) ? S.lastSeen : 0;
   const op=(typeof S.offlinePending==='number' && isFinite(S.offlinePending)) ? S.offlinePending : 0;
   S.offlinePending=op;   // 숫자 아닌 값을 남겨 두면 정산 화면의 비교·덧셈에서 같은 TypeError 가 난다
-  if(ls){ const elapsed=(now-ls)/1000, cap=OFFLINE_CAP_H*3600; if(elapsed>60){ S.offlinePending=op+Math.floor(OFFLINE_GPM/60*Math.min(elapsed,cap)); } }
-  S.lastSeen=now;
+  /* ★ #16(2차): 시계 왕복 반복 차단 — 정산 시작점은 max(마지막 접속, 이미 정산한 최고 시각 offHi). 종전엔 시계를 하루 앞으로(12시간치 정산) →
+     되돌림(lastSeen 이 과거로) → 다시 앞으로 할 때마다 12시간치가 또 쌓였다. 정상 흐름에선 lastSeen ≥ offHi 라 결과가 같다. */
+  const hi=(typeof S.offHi==='number' && isFinite(S.offHi)) ? S.offHi : 0, from=Math.max(ls, hi);
+  if(ls){ const elapsed=(now-from)/1000, cap=OFFLINE_CAP_H*3600; if(elapsed>60){ S.offlinePending=op+Math.floor(OFFLINE_GPM/60*Math.min(elapsed,cap)); } }
+  S.lastSeen=now; S.offHi=Math.max(hi, now);
 }
 /* 로드한 세이브의 이관 단위 — ⚠ load() 와 saveImport() 사전검사가 **반드시 이 함수 하나**를 같이 써야 한다.
    가져오기 검사가 로드의 실패 조건과 달라지면(종전: 검사는 mergeDefaults 만) 확인창을 통과한 데이터가 다음 로드에서 복구 화면에 갇힌다. */
@@ -1969,6 +1978,15 @@ function loginRewardGive(day){
    · 지급은 방치 정산 화면 [수령]에서만(원시 골드 — 버프 중첩 없음). 매일 콘텐츠를 한 번도 안 한 이용자(탑 0·미궁 0)는 몫이 없다. */
 const AWAY_MAX_DAYS = 7;
 function dayIdx(ds){ const t=new Date(ds).getTime(); return isFinite(t) ? Math.round(t/864e5) : NaN; }
+/* ★ 2026-09-25(워크플로 2차 #16): 날짜·주·월 경계는 '다르면'이 아니라 **'나중이면'** 넘긴다 — 저장된 날짜·키 자체가 최고 처리 지점(고수위)이다.
+   종전엔 동등 비교뿐이라 기기 날짜를 하루 앞뒤로 돌릴 때마다 일일 초기화·접속 보상·투기장 티어 골드·출석이, 월을 앞뒤로 돌릴 때마다
+   탑 월간 정산(주사위 800)이 반복 지급됐다(실측: 2회 왕복에 3,200). 복귀 적립(awayBank.hi)만 막혀 있었다.
+   ⚠ '며칠 이상 되감으면 재기준' 같은 예외를 넣지 마라 — 크게 되감아 재기준한 뒤 하루씩 앞으로 가면 4번 바꿀 때 3번 지급이 다시 생긴다(검증 지적).
+   대가: 시계가 앞서 있다가 교정된 이용자는 실제 시각이 마지막 처리일을 지날 때까지 초기화가 없다(이미 앞당겨 쓴 날이다).
+   별도 필드를 두지 않는 이유: smoke 가 S.daily.date='2000-01-01' 로 롤오버를 강제하는데, 따로 둔 hi 는 그 경로를 막는다.
+   파싱 불가('demo'·빈 값)는 '나중'으로 본다(종전 동작 유지). */
+function isLaterDay(prev, now){ const a=dayIdx(prev), b=dayIdx(now); return !isFinite(a) || !isFinite(b) || b>a; }
+function attendDoneToday(){ return !!(S && S.attendLastDate) && !isLaterDay(S.attendLastDate, today()); }   // 오늘 받았거나 시계가 마지막 수령일보다 뒤로 가 있으면 '받음'
 function awayAccrue(prevDs, nowDs){
   try{
     const p=dayIdx(prevDs), n=dayIdx(nowDs); if(!isFinite(p) || !isFinite(n)) return 0;
@@ -1988,6 +2006,7 @@ function awayAccrue(prevDs, nowDs){
 }
 function rollDaily(){
   const t=today(); if(S.daily.date===t) return;
+  if(S.daily.date && !isLaterDay(S.daily.date, t)) return;   // #16: 시계를 되돌렸다 — 초기화·지급 없이 그날 카운터 유지(isLaterDay 주석)
   const first = !S.daily.date;
   /* ★ #26 — S.daily.date 를 덮어쓰기 전에(직전 접속일 기준). #18(2차): 숨김 중 날짜 전환은 기준일만 붙잡는다(awayCatchUp 이 보일 때 적립). */
   if(!first){ const hid=(typeof document!=='undefined' && document.hidden);
@@ -2077,7 +2096,7 @@ function monthlyClaimable(){
 const MAIL_ITEMS=[['welcome','운영자 선물 · 루비 100','💎',()=>S.ruby+=100],['attend7','출석 보상 · 소환권 1','🎟️',()=>S.tickHero++],['shard','환영 조각 · 화염술사 30','🔥',()=>S.shards.flame+=30]];
 function mailPending(){ return !!(S && S.claimed) && MAIL_ITEMS.some(([id])=>!(S.claimed.mail && S.claimed.mail[id])); }
 function attendClaimable(){
-  if(!S || S.attendLastDate===today()) return false;
+  if(!S || attendDoneToday()) return false;
   return ATTEND_DAYS.some((_,i)=>!(S.claimed&&S.claimed.attend&&S.claimed.attend[i]));
 }
 /* ★ v5.167: 공지 미열람 수 — NOTICES.length 가 읽은 수(noticeSeen)보다 많으면 unseen. */
@@ -5277,7 +5296,7 @@ function introRewards(){
        종전 소환권 1 은 환영 보너스로 유지(신규 지급 감소 없음). 드로어에서 먼저 받았으면 출석분은 건너뛴다(이중 지급 차단). */
     {t:'7일 출석 · 1일차',ic:'🗓️',d:`${ATTEND_DAYS[0][0]} · 소환권 1`,act:()=>{ S.tickHero++;
       const ca=(S.claimed.attend=S.claimed.attend||{});
-      if(ca[0] || S.attendLastDate===today()) return;
+      if(ca[0] || attendDoneToday()) return;
       ATTEND_DAYS[0][2](); ca[0]=true; S.attendLastDate=today(); sysLog(`7일 출석 1일차 — ${ATTEND_DAYS[0][0]}`); }},
     {t:'첫 방치 보상',ic:'⏳',d:'희귀 재료 20',act:()=>{ matGainGrade('R',20); }} ];
   /* ★ v5.28: 튜토리얼 완료에 필요한 자원 사전 지급.
@@ -5657,9 +5676,13 @@ const FESTIVALS=[
 ];
 function festival(){ const p=getWeekKey().split('-W'); return FESTIVALS[(parseInt(p[0])*53+parseInt(p[1]))%FESTIVALS.length]; }
 function festivalMul(id){ return festival().id===id ? 1.2 : 1; }
+/* #16: 주·월 키 서수 — 'YYYY-Wn' → y*53+n(ISO 주는 1~53이라 해가 바뀌어도 단조), 'YYYY-M' → y*12+m. 파싱 불가는 -1(= 비교 안 함, 종전 동작). */
+function weekOrd(k){ const m=/^(\d+)-W(\d+)$/.exec(k||''); return m ? (+m[1])*53+(+m[2]) : -1; }
+function monthOrd(k){ const m=/^(\d+)-(\d+)$/.exec(k||''); return m ? (+m[1])*12+(+m[2]) : -1; }
 function weeklyState(){
   if(!S.weekly || typeof S.weekly!=='object') S.weekly={ key:'', base:null, claimed:{} };
   const k=getWeekKey();
+  { const a=weekOrd(S.weekly.key), b=weekOrd(k); if(a>=0 && b>=0 && b<a) return S.weekly; }   // #16: 시계를 되돌렸다 — 리셋 없음(isLaterDay 주석)
   /* ★ v5.295: 실제 주 롤오버(신규 세이브 최초 초기화가 아닐 때)에만 이번 주 축제를 알린다 —
      최초 부팅(키 '')에 토스트를 뿌리면 튜토리얼 흐름을 침범한다. */
   if(S.weekly.key && S.weekly.key!==k){ const f=festival(); toast(`${f.ic} 이번 주는 ${f.n}입니다 — ${f.fx}`); }
@@ -5673,6 +5696,7 @@ function getMonthKey(){ const d=new Date(); return d.getFullYear()+'-'+(d.getMon
 function monthlyState(){
   if(!S.monthly || typeof S.monthly!=='object') S.monthly={ key:'', base:null, claimed:{} };
   const k=getMonthKey();
+  { const a=monthOrd(S.monthly.key), b=monthOrd(k); if(a>=0 && b>=0 && b<a) return S.monthly; }   // #16: 월을 되돌렸다 — 리셋·탑 정산·용광로 시련 재개방 없음
   if(S.monthly.key!==k){
     const prevKey=S.monthly.key, prevBase=S.monthly.base;
     S.monthly.key=k; S.monthly.base={ kills:S.stats.kills||0, crafts:S.stats.crafts||0, summons:S.stats.summons||0, towerTries:S.stats.towerTries||0 }; S.monthly.claimed={};
@@ -7682,14 +7706,14 @@ const MODALS = {
     const g=el('div','grid c7'); g.style.marginTop='8px';
     const days=ATTEND_DAYS;
     const next = days.findIndex((_,i)=>!S.claimed.attend[i]);           // 미수령 중 최저 인덱스
-    const claimedToday = S.attendLastDate===today();
+    const claimedToday = attendDoneToday();
     days.forEach(([t,ic,give],i)=>{ const done=S.claimed.attend[i]; const open=(i===next && !claimedToday);
       const c=el('div','cell gframe'); if(done) c.style.opacity='.4'; else if(!open) c.style.opacity='.7';
       if(open) c.style.borderColor='var(--frame-lit)';
       c.innerHTML=`<div class="gtag">${i+1}일</div><div class="ei">${eImg(ic,2)}</div><div class="cn">${t}${done?' ✓':''}</div>`;
       c.onclick=()=>{
         if(S.claimed.attend[i]){ toast('이미 수령한 날짜입니다'); return; }
-        if(S.attendLastDate===today()){ toast('출석 체크는 1일 1회만 가능합니다'); return; }
+        if(attendDoneToday()){ toast('출석 체크는 1일 1회만 가능합니다'); return; }
         if(i!==next){ toast(`${next+1}일차부터 순서대로 수령됩니다`); return; }
         give(); S.claimed.attend[i]=true; S.attendLastDate=today(); save();   /* ★ v5.308: 출석 확정 즉시 저장 — 롤백 재수령 차단 */
         claimSfx(); toast(`${t} 수령`); sysLog(`7일 출석 ${i+1}일차 — ${t}`); openModal('attend'); refreshHUD(); };
@@ -9705,6 +9729,8 @@ function arenaWeekRoll(){
      즉시 save 관례와 같은 패턴으로 맞춘다(점수 리셋 자체는 멱등이라 피해는 없었음). */
   if(!S.arenaWeek){ S.arenaWeek=k; save(); return false; }   // 구세이브·첫 진입은 현재 주차로 봉인(즉시 초기화 금지)
   if(S.arenaWeek===k) return false;
+  { const t=s=>{ const m=/^(\d+)-(\d+)-(\d+)$/.exec(s||''); return m ? new Date(+m[1], +m[2]-1, +m[3]).getTime() : NaN; };
+    const a=t(S.arenaWeek), b=t(k); if(isFinite(a) && isFinite(b) && b<a) return false; }   // #16: 주차를 되돌렸다 — 주간 주사위·초기화 없음
   /* ★ 2026-09-25: 주간 순위 주사위 — 리셋 '전' 순위로 1회 지급(ARENA_DICE_ROWS 정본). 종전엔 표만 있고 지급이 없었다. */
   const _played = !!(S.arenaSession && ((S.arenaSession.w|0)+(S.arenaSession.l|0))>0);
   const _dice = arenaWeeklyDice(S.arenaRank|0, _played);
@@ -10182,7 +10208,9 @@ setInterval(()=>{ { const now=Date.now(); _wallGapCheck(_tickWall, now); _tickWa
 /* (_tabHideTs 선언은 save() 위로 옮겼다 — 2026-09-25) */
 function _visibilitySettle(hideTs, nowTs){
   if(!S || !hideTs) return 0;
-  const elapsed=(nowTs-hideTs)/1000, cap=OFFLINE_CAP_H*3600;
+  const hi=(typeof S.offHi==='number' && isFinite(S.offHi)) ? S.offHi : 0;   // #16: computeOffline 과 같은 고수위 — 켠 채 시계를 앞뒤로 돌려 절전 간격 정산을 반복하는 구멍
+  const elapsed=(nowTs-Math.max(hideTs, hi))/1000, cap=OFFLINE_CAP_H*3600;
+  S.offHi=Math.max(hi, nowTs);
   const add = elapsed>60 ? Math.floor(OFFLINE_GPM/60*Math.min(elapsed,cap)) : 0;   /* ★ v5.196: 정본 상수 사용 */
   if(add>0){
     S.offlinePending=(S.offlinePending||0)+add;
@@ -10208,7 +10236,12 @@ document.addEventListener('visibilitychange', ()=>{
    ② 숨김 탭으로 며칠 두면 5초 주기가 매일 rollDaily 를 돌려 부재 적립의 '빠진 날'이 0 이 됐다(닫았다 열면 2일 적립인데 숨김이면 0) —
       숨김 중 날짜 전환은 적립 기준일(S._awayFrom)만 붙잡아 두고, 보이게 된 순간(또는 다음 부팅) 그 날부터 적립한다. hi·7일 상한·금액 확정 규칙은 awayAccrue 그대로. */
 let _tickWall=Date.now();
-function _wallGapCheck(prev, now){ if(_saveSealed || (typeof document!=='undefined' && document.hidden) || _tabHideTs) return 0; return (now-prev>60000) ? _visibilitySettle(prev, now) : 0; }
+function _wallGapCheck(prev, now){ if(_saveSealed || (typeof document!=='undefined' && document.hidden) || _tabHideTs) return 0;
+  const r=(now-prev>60000) ? _visibilitySettle(prev, now) : 0;
+  /* #16: 보이는 동안은 매 틱 고수위를 지금으로 — 안 하면 켠 채 시계를 3시간 되돌렸다가 제자리로 돌려 놓을 때 그 3시간이 절전 간격으로 또 정산된다.
+     ⚠ 숨김·숨김 정산 대기 중엔 올리지 마라(위 조기 반환) — 올리면 복귀 때 숨김 구간 정산이 0 이 된다. */
+  if(S){ const h=(typeof S.offHi==='number' && isFinite(S.offHi)) ? S.offHi : 0; if(now>h) S.offHi=now; }
+  return r; }
 function awayCatchUp(){
   try{
     if(!S || !S._awayFrom || (typeof document!=='undefined' && document.hidden) || !S.daily || S.daily.date!==today()) return 0;
