@@ -2705,8 +2705,22 @@ const Battle = (()=>{
     if(crit){ if(now-_critSfxT<140) return; _critSfxT=now; sfx('crit'); }
     else { if(now-_hitSfxT<180) return; _hitSfxT=now; sfx('hit'); }
   }
-  function dmgText(x,y,val,crit,color){ _dmgSeq=(_dmgSeq+1)%3;
-    fx.push({ type:'dmg', x:x+(_dmgSeq-1)*7, y, val:dmgLabel(val), t:0, crit, color: color||(crit?'#ffd36a':'#ffffff') }); }
+  /* ★ 2026-09-25: 숫자 위계 — 일반(흰 16) < 치명(금 그라디언트 24 + '치명' 꼬리표) < 스킬(적주황 26).
+     종전엔 일반 타격 숫자를 영웅 직업색으로 칠해 청록 바닥 위 갈색·회색 숫자가 거의 안 보였다 — 직업색은 파티클(spark)에만.
+     같은 대상이 250ms 안에 또 맞으면 16px 씩 위로 쌓는다(최대 3단) · 화면 동시 숫자는 24개로 묶고 넘치면 오래된 일반 숫자부터 뺀다.
+     전부 연출 전용 값(벽시계·fx)이라 전투 결정론과 무관. */
+  const DMG_CAP=24;
+  function dmgText(x,y,val,crit,color,kind){ _dmgSeq=(_dmgSeq+1)%3;
+    /* ⚠ splice 금지: dmgText 는 bolt 착탄(fx.forEach 안의 hitMob)에서도 불린다 — 순회 중 배열을 줄이면 다음 fx(착탄 대기 bolt 포함)의
+       진행이 한 스텝 밀려 전투 결과가 바뀐다. 오래된 숫자는 t=1(수명 끝)로 표시만 하고 다음 filter 가 치운다(dmg 는 그리기 전용). */
+    let n=0; for(const f of fx) if(f.type==='dmg' && f.t<1) n++;
+    if(n>=DMG_CAP){ const o=fx.find(f=>f.type==='dmg' && f.t<1 && !f.crit && f.kind!=='skill'); if(o) o.t=1; }
+    fx.push({ type:'dmg', x:x+(_dmgSeq-1)*7, y, val:dmgLabel(val), t:0, crit, kind:kind||'', color: color||(crit?'#ffd36a':'#ffffff') }); }
+  function stackY(m){   // 같은 대상 연타 시 위로 쌓기(그리기 전용 필드 _dsT/_dsN)
+    const now=(typeof performance!=='undefined'&&performance.now)?performance.now():Date.now();
+    m._dsN = (m._dsT && now-m._dsT<250) ? Math.min((m._dsN||0)+1, 3) : 0; m._dsT=now;
+    return m._dsN*16;
+  }
   /* ★ M1: 파티클 물리(각도·속도)는 연출용 — 시뮬레이션 상태에 되먹임 없음. cosmetic 지대에서 전역 rnd() 유지 */
   function spark(x,y,color){ const q=gfxSpark(); if(q<=0) return;   /* ★ v5.170: 품질 '하'는 파티클 생략 — 유일한 발생 통로라 여기서 끊는다 */
     cosmetic(()=>{ const n=Math.max(1,Math.round(7*q)); for(let i=0;i<n;i++){ const a=rnd(0,6.28),s=rnd(30,80); fx.push({type:'spark',x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,t:0,color}); } }); }
@@ -3127,7 +3141,7 @@ const Battle = (()=>{
        여기로 0 이 들어와 "0" 숫자·번쩍임·넉백·타격음이 났다(아트 디렉터 검수 발견). HP 가 안 변하므로
        여기서 돌아가도 전투 결과(결정론 해시)는 같다. */
     if(!(dmg>0)) return;
-    m.hp -= dmg; dmgText(m.x, m.y-m.r-4, dmg, crit, txtColor||color); m.flash = 0.12; m.kb = 0.12;   // kb = 넉백 연출(그리기 전용 — drawMob)
+    m.hp -= dmg; dmgText(m.x, m.y-m.r-4-stackY(m), dmg, crit, txtColor||null, txtColor?'skill':''); m.flash = 0.12; m.kb = 0.12;   // kb = 넉백 연출(그리기 전용 — drawMob)
     if(crit){ shake=Math.max(shake,0.14); spark(m.x,m.y,color); }
     hitSfx(crit);
     if(m.hp<=0){ const mx=m.x,my=m.y,boss=m.boss; mobs = mobs.filter(x=>x!==m); spark(mx,my,boss?'#ffd36a':'#ff8a3c');
@@ -3145,7 +3159,7 @@ const Battle = (()=>{
        아군 공격력(f.cp 기반)과 적 전투력(f.cp)의 비율로 HP 감소량 산출. */
     const hpDmg = dmg / Math.max(1, f.cp) * 0.08;
     f.hp = Math.max(0, f.hp - hpDmg);
-    dmgText(f.x, f.y-30, dmg, crit, color);
+    dmgText(f.x, f.y-30-stackY(f), dmg, crit, null);   // ★ 2026-09-25: 숫자는 흰/금 위계(직업색은 파티클에만)
     if(crit){ shake=Math.max(shake,0.14); spark(f.x,f.y,color); }
     if(f.hp<=0){
       f.dead=true; f.respT=3; f.dieAnimT=0;
@@ -3376,12 +3390,21 @@ const Battle = (()=>{
       } else if(f.type==='dmg'){
         /* ★ 2026-09-25: 외곽선(배경 위 가독성) + 치명타 팝(1.6배→1배, 첫 0.15초) + 후반 0.6초부터 페이드.
            종전엔 전 구간 선형 페이드라 떠오르자마자 흐려져 숫자를 읽을 틈이 없었다. */
-        const pop = f.crit ? 1 + 0.6*clamp(1-f.t/0.15,0,1) : 1;
-        const sz = (f.crit?19:14)*pop;
+        const big = f.kind==='skill' || f.crit;
+        const pop = big ? 1 + 0.6*clamp(1-f.t/0.15,0,1) : 1 + 0.15*clamp(1-f.t/0.1,0,1);
+        const sz = (f.kind==='skill'?26:f.crit?24:16)*pop;
         ctx.globalAlpha=clamp((1-f.t)/0.4,0,1); ctx.font=`bold ${sz.toFixed(1)}px 'Malgun Gothic',sans-serif`; ctx.textAlign='center';
-        const yy = f.y - Math.min(f.t,0.5)*44;
-        ctx.lineWidth=3; ctx.strokeStyle='rgba(0,0,0,.75)'; ctx.strokeText(f.val, f.x, yy);
-        ctx.fillStyle=f.color; ctx.fillText(f.val, f.x, yy); ctx.globalAlpha=1; }
+        /* 화면 가장자리의 몬스터 숫자가 캔버스 밖으로 잘리지 않게 안쪽으로 끌어들인다(그리기 좌표만) */
+        const tw = ctx.measureText(f.val).width;
+        const yy = clamp(f.y - Math.min(f.t,0.5)*44, sz+(f.crit&&f.kind!=='skill'?12:2), H-4);
+        const xx = clamp(f.x, tw/2+4, W-tw/2-4);
+        ctx.lineJoin='round'; ctx.lineWidth=big?5:4; ctx.strokeStyle=big?'rgba(58,10,0,.9)':'rgba(20,8,0,.85)'; ctx.strokeText(f.val, xx, yy);
+        if(f.crit && f.kind!=='skill' && f.color==='#ffd36a'){   // 치명: 금→주황 세로 그라디언트 + 꼬리표
+          const gr=ctx.createLinearGradient(0,yy-sz*0.8,0,yy); gr.addColorStop(0,'#fff0a8'); gr.addColorStop(0.5,'#ffd36a'); gr.addColorStop(1,'#ff8a1e');
+          ctx.fillStyle=gr; ctx.fillText(f.val, xx, yy);
+          ctx.font="bold 10px 'Malgun Gothic',sans-serif"; ctx.lineWidth=3; ctx.strokeText('치명', xx, yy-sz*0.95); ctx.fillStyle='#ffe27a'; ctx.fillText('치명', xx, yy-sz*0.95);
+        } else { ctx.fillStyle=f.color; ctx.fillText(f.val, xx, yy); }
+        ctx.lineWidth=1; ctx.globalAlpha=1; }
       /* ★ 2026-09-25: 몬스터 사망 잔상 — 흰 실루엣 번쩍임(0~0.08초) 뒤 1.3배로 부풀며 떠올라 0.45초에 소멸. */
       else if(f.type==='die'){ const e=f.t/0.45; if(e<1){
         const spr=f.img?monImg(f.img):null, mscale=(f.img&&MON_SCALE[f.img])||1, sz=f.r*2.4*mscale*(1+0.3*e);
