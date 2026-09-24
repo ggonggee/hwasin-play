@@ -2448,6 +2448,10 @@ step('시련의 탑 순위·월간 정산 — 표 = 지급 · 도전한 달만 �
   if(S._tower!==22) errs.push('정산이 기록을 초기화함');
   S.monthly={ key:'2000-01', base:{ kills:0, crafts:0, summons:0, towerTries:5 }, claimed:{} };
   const d2=S.dice; ev('monthlyState')(); if(S.dice!==d2) errs.push('도전 없는 달인데 지급');
+  // 정산 알림은 그 세션에 떠야 한다 — enterHome 에서 flushLoginToasts 가 monthlyState 보다 뒤(리뷰 확정: 앞이면 다음 접속으로 밀림)
+  { const eh=js.slice(js.indexOf('function enterHome('), js.indexOf('\nfunction ', js.indexOf('function enterHome(')+10));
+    const im=eh.indexOf('monthlyState();'), ifl=eh.indexOf('flushLoginToasts();');
+    if(im<0 || ifl<0 || ifl<im) errs.push('enterHome: flushLoginToasts 가 monthlyState 보다 앞(또는 없음)'); }
   S.monthly=keep.m; S.stats.towerTries=keep.tt; S._tower=keep.tw; S.dice=keep.dice; S._pendingLoginToast=keep.pl;
   if(errs.length) throw new Error(errs.join(' | '));
 });

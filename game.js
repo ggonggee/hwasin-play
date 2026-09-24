@@ -9960,8 +9960,8 @@ function enterHome(){
   const sc=$('#server-confirm'); if(sc) sc.classList.add('hidden');
   $('#home').classList.remove('hidden');
   Battle.resize(); Battle.start(); refreshHUD(); tickClock();
-  /* ★ 2026-09-25(#26): 복귀 적립 안내·접속 보상 토스트는 홈 진입 때 — 부팅(load 직후)에 띄우면 타이틀 화면에서 사라져 보지 못한다(실물 확인). */
-  flushLoginToasts();
+  /* ★ 2026-09-25(#26): 복귀 적립 안내·접속 보상 토스트는 홈 진입 때 — 부팅(load 직후)에 띄우면 타이틀 화면에서 사라져 보지 못한다(실물 확인).
+     접속 보상 큐 플러시(flushLoginToasts)는 아래 monthlyState 호출 뒤에 있다. */
   if(S.awayBank && (S.awayBank.days|0)>0) setTimeout(()=>toast(`🏠 돌아오셨군요 — 비운 ${S.awayBank.days}일분 탑·미궁 몫을 적립했습니다 · 좌상단 시계에서 수령`), 900);
   for(let i=0;i<5;i++) pushChat(pick(CHAT_LINES)(), '전체');
   sysLog('결정의 시대에 오신 것을 환영합니다, 군주여.');
@@ -9970,6 +9970,9 @@ function enterHome(){
      진행 카운트에 못 들어갔다(불리). 접속 시점에 확정하면 리셋 직후 첫 킬부터 정확.
      (시뮬의 dailyStep 은 매일 호출이라 이미 정확 — 실유저와의 정합) */
   try{ weeklyState(); monthlyState(); }catch(e){}
+  /* ★ 2026-09-25(리뷰 확정): 접속 알림 플러시는 monthlyState **뒤**에 — 탑 월간 정산은 monthlyState 안에서 큐에 쌓이므로,
+     앞에서 비우면 정산 알림이 그 세션에 안 뜨고 다음 접속으로 밀렸다(검증 실측). */
+  flushLoginToasts();
   /* ★ 2026-09-10: 폐지된 몬스터 소환권 환불 안내. 재화가 조용히 사라지면 이용자는 버그로 받아들인다 —
      이관은 로드 시점에 이미 끝났고(migrateMonTickets), 여기서는 알리기만 한다. */
   if(S._monTicketRefund > 0){
