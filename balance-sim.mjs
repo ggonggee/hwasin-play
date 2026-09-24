@@ -596,6 +596,18 @@ const awakenTally={gold:0};
 /* ★ 2026-09-25(워크플로 #12): 영웅 강화 정책 — 로스터 완성·기본 각성 12 이후 남는 조각을 리더 → 파티 2·3번 순으로 +20 까지.
    정본 heroShardSpend(전용 조각 → 직업 공용 순 차감)·heroEnhLv 를 그대로 쓴다. 다음 R 재합성 대비 여유는 각성과 같은 200. */
 const enhTally={ups:0};
+/* ★ 2026-09-25(워크플로 2차 #4 ②): goldlv=P — 리더 골드 레벨업 정책(기본 0 = 꺼짐, 기준선 불변). 비용 lv×80,000(game.js heroDetail 레벨업 정본)이
+   보유 골드의 P% 이하인 동안 레벨을 산다(창당 최대 200). 게임엔 이미 있는 수단인데 시뮬엔 모델이 없었다 — 노출(버튼 금색·점)을 키우기 전에
+   곡선이 어떻게 바뀌는지부터 잰다(검증 권고 순서). 제작·장착 뒤에 돈다(제작이 코어 루프 — 남는 골드 정책). */
+const GOLDLV_P = (()=>{ for(const a of process.argv.slice(3)){ const m=/^goldlv=([\d.]+)$/.exec(a||''); if(m) return Number(m[1]); } return 0; })();
+const goldLvTally={ n:0, gold:0 };
+function goldLvStep(){
+  if(!(GOLDLV_P>0)) return 0;
+  const S=ev('S'), id=leaderId(), st=S.heroes && S.heroes[id]; if(!st) return 0;
+  let n=0; while(n<200){ const lv=st.level||1, c=lv*80000; if(c > S.gold*GOLDLV_P/100) break; S.gold-=c; st.level=lv+1; n++; goldLvTally.gold+=c; }
+  if(n){ goldLvTally.n+=n; ev('Battle').refreshParty(); }
+  return n;
+}
 function heroEnhStep(){
   const S=ev('S'); if(S.guideStep<ev('GUIDE_CHAIN').length) return 0;
   if(ev('ownedHeroes')().length<9 || (S.awaken||0)<12) return 0;
@@ -816,6 +828,7 @@ while(simSec < MAX_HOURS*3600 && windows<51200){   // ★ v5.257: 창 상한 512
     c=bestCraftable();
   }
   if(crafts>0) did+=`${crafts}제작·장착 @${tier.n}`;
+  { const gl=goldLvStep(); if(gl>0) did+=` 골드레벨+${gl}`; }   // #4 ② goldlv=P 일 때만
   const ups=enhanceStep();
   if(ups>0) did+=` 강화+${ups}`;
   /* ★ v5.229: 위험 강화(+11~20) — 안전 강화가 끝난 뒤에만 도전한다(정책 상세는 함수 주석). */
@@ -946,6 +959,7 @@ log(`\n총 시뮬: ${(simSec/3600).toFixed(1)}h · 창 ${windows}회 · 최종 C
   log(`[진단] 위험강화: 시도 ${riskTally.tries} · 성공 ${riskTally.success} · 하락 ${riskTally.drop} · 보호 ${riskTally.saved} · 파괴 ${riskTally.destroyed} · +25도달 ${riskTally.max20}부위 · 망치구매 골드 ${(riskTally.hammerGold/1e6).toFixed(0)}M + 강화석 ${riskTally.hammerStone}개`);
   log(`[진단] 보유 영웅별 CP:`, ev('ownedHeroes')().map(h=>`${h.name.slice(0,5)}(${h.grade})=${ev('heroPower')(h)}`).join(' · '));
   if(arenaTally.log) log('[진단] 투기장 주별(실전투): '+arenaTally.log.join(' · '));
+  if(GOLDLV_P>0) log(`[진단] 골드 레벨업(#4 ②, P=${GOLDLV_P}%): ${goldLvTally.n}회 · 골드 ${(goldLvTally.gold/1e6).toFixed(0)}M · 리더 Lv ${(ev('S').heroes[leaderId()]||{}).level||1}`);
   if(GUILD_ON){ const cv=guildTally.curve, pick=d=>{ const x=cv.filter(c=>c[0]<=d).pop(); return x?`${d}일 ${x[1]}단계(CP ${Math.round(x[2]/1000)}k)`:''; };
     const ck=Object.values(guildTally.cycKills), z=ck.filter(n=>n===0).length, one=ck.filter(n=>n===1).length, many=ck.filter(n=>n>1).length;
     log(`[진단] 길드 토벌(#14, cal ${GUILD_CAL}): ${[3,7,14,30,60,100].map(pick).filter(Boolean).join(' · ')} · 처치 ${guildTally.kills} · 주기 ${ck.length}개(0처치 ${z}·1처치 ${one}·2+처치 ${many}) · 기록서 +${guildTally.rec} · 길드코인 +${guildTally.coin} · 주사위 +${guildTally.dice}`); }

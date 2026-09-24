@@ -841,9 +841,11 @@ const GOLDSHOP = [
      으로 흘려보낸다. 환율 근거: 소환서 골드 정본가 150만/장 → X3=450만 상당 = 주사위 90개
      (L리롤 1.8회분) — '리롤 2회 포기 = 소환 3장'의 직관적 트레이드오프. */
   { t:'영웅 소환서 X3 (주사위)', ic:'📜', cur:'dice', cost:90, give:()=>{ S.tickHero+=3; } },
-  { t:'투기장 입장권 X1',  ic:'🎫', cur:'gold', cost:5000000,  give:()=>{ S.ticket=Math.min(30,S.ticket+1); } },
-  { t:'골드 10,000,000',   ic:'🪙', cur:'ruby', cost:300,  give:()=>{ addGold(10000000); } },
-  { t:'골드 200,000,000 + 전설 망치 20', ic:'🪙', cur:'ruby', cost:2800, give:()=>{ addGold(200000000); S.hammers=(S.hammers||0)+20; } },
+  /* soldOut(2차 미검증 U5 — 반박 검증 없이 코드로 확인): 상한에 막히는 상품은 값만 빠졌다(입장권 30장에서 골드 500만 · 골드 50억 근처에서 루비 환전).
+     mkBuy 가 렌더 때 '보유 상한'으로 비활성하고, 클릭 시점에 결제 전 다시 판정한다. 환전은 addGold 관문(버프 곱)을 거치므로 배율까지 넣어 판정한다. */
+  { t:'투기장 입장권 X1',  ic:'🎫', cur:'gold', cost:5000000,  give:()=>{ S.ticket=Math.min(30,S.ticket+1); }, soldOut:()=>(S.ticket|0)>=30 },
+  { t:'골드 10,000,000',   ic:'🪙', cur:'ruby', cost:300,  give:()=>{ addGold(10000000); }, soldOut:()=>goldRoomBase(10000000,false)<10000000 },
+  { t:'골드 200,000,000 + 전설 망치 20', ic:'🪙', cur:'ruby', cost:2800, give:()=>{ addGold(200000000); S.hammers=(S.hammers||0)+20; }, soldOut:()=>goldRoomBase(200000000,false)<200000000 },
 ];
 /* ★ v5.126: 골드 보유 상한(30억)을 변경. ⚠임의수치. addGold()의
    실제 클램프 값도 GOLD_CAP 상수로 통일해 두 곳이 다시 어긋나지 않게 했다. */
@@ -882,7 +884,7 @@ const GUILDSHOP = [
 const ADPOOL = [
   { t:'영웅 소환서 X3',      ic:'📜', give:()=>{ S.tickHero+=3; } },
   { t:'골드던전 입장권 X1',  ic:'🎟️', give:()=>{ S.goldTicket=(S.goldTicket||0)+1; } },
-  { t:'투기장 입장권 X1',    ic:'🎫', give:()=>{ S.ticket=Math.min(30,S.ticket+1); } },
+  { t:'투기장 입장권 X1',    ic:'🎫', give:()=>{ S.ticket=Math.min(30,S.ticket+1); }, soldOut:()=>(S.ticket|0)>=30 },   // 상한 30 — 광고 1회만 소모되고 무지급이던 것(2차 미검증 U5)
   { t:'재료 열쇠 X3',        ic:'🗝️', give:()=>{ S.tickMat+=3; } },
   { t:'망치 X3',             ic:'🔨', give:()=>{ S.hammerN=(S.hammerN||0)+3; } },
   { t:'골드 X500,000',       ic:'🪙', give:()=>{ addGold(500000); } },
@@ -1417,6 +1419,13 @@ const ATTEND_DAYS = [
 ];
 /* ★ B9/G-134: 공지 — 제목 밴드 + 양피지 서술형 본문 (목록 → 상세 2단) */
 const NOTICES = [
+  /* ★ v5.360: 보유 상한에서 값만 빠지던 구매·수령(2차 미검증 U5) · 대장간 마지막 선택 기억(U3). */
+  { cat:'[수정]', ic:'🧾', t:'보유 상한에서 값만 빠지던 구매·수령을 바로잡았습니다', d:'2026-09-25',
+    body:'군주들에게 알립니다.<br><br>'+
+      '· <b>투기장 입장권</b> — 이미 30장(상한)일 때 골드 구매·광고 보상이 값(골드·광고 횟수)만 쓰고 입장권이 늘지 않던 것을 막았습니다. 상한이면 \"보유 상한\"으로 표시됩니다.<br>'+
+      '· <b>골드 환전·수령</b> — 골드가 보유 상한(50억)에 가까우면 루비 환전을 막고, 방치 정산 [수령]은 들어갈 만큼만 받고 나머지는 대기 금액으로 남깁니다. 부재 적립은 골드를 쓴 뒤 받도록 보류합니다(적립은 그대로).<br>'+
+      '· 방치 정산 수령 알림이 버프를 곱하기 전 금액으로 적히던 것을 실제로 받은 금액으로 고쳤습니다.<br>'+
+      '· <b>대장간</b> — 길잡이를 마친 뒤에는 마지막으로 고른 아이템이 선택된 채로 열립니다. 영웅 화면의 [레벨업]은 골드가 충분하면 금색으로 표시됩니다.' },
   /* ★ v5.359: 길드 토벌(#14) — 길드 레이드에 단계 진척. 기존 참전 보상·길드 점수는 그대로. */
   { cat:'[업데이트]', ic:'🗿', t:'길드 토벌 — 재의 골렘이 단계마다 강해집니다', d:'2026-09-25',
     body:'군주들에게 알립니다.<br><br>길드 레이드의 재의 골렘을 이제 실제로 쓰러뜨릴 수 있습니다.<br><br>'+
@@ -1668,6 +1677,7 @@ function freshState(){
     weekly:{ key:'', base:null, claimed:{} },
     /* ★ #3(2차) 대장간 주문 — on=해금(리더 10부위 L, 한 번 열리면 유지) · day=마지막 갱신일 · list=3칸. 진행도 상태(이관 판정 플래그 아님). */
     orders:{ on:0, day:'', list:[] },
+    forgeLast:'',   // ★ U3(2차) 대장간을 다시 열 때 선택할 마지막 아이템명(표시 설정 — 이관 플래그 아님)
     /* ★ v5.256: 월간 의뢰 — 일(미션)-주(의뢰)-월(의뢰) 리듬 완결. 주간(v5.249)과
        동일 패턴(키·스냅샷·의뢰별 1회성)을 월 규모로. */
     monthly:{ key:'', base:null, claimed:{} },
@@ -4568,6 +4578,8 @@ function addGold(n, raw){
   if(!raw) n = n * addGoldMul();
   S.gold = Math.min(GOLD_CAP, S.gold + n);
 }
+/* 골드 보유 상한(GOLD_CAP)에 잘리지 않고 줄 수 있는 '기준 금액'(addGold 에 넘길 값 — raw 가 아니면 관문 배율을 곱하기 전). 대가를 받고 주는 곳(환전·수령)의 판정용. */
+function goldRoomBase(n, raw){ const room=Math.max(0, GOLD_CAP-(S.gold||0)), mul=raw?1:Math.max(1e-9, addGoldMul()); return Math.max(0, Math.min(n, Math.floor(room/mul))); }
 // ★ B7/G-100: '제작 시간 -50%' 구독 버프 배율 (상점 버프탭에서 구매, 30일)
 //   ★ F2: 칭호의 '제작 시간 -X%' 도 같은 관문에서 곱한다(제작 시작 시점의 endAt 산출에 사용).
 function craftTimeMul(){ return ((S && S.buffs && S.buffs.craftUntil > Date.now()) ? 0.5 : 1) * titleCraftTimeMul(); }
@@ -6092,6 +6104,9 @@ function openOrders(){
       else {
         const b=el('button','btn sm'+(ready?' gold':''), ready?'납품':'제작');
         b.onclick=()=>{
+          /* 리뷰(v5.357~358 실측): 창을 연 채 자정을 넘기면 그 칸이 새 주문으로 바뀌는데, 종전엔 화면의 옛 주문(o)으로 판정·토스트하고
+             orderDeliver(i) 는 새 주문을 처리해 '보이지 않던 장비가 사라지고 문구가 어긋났다'. 클릭 시점에 전환을 먼저 반영하고, 바뀌었으면 소모 없이 다시 그린다. */
+          const now=ordersState(); if(!now || now.list[i]!==o){ toast('날짜가 바뀌어 주문이 새로 갱신되었습니다'); closeSub(); openOrders(); return; }
           if(!orderReady(o)){ closeSub(); openModal('forge', o.n); return; }   // 제작: 그 아이템이 선택된 대장간(v5.119 사전 선택)
           const res=orderDeliver(i);
           if(res==='ok'){ claimSfx(); toast(`납품 완료 — ${orderRwTxt(r)}`); sysLog(`대장간 주문 납품 — ${G.name} ${o.n} ×${o.qty} · ${orderRwTxt(r)}`); refreshHUD(); refreshClaimBadges(); draw(i);
@@ -6273,7 +6288,8 @@ const MODALS = {
        ③ 길잡이 진행 중이면 현재 목표. 해당 없으면 종전처럼 일반/무기/첫 칸. */
     const want = (typeof pre==='string' && pre) ? pre
       : (!S.seenTutorial && TUT[S.tutStep] && TUT[S.tutStep].k==='shield') ? '방패'
-      : (S.seenTutorial && guideTarget()) ? guideTarget().slot : null;
+      : (S.seenTutorial && guideTarget()) ? guideTarget().slot
+      : (S.seenTutorial && S.forgeLast) ? S.forgeLast : null;   // U3(2차): 길잡이 뒤엔 마지막으로 고른 아이템 — 종전엔 매번 일반/무기/첫 칸이라 중반 L 제작마다 탭을 다시 눌렀다
     if(want){ const loc=forgeLocate(want); if(loc){ cur=loc.grade; slotIdx=loc.slotIdx; itemIdx=loc.itemIdx; } }
     /* #3(2차): 대장간 주문 줄 — 해금 뒤에만. ⚠ 등급 탭 줄 안에 넣지 마라(탭 on 토글이 GORDER 인덱스로 children 을 짚는다). */
     { const st=ordersState(); if(st){ const os=el('div','ord-strip'); os.innerHTML=ordStripHTML(st); os.onclick=()=>openOrders(); b.appendChild(os); } }
@@ -6323,6 +6339,7 @@ const MODALS = {
       const slot=FORGE_SLOTS[slotIdx], G=GRADES[cur], list=itemsOf();
       if(itemIdx>=list.length) itemIdx=0;
       const item=list[itemIdx], cp=item?craftParams(cur,slot.k,item.n):null;
+      if(item && S.seenTutorial) S.forgeLast=item.n;   // U3(2차): 다음에 열 때 이 자리로(표시 설정 — 경제 무관)
       const grid=el('div','forge-grid');
       const items=el('div','forge-items');
       list.forEach((it,i)=>{ const cell=el('div','fitem grade-'+cur+(i===itemIdx?' sel':'')); cell.style.setProperty('--gc',G.color);
@@ -7213,8 +7230,8 @@ const MODALS = {
           <div class="sh-left"><div class="sh-ic">${eImg(ic,2)}</div></div>
           <div class="sh-right"><div class="sh-t">${t}</div><div class="sh-d">${d}</div></div>
         </div>`;
-      const ok=have(cur)>=cost;
-      const btn=el('button','btn sm'+(ok?' gold':''), label||'구매'); if(!ok) btn.disabled=true;
+      const capped=!!(soldOut && soldOut()), ok=have(cur)>=cost && !capped;
+      const btn=el('button','btn sm'+(ok?' gold':''), capped?'보유 상한':(label||'구매')); if(!ok) btn.disabled=true;
       btn.onclick=()=>{ if(soldOut && soldOut()){ toast(`${t} — 보유 상한이라 지금은 교환할 수 없습니다`); render(); return; }
         if(have(cur)<cost){ toast(`${CURN[cur]}가 부족합니다.`); return; }
         payCur(cur,cost); give(); sfx('tap'); toast(`${t} 획득`); render(); refreshHUD(); save(); };   /* ★ v5.309: 구매 확정 즉시 저장 */
@@ -7234,12 +7251,14 @@ const MODALS = {
         const di=new Date().getDate(); // 일자 기준 2슬롯 로테이션 (풀 6종)
         [ADPOOL[(di*2)%ADPOOL.length], ADPOOL[(di*2+1)%ADPOOL.length]].forEach(it=>{
           const card=shopCard(it.ic, it.t, S.buffs.adFree?'즉시 수령(광고 제거)':'광고 시청 후 무료');
-          const btn=el('button','btn sm'+(left>0?' gold':''),S.buffs.adFree?'받기':'광고 보고 받기'); if(left<=0) btn.disabled=true;
-          btn.onclick=()=>{ if(dailyLeft('ad',15)<=0){ toast('오늘 소진'); return; } dailyUse('ad'); it.give(); toast(`${it.t} 획득`); render(); refreshHUD(); };
+          const capAd=!!(it.soldOut && it.soldOut());   // 상한이면 광고 횟수만 쓰고 무지급이던 것(U5)
+          const btn=el('button','btn sm'+(left>0&&!capAd?' gold':''),capAd?'보유 상한':S.buffs.adFree?'받기':'광고 보고 받기'); if(left<=0||capAd) btn.disabled=true;
+          btn.onclick=()=>{ if(it.soldOut && it.soldOut()){ toast(`${it.t} — 보유 상한입니다`); render(); return; }
+            if(dailyLeft('ad',15)<=0){ toast('오늘 소진'); return; } dailyUse('ad'); it.give(); toast(`${it.t} 획득`); render(); refreshHUD(); };
           card.mount(btn); });
         grpLabel('골드 즉시 구매');
         curLine('gold');
-        GOLDSHOP.slice(0,4).forEach(it=> mkBuy(it.ic,it.t,priceTxt(it.cur,it.cost),it.cur,it.cost,it.give));
+        GOLDSHOP.slice(0,4).forEach(it=> mkBuy(it.ic,it.t,priceTxt(it.cur,it.cost),it.cur,it.cost,it.give,undefined,it.soldOut));
 
       /* ── ② 버프 (G-100): 6항목 ── */
       } else if(tab==='buff'){
@@ -7359,7 +7378,7 @@ const MODALS = {
       } else if(tab==='gold'){
         body.appendChild(el('div','hint','골드로 소모품 구매 · 루비로 골드 환전'));
         curLine('gold');
-        GOLDSHOP.forEach(it=> mkBuy(it.ic,it.t,priceTxt(it.cur,it.cost),it.cur,it.cost,it.give,it.cur==='ruby'?'환전':'구매'));
+        GOLDSHOP.forEach(it=> mkBuy(it.ic,it.t,priceTxt(it.cur,it.cost),it.cur,it.cost,it.give,it.cur==='ruby'?'환전':'구매',it.soldOut));
         const nt=el('div','small mut',GOLD_CAP_NOTICE); nt.style.cssText='margin-top:10px;text-align:center;line-height:1.6'; body.appendChild(nt);
 
       /* ── ⑥ 재료상점 (G-94/§4-5): 9종 × (1개/5개) = 18항목, 루비 결제 ── */
@@ -8100,6 +8119,7 @@ const MODALS = {
         + `<div class="ab-d small">비운 날의 시련의 탑 소탕·잔불의 미궁 몫 — 골드 <b>${fmt(ab.gold||0)}</b> · 강화석 <b>${fmt(ab.stones||0)}</b> · 웨이브 상자 <b>${fmt(ab.box||0)}</b></div>`);
       const abt=el('button','btn gold sm','수령');
       abt.onclick=()=>{ const a=S.awayBank; if(!a || !((a.days|0)>0)) return;
+        if(goldRoomBase(a.gold||0, true)<(a.gold||0)){ toast('골드 보유 상한 — 골드를 쓴 뒤 수령하세요(적립은 그대로 남습니다)'); return; }   // U5: 잘린 몫이 사라지지 않게(부분 지급 대신 보류 — 일 수·7일 상한 회계를 흔들지 않는다)
         addGold(a.gold||0, true); S.stones=(S.stones||0)+(a.stones|0); S.towerBox=(S.towerBox||0)+(a.box|0);
         claimSfx(); toast(`부재 적립 ${a.days}일 수령 — 골드 +${fmt(a.gold||0)} · 강화석 +${fmt(a.stones|0)} · 상자 +${fmt(a.box|0)}`);
         sysLog(`부재 적립 ${a.days}일 수령 — 골드 +${fmt(a.gold||0)} · 강화석 +${fmt(a.stones|0)} · 웨이브 상자 +${fmt(a.box|0)}`);
@@ -8126,7 +8146,13 @@ const MODALS = {
          누르고 곧장 창을 닫으면 세이브에 offlinePending 이 그대로 남아 재접속에서 같은 금액을
          또 수령할 수 있었다(중복 지급. v5.306 투기장 롤오버와 같은 유형 — 상태만 바꾸고
          저장을 안 한 사례). 지급이 일어난 자리에서 즉시 저장한다. */
-      btn.onclick=()=>{ addGold(S.offlinePending); claimSfx(); toast(`오프라인 골드 +${fmt(S.offlinePending)}`); sysLog(`오프라인 방치 보상 +${fmt(S.offlinePending)}G`); S.offlinePending=0; closeModal(); refreshHUD(); refreshClaimBadges(); save(); };
+      /* U5(2차): 골드 보유 상한 근처면 여유만큼만 주고 나머지는 대기 금액으로 남긴다(종전: 상한에서 잘린 몫이 사라졌다).
+         토스트는 실제 증가분 — 종전엔 버프를 곱하기 전 기준 금액을 적어 실제보다 적게 보였다. */
+      btn.onclick=()=>{ const want=S.offlinePending||0, give=goldRoomBase(want,false);
+        if(give<=0){ toast('골드 보유 상한 — 골드를 쓴 뒤 수령하세요(대기 금액은 그대로 남습니다)'); return; }
+        const g0=S.gold; addGold(give); const got=S.gold-g0; S.offlinePending=Math.max(0, want-give);
+        claimSfx(); toast(`오프라인 골드 +${fmt(got)}`+(S.offlinePending>0?` · 보유 상한으로 ${fmt(S.offlinePending)} 대기`:'')); sysLog(`오프라인 방치 보상 +${fmt(got)}G`);
+        if(S.offlinePending>0) openModal('settle'); else closeModal(); refreshHUD(); refreshClaimBadges(); save(); };
       b.appendChild(btn);
     } else b.appendChild(el('div','center mut small','현재 온라인 실시간 수급 중 · 접속 종료 시 자동 누적됩니다.'));
   }},
@@ -9227,7 +9253,10 @@ function heroDetail(hidOrJob){
       ['이동속도',        (100+GORDER.indexOf(e.grade)*6+lv*0.3).toFixed(0)],
     ];
     rows.forEach(([k,v])=>body.appendChild(el('div','kv',`<span>${k}</span><b>${v}</b>`)));
-    const lvCost = lv*80000; const lb=el('button','btn wide',`레벨업 (골드 ${fmt(lvCost)})`); lb.style.marginTop='8px';
+    /* #4 ③(2차): 살 수 있으면 금색 — 같은 화면의 강화 버튼과 같은 규칙(종전 회색이라 비활성처럼 보였다). ⚠ 영웅 버튼 점·길잡이 안내는 넣지 마라:
+       시뮬(goldlv, 3시드 중앙값) — 남는 골드의 10%/25% 를 레벨에 쓰면 캐주얼 2400h 최종 CP +12%/+26%, R 등급 도달 24.5h → 7.5h/3~4.5h(초반 3배 압축).
+       노출을 강하게 키우는 건 초반 곡선 재설계와 함께 판단할 일이다(HANDOFF v5.360). */
+    const lvCost = lv*80000; const lb=el('button','btn wide'+(S.gold>=lvCost?' gold':''),`레벨업 (골드 ${fmt(lvCost)})`); lb.style.marginTop='8px';
     if(S.gold<lvCost) lb.disabled=true;
     /* ★ 2026-09-25(워크플로 2차 #4): 클릭 시점 재조회(화면이 오래 떠 있던 경우 옛 가격 결제 방지) + 전투력 전후 카드. 종전 결과는 'Lv5' 토스트 한 줄이라
        초반 가장 효율 좋은 성장 수단(골드 120만 → 리더 +41% 실측)이 장착·강화·각성(전후 카드)보다 약하게 보였다. 노출 확대(버튼 금색·점)는 시뮬 확정 뒤. */
@@ -9631,10 +9660,12 @@ function resolveCraft(forceSuccess){
   if(canEq){
     const eqb=el('button','btn gold wide',`리더 ${lead.name}에게 장착`); eqb.style.marginTop='10px';
     eqb.onclick=()=>{
-      if(!S.equips.includes(ne) || ne.equipped || !slotFree(lead)){ toast('이미 처리된 장비입니다'); eqb.remove(); return; }   // 팝업이 떠 있는 사이 분해·장착된 경우
-      const pre=SETS.map(s=>({ s, k:setTierOf(s) })), p0=heroPower(lead), cp0=totalCP();
+      /* U1(2차): lead 는 팝업을 그린 시점의 스냅숏(레벨 포함) — 떠 있는 사이 전투 경험치로 레벨이 오르면 전후 수치가 옛 레벨로 계산됐다. 클릭 시점에 다시 해석한다. */
+      const L=heroEntry(lead.hero_id)||lead;
+      if(!S.equips.includes(ne) || ne.equipped || !slotFree(L)){ toast('이미 처리된 장비입니다'); eqb.remove(); return; }   // 팝업이 떠 있는 사이 분해·장착된 경우
+      const pre=SETS.map(s=>({ s, k:setTierOf(s) })), p0=heroPower(L), cp0=totalCP();
       equipItem(ne, lead.hero_id);
-      const p1=heroPower(lead); sfx('tap');
+      const p1=heroPower(heroEntry(lead.hero_id)||L); sfx('tap');
       notifySetGain(pre, cp0);   // #11(2차) 세트 발동 카드
       const done=el('div','center small eq-done', `리더 ${lead.name} 장착 완료 · ${cpDeltaLine(p0,p1)}`);
       if(eqb.parentNode) eqb.parentNode.insertBefore(done, eqb); eqb.remove();
@@ -9652,7 +9683,7 @@ function resolveCraft(forceSuccess){
   /* #3(2차): 방금 만든 것으로 주문을 채울 수 있으면 바로 납품 창으로 — 제작→납품 고리를 한 탭으로. 못 채우면 진행(1/2)만 알린다. */
   if(ok){ try{ const st=ordersState(), oi=st ? st.list.findIndex(o=>o && !o.done && o.g===grade && o.n===slot) : -1;
     if(oi>=0){ const o=st.list[oi], have=orderCands(o).length;
-      if(have>=o.qty){ const ob=el('button','btn gold wide',`📜 주문 납품 (${Math.min(have,o.qty)}/${o.qty}) ▶`); ob.style.marginTop='6px';
+      if(have>=o.qty){ const ob=el('button','btn'+((canEq||gNext)?'':' gold')+' wide',`📜 주문 납품 (${Math.min(have,o.qty)}/${o.qty}) ▶`); ob.style.marginTop='6px';   // 리뷰: 장착·다음 길잡이가 주 행동이면 금색 양보(금색은 항상 1개 — 장착과 납품은 같은 아이템을 두고 배타적)
         ob.onclick=()=>{ closeSub(); openModal('forge', fSlot); openOrders(); }; b.appendChild(ob); again.classList.remove('gold'); }
       else b.appendChild(el('div','small mut center',`📜 대장간 주문 ${GRADES[grade].name} ${slot} — ${have}/${o.qty}`)); } }catch(e){} }
   const btn=el('button','btn'+((gNext && !canEq)?' gold':'')+' wide', gNext ? `다음 길잡이 · ${gNext} ▶` : '확인'); btn.style.marginTop='6px';

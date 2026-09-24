@@ -2606,6 +2606,43 @@ step('리뷰 반영 — 교환 클릭 시점 품절 · 긴 토스트 · 가져�
   S.mats=keep.mats; S.gray=keep.gray; S.lastSeen=keep.ls; S.offlinePending=keep.op;
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ 2026-09-25(2차 미검증 U5·U3·U1 · #4 ③): 상한 재화 구매·수령이 값만 빼지 않는다 · 대장간은 마지막 아이템으로 · 레벨업 버튼 금색 · 리더 장착 전후 클릭 시점. */
+step('상한 재화 보호 · 대장간 마지막 선택 · 레벨업 버튼 · 장착 전후 재해석', ()=>{
+  const errs=[], S=ev('S');
+  const keep=JSON.parse(JSON.stringify({ t:S.ticket, g:S.gold, r:S.ruby, op:S.offlinePending, ab:S.awayBank, fl:S.forgeLast, st:S.seenTutorial, gs:S.guideStep }));
+  const GS=ev('GOLDSHOP'), CAP=ev('GOLD_CAP');
+  const tk=GS.find(x=>/투기장 입장권/.test(x.t)), ex=GS.find(x=>x.t==='골드 10,000,000'), ad=ev('ADPOOL').find(x=>/투기장 입장권/.test(x.t));
+  S.ticket=30; if(!(tk.soldOut&&tk.soldOut()) || !(ad.soldOut&&ad.soldOut())) errs.push('입장권 30장인데 판매/광고 가능');
+  S.ticket=10; if(tk.soldOut() || ad.soldOut()) errs.push('입장권 여유 있는데 품절');
+  S.gold=CAP-1000; if(!ex.soldOut()) errs.push('골드 상한 직전인데 루비 환전 가능');
+  S.gold=1000; if(ex.soldOut()) errs.push('골드 여유 있는데 환전 품절');
+  // 방치 정산 [수령]: 상한 근처면 여유만큼 · 나머지는 대기
+  const room=ev('goldRoomBase'); S.gold=CAP-500000; S.offlinePending=10000000;
+  const bx=new Node2('div'); ev('MODALS').settle.render(bx); const bt=findBtnByText(bx,'수령',true);
+  if(!bt) errs.push('정산 수령 버튼 없음'); else { bt.onclick();
+    if(S.gold>CAP || S.gold<CAP-50) errs.push('상한 근처 수령 후 골드 '+(CAP-S.gold)+' 모자람');
+    if(!(S.offlinePending>0)) errs.push('잘린 몫이 대기로 남지 않음'); }
+  S.gold=CAP; const op1=S.offlinePending; const bx2=new Node2('div'); ev('MODALS').settle.render(bx2); const bt2=findBtnByText(bx2,'수령',true);
+  if(bt2){ bt2.onclick(); if(S.offlinePending!==op1) errs.push('상한에서 수령했는데 대기 금액이 사라짐'); }
+  // 부재 적립: 상한이면 보류(적립 유지)
+  S.gold=CAP-10; S.awayBank={ days:2, gold:5000000, stones:10, box:1, hi:0 }; const bx3=new Node2('div'); ev('MODALS').settle.render(bx3);
+  const firstBtn=(root,label)=>{ let f=null; const rec=n=>{ if(f||!n||typeof n!=='object') return; if(n.tagName==='BUTTON' && String(n._text||n._html||'').trim()===label){ f=n; return; } (n.children||[]).forEach(rec); }; rec(root); return f; };
+  /* 부재 적립 카드가 위(첫 번째 [수령]) — findBtnByText 는 마지막 것을 돌려준다 */
+  const bt3=firstBtn(bx3,'수령'); if(bt3){ bt3.onclick(); if(S.awayBank.days!==2 || S.awayBank.gold!==5000000) errs.push('상한에서 부재 적립이 사라짐'); } else errs.push('부재 적립 수령 버튼 없음');
+  if(room(100,true)!==10 && S.gold===CAP-10) errs.push('goldRoomBase raw');
+  // 대장간: 길잡이 뒤엔 마지막 아이템으로 연다
+  S.seenTutorial=true; S.guideStep=ev('GUIDE_CHAIN').length; S.forgeLast='심연 부적';
+  const fb=new Node2('div'); ev('MODALS').forge.render(fb);
+  if(S.forgeLast!=='심연 부적') errs.push('대장간이 마지막 아이템으로 열리지 않음: '+S.forgeLast);
+  // 레벨업 버튼 금색(살 수 있을 때만) — 소스 규칙
+  if(!/const lb=el\('button','btn wide'\+\(S\.gold>=lvCost\?' gold':''\)/.test(js)) errs.push('레벨업 버튼 금색 규칙 없음');
+  // 리더 장착 전후: 클릭 시점 재해석
+  const rc=js.slice(js.indexOf('eqb.onclick=()=>{'), js.indexOf('eqb.onclick=()=>{')+900);
+  if(!/const L=heroEntry\(lead\.hero_id\)/.test(rc) || !/p0=heroPower\(L\)/.test(rc)) errs.push('리더 장착 전후가 팝업 시점 스냅숏');
+  Object.assign(S, { ticket:keep.t, gold:keep.g, ruby:keep.r, offlinePending:keep.op, awayBank:keep.ab, forgeLast:keep.fl, seenTutorial:keep.st, guideStep:keep.gs });
+  ev('closeModal')();
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ 2026-09-25(워크플로 2차 #14): 길드 토벌 — 고정 HP 표·주기 경계(HP 만 리필, 단계 유지)·되감기 무시·처치 보상·기록서 5단계마다·참전 보상 4단·기존 적립 불변. */
 step('길드 토벌 — 단계 HP 표·주기·처치 보상·기록서·참전 보상·기존 적립 불변', ()=>{
   const errs=[], S=ev('S'), G=ev('GBOSS'), hp=ev('gbossHP');
