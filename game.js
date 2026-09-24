@@ -2685,7 +2685,28 @@ const Battle = (()=>{
     mobs.push({ name:t.n, col:t.c, shape:t.shape, img:t.img, x:sx, y:sy,
       vx:dx/dl*sp, vy:dy/dl*sp*0.6, hpMax:t.hp, hp:t.hp, r:bRi(12,17), flash:0, atkT:bRnd(0.8,1.6), homing:true, spd:sp });   /* ★ M1: 시드 RNG */
   }
-  function dmgText(x,y,val,crit,color){ fx.push({ type:'dmg', x, y, val, t:0, crit, color: color||(crit?'#ffd36a':'#ffffff') }); }
+  /* ★ 2026-09-25: 데미지 숫자에 큰 수 표기(fmt) 적용 + 겹침 방지 가로 엇갈림.
+     종전엔 원시 정수(예: 1234567)를 그대로 찍어 후반엔 숫자가 몬스터 폭보다 길어졌다 — '숫자가 커질수록
+     읽을 수 없는' 역효과. 이 게임 전역 표기(fmt: 만·억)와 같은 규칙으로 맞춘다.
+     엇갈림은 난수가 아니라 순번(_dmgSeq)으로 준다 — 전투 결정론(D5: 전투 스텝 중 비시드 난수 0건)을 지킨다.
+     이 값들은 전부 연출 전용(fx)이라 전투 해시(승패·데미지·처치·RNG 체크섬)에 들어가지 않는다. */
+  let _dmgSeq=0;
+  function dmgLabel(val){
+    if(typeof val==='number') return fmt(Math.round(val));
+    const m=/^([-+]?)(\d{5,})$/.exec(String(val)); return m ? m[1]+fmt(Number(m[2])) : val;
+  }
+  /* ★ 2026-09-25: 타격음 연결 — sfx 표에 hit·crit 이 정의만 되고 호출 0건이었다(타격감의 청각 축이 비어 있었음).
+     방치 전투는 초당 수십 타라 그대로 울리면 소음이 된다 → 일반 180ms·치명 140ms 간격으로 묶는다.
+     시각은 벽시계(performance.now)로 잰다 — 시드 난수·전투 상태를 건드리지 않는다. */
+  let _hitSfxT=0, _critSfxT=0;
+  function hitSfx(crit){
+    if(!_actx) return;
+    const now=(typeof performance!=='undefined'&&performance.now)?performance.now():Date.now();
+    if(crit){ if(now-_critSfxT<140) return; _critSfxT=now; sfx('crit'); }
+    else { if(now-_hitSfxT<180) return; _hitSfxT=now; sfx('hit'); }
+  }
+  function dmgText(x,y,val,crit,color){ _dmgSeq=(_dmgSeq+1)%3;
+    fx.push({ type:'dmg', x:x+(_dmgSeq-1)*7, y, val:dmgLabel(val), t:0, crit, color: color||(crit?'#ffd36a':'#ffffff') }); }
   /* ★ M1: 파티클 물리(각도·속도)는 연출용 — 시뮬레이션 상태에 되먹임 없음. cosmetic 지대에서 전역 rnd() 유지 */
   function spark(x,y,color){ const q=gfxSpark(); if(q<=0) return;   /* ★ v5.170: 품질 '하'는 파티클 생략 — 유일한 발생 통로라 여기서 끊는다 */
     cosmetic(()=>{ const n=Math.max(1,Math.round(7*q)); for(let i=0;i<n;i++){ const a=rnd(0,6.28),s=rnd(30,80); fx.push({type:'spark',x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,t:0,color}); } }); }
@@ -2829,8 +2850,9 @@ const Battle = (()=>{
           if(isSingle){
             /* 단일 스킬 — 가장 강한(HP 높은) 몹 1체에 집중 타격 */
             const tgt = mobs.reduce((a,b)=> b.hp>a.hp?b:a, mobs[0]);
-            hitMob(tgt, finalDmg, true, h.color);  /* 단일 스킬은 항상 크리 */
-            dmgText(tgt.x, tgt.y-tgt.r-8, finalDmg, true, '#ff6a3a');
+            /* 단일 스킬은 항상 크리. ★ 2026-09-25: 종전엔 hitMob 이 숫자를 찍은 뒤 여기서 한 번 더 찍어(주황)
+               같은 데미지가 두 겹으로 번져 보였다 — 글자색만 hitMob 에 넘겨 한 번만 찍는다. */
+            hitMob(tgt, finalDmg, true, h.color, '#ff6a3a');
             spark(tgt.x, tgt.y, '#ff8a3a');
           } else {
             let hits=0;
@@ -2980,6 +3002,7 @@ const Battle = (()=>{
         m.x += m.vx*dt; if(m.x < W*0.25) m.x = W*0.25;
       }
       if(m.flash>0) m.flash-=dt;
+      if(m.kb>0) m.kb-=dt;
     });
     spawnT -= dt;
     if(mode==='dungeon' && dg){
@@ -3096,13 +3119,17 @@ const Battle = (()=>{
     drops.forEach(d=>{ d.t+=dt*1.1; const e=clamp(d.t,0,1); const ease=e<0.5? e : e; d.x=d.sx+(d.tx-d.sx)*Math.pow(e,1.6); d.y=d.sy+(d.ty-d.sy)*Math.pow(e,1.6); });
     drops = drops.filter(d=> d.t<1);
   }
-  function hitMob(m, dmg, crit, color){
+  function hitMob(m, dmg, crit, color, txtColor){
     /* ★ v5.84: foes(투기장 적 영웅)가 타겟이면 hitFoe로 위임 */
     if(foes.includes(m)){ hitFoe(m, dmg, crit, color); return; }
     if(!mobs.includes(m)) return;
-    m.hp -= dmg; dmgText(m.x, m.y-m.r-4, dmg, crit, color); m.flash = 0.12;
+    m.hp -= dmg; dmgText(m.x, m.y-m.r-4, dmg, crit, txtColor||color); m.flash = 0.12; m.kb = 0.12;   // kb = 넉백 연출(그리기 전용 — drawMob)
     if(crit){ shake=0.14; spark(m.x,m.y,color); }
+    hitSfx(crit);
     if(m.hp<=0){ const mx=m.x,my=m.y,boss=m.boss; mobs = mobs.filter(x=>x!==m); spark(mx,my,boss?'#ffd36a':'#ff8a3c');
+      /* ★ 2026-09-25: 사망 연출 — 종전엔 배열에서 빠지는 순간 그림도 사라져 '맞다가 증발' 했다.
+         흰 번쩍임 → 부풀며 떠올라 사라지는 0.45초 잔상(fx 'die')을 남긴다. 그리기 전용·난수 미사용. */
+      fx.push({ type:'die', x:mx, y:my, r:m.r, img:m.img, boss:!!boss, col:m.col, flip: mx < (heroes.length ? (heroes[0].x||W*0.5) : W*0.5), t:0 });
       /* ★ M1: 사망 파티클 위치 지터는 연출용 — cosmetic 지대에서 전역 rnd() 유지 */
       if(boss){ shake=0.3; cosmetic(()=>{ for(let i=0;i<12;i++) spark(mx+rnd(-22,22),my+rnd(-22,22),'#ffd36a'); }); } onKill(m,mx,my,boss); }
   }
@@ -3312,7 +3339,26 @@ const Battle = (()=>{
         ctx.fillStyle=f.color; ctx.globalAlpha=.9; ctx.beginPath(); ctx.arc(x,y,4,0,7); ctx.fill();
         ctx.globalAlpha=.35; ctx.beginPath(); ctx.arc(x,y,8,0,7); ctx.fill(); ctx.globalAlpha=1;
       } else if(f.type==='spark'){ ctx.globalAlpha=clamp(1-f.t,0,1); ctx.fillStyle=f.color; ctx.beginPath(); ctx.arc(f.x,f.y,2.2,0,7); ctx.fill(); ctx.globalAlpha=1;
-      } else if(f.type==='dmg'){ ctx.globalAlpha=clamp(1-f.t,0,1); ctx.fillStyle=f.color; ctx.font=`${f.crit?'bold 18':'14'}px 'Malgun Gothic',sans-serif`; ctx.textAlign='center'; ctx.fillText(f.val, f.x, f.y - f.t*26); ctx.globalAlpha=1; }
+      } else if(f.type==='dmg'){
+        /* ★ 2026-09-25: 외곽선(배경 위 가독성) + 치명타 팝(1.6배→1배, 첫 0.15초) + 후반 0.6초부터 페이드.
+           종전엔 전 구간 선형 페이드라 떠오르자마자 흐려져 숫자를 읽을 틈이 없었다. */
+        const pop = f.crit ? 1 + 0.6*clamp(1-f.t/0.15,0,1) : 1;
+        const sz = (f.crit?19:14)*pop;
+        ctx.globalAlpha=clamp((1-f.t)/0.4,0,1); ctx.font=`bold ${sz.toFixed(1)}px 'Malgun Gothic',sans-serif`; ctx.textAlign='center';
+        const yy = f.y - Math.min(f.t,0.5)*44;
+        ctx.lineWidth=3; ctx.strokeStyle='rgba(0,0,0,.75)'; ctx.strokeText(f.val, f.x, yy);
+        ctx.fillStyle=f.color; ctx.fillText(f.val, f.x, yy); ctx.globalAlpha=1; }
+      /* ★ 2026-09-25: 몬스터 사망 잔상 — 흰 실루엣 번쩍임(0~0.08초) 뒤 1.3배로 부풀며 떠올라 0.45초에 소멸. */
+      else if(f.type==='die'){ const e=f.t/0.45; if(e<1){
+        const spr=f.img?monImg(f.img):null, mscale=(f.img&&MON_SCALE[f.img])||1, sz=f.r*2.4*mscale*(1+0.3*e);
+        const footY=(f.img&&MON_FOOTY[f.img])||0.96, dy=f.y+f.r-footY*sz - e*10;
+        ctx.save(); ctx.globalAlpha=clamp(1-e,0,1);
+        if(spr && spr.complete && spr.naturalWidth>0){
+          if(f.flip){ ctx.translate(f.x+sz/2,0); ctx.scale(-1,1); ctx.translate(-f.x+sz/2,0); }
+          ctx.drawImage(spr, f.x-sz/2, dy, sz, sz);
+          if(f.t<0.08){ ctx.globalCompositeOperation='source-atop'; ctx.fillStyle='rgba(255,255,255,.85)'; ctx.fillRect(f.x-sz/2,dy,sz,sz); }
+        } else { ctx.fillStyle=f.t<0.08?'#fff':(f.col||'#8a8f96'); ctx.beginPath(); ctx.arc(f.x, f.y-e*10, f.r*(1+0.3*e), 0, 7); ctx.fill(); }
+        ctx.restore(); } }
       /* ★ 홈 1인 광역(AoE) 이펙트 — "광역 화염 이펙트로 다수 동시 타격" 재현.
          확장되는 원형 화염 + 페이드아웃. f.t: 0→1 진행. */
       else if(f.type==='aoe'){ const e=f.t/0.4; ctx.globalAlpha=clamp(1-e,0,1)*0.55;
@@ -3640,6 +3686,9 @@ const Battle = (()=>{
       const refX = heroes.length ? (heroes[0].x || W*0.5) : W*0.5;
       const flip = m.x < refX;
       ctx.save();
+      /* ★ 2026-09-25: 넉백 — 맞은 순간 영웅 반대쪽으로 최대 5px 밀렸다 돌아온다(0.12초). 그리기 오프셋일 뿐
+         m.x(전투 좌표)는 건드리지 않는다 — 이동·거리 판정·결정론 해시에 영향 없음. */
+      if(m.kb>0){ ctx.translate((flip?-1:1)*5*(m.kb/0.12), 0); }
       if(m.flash>0){ ctx.globalAlpha=0.85; }
       if(flip){ ctx.translate(m.x+sz/2, 0); ctx.scale(-1,1); ctx.translate(-m.x+sz/2, 0); }
       ctx.drawImage(spr, m.x-sz/2, dy, sz, sz);
