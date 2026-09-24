@@ -2357,6 +2357,30 @@ step('제작 결과 리더 장착(빈 부위만) · 추천 사냥터 점 · 구�
   S.equips=keep.eq; S.seenTutorial=keep.st; S.huntTier=keep.ht; S.huntHintSeen=keep.hs; S.heroes=keep.lv;
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ 2026-09-25(워크플로 #17·#14): 결과 연출 문법 — 투기장 결과 카드 rc-anim·승급 배너(토스트 아님) · 제작 결과 rc-anim(등급별 광선) · 콤보 초기화. */
+step('결과 연출 — 투기장 카드·승급 배너 · 제작 결과 카드 · 콤보 초기화', ()=>{
+  const errs=[], S=ev('S');
+  const findCls=(root,re)=>{ let f=null; const rec=n=>{ if(!n||typeof n!=='object'||f) return; if(re.test(String(n.className||''))) f=n; (n.children||[]).forEach(rec); }; rec(root); return f; };
+  const keep={ pts:S.arenaPts, tier:S.arenaTier, st:S.arenaStreak, rank:S.arenaRank, dice:S.dice, sess:JSON.parse(JSON.stringify(S.arenaSession||{})), wins:S.stats.arenaWins, seen:S.seenTutorial, eq:S.equips.slice() };
+  S.seenTutorial=true; S.arenaTier=0; S.arenaPts=ev('TIER_PTS')[1]-50; S.arenaStreak=0;
+  ev('arenaResult')(true,'스모크',100,'브론즈');
+  const body=ev("$('#modalBody')");
+  if(S.arenaTier!==1) errs.push('승급 판정 '+S.arenaTier);
+  if(!findCls(body,/\bar-promo\b.*\bup\b/)) errs.push('승급 배너 없음');
+  if(!findCls(body,/result-card rc-anim rc-win/)) errs.push('투기장 승리 카드 rc-anim 없음');
+  ev('arenaResult')(false,'스모크',100,'실버');
+  if(S.arenaTier!==0 || !findCls(ev("$('#modalBody')"),/\bar-promo\b.*\bdn\b/)) errs.push('강등 배너 없음');
+  ev('closeModal')();
+  S.craft={ grade:'E', slot:'장비', cat:'무기', ic:'⚔️', endAt:0, p0:1, sec:1, gold:0, recipe:[] }; ev('craftAutoCheck')();
+  const root=ev("$('#modal-root')");
+  if(!findCls(root,/result-card rc-anim rc-win/)) errs.push('제작 성공 카드 rc-anim 없음');
+  if(!/rc-rays rr-e/.test(collectText(root))) errs.push('E 제작 광선 없음');
+  ev('closeSub')(); ev('closeModal')();
+  const bsrc=js.slice(js.indexOf('  function startDungeon(cfg){'), js.indexOf('  function startDungeon(cfg){')+400);
+  if(!/combo=0; comboT=0; comboPop=0;/.test(bsrc)) errs.push('startDungeon 콤보 초기화 없음');
+  S.arenaPts=keep.pts; S.arenaTier=keep.tier; S.arenaStreak=keep.st; S.arenaRank=keep.rank; S.dice=keep.dice; S.arenaSession=keep.sess; S.stats.arenaWins=keep.wins; S.seenTutorial=keep.seen; S.equips=keep.eq;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 step('잠긴 창 복귀 정산 차단 · 배경 로드 탭 숨김 시각 포착', ()=>{
   const errs=[], S=ev('S'), doc=ev('document'), vis=doc._ev && doc._ev.visibilitychange;
   if(typeof vis!=='function') throw new Error('visibilitychange 핸들러 미등록');

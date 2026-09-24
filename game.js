@@ -2718,6 +2718,7 @@ const Battle = (()=>{
   // ---- 던전 모드: 입장 → 필드에서 몬스터/보스와 실전 → 성공/실패 → 퇴장 ----
   function startDungeon(cfg){
     mode='dungeon'; wiped=0; mobs=[]; spawnT=0;
+    combo=0; comboT=0; comboPop=0;   // ★ 2026-09-25(#14): 홈 콤보가 던전 부제·투기장 헤더 위로 이월되던 것(표시 전용 — 결정론 무관)
     heroes.forEach(h=>{ h.dead=false; h.hp=1; h.respT=0; h.dmgDone=0; });
     dg={ name:cfg.name, col:cfg.col||'#e8843c', foeCP:Math.max(1,cfg.foeCP||1000), kind:cfg.kind||'mobs',
          total:cfg.count||10, spawned:0, killed:0, dur:cfg.dur||30, timeLeft:cfg.dur||30, onEnd:cfg.onEnd, done:false, bossSpawned:false,
@@ -2781,6 +2782,7 @@ const Battle = (()=>{
     if(!dg || dg.done) return; dg.done=true;
     const cb=dg.onEnd, dmg=heroes.reduce((a,h)=>a+h.dmgDone,0), kills=dg.killed, wv=dg.waveNo||0;
     mode='hunt'; dg=null; mobs=[]; foes=[]; spawnT=0.4;   /* ★ v5.84: foes도 초기화 */
+    combo=0; comboT=0; comboPop=0;   // 던전 콤보를 홈으로 들고 오지 않는다(표시 전용)
     heroes.forEach(h=>{ h.dead=false; h.hp=1; h.respT=0; });
     if(cb) cb(win, {dmg, kills, wave:wv});
   }
@@ -3720,11 +3722,28 @@ const Battle = (()=>{
         ctx.fillText((dg.kind==='mobs'? `처치 ${dg.killed}/${dg.total} · `:'')+`남은 ${Math.max(0,dg.timeLeft).toFixed(0)}s`
           +((dg.otMul||1)>1 ? ` · 가중 x${dg.otMul.toFixed(1)}` : ''), W/2, 34);   // ★ v5.117
       }
-      // 보스 HP = 상단 전폭 붉은 바 (설계: 보스 머리 위가 아니라 화면 상단 고정)
+      // 보스 HP = 상단 고정 붉은 바 (설계: 보스 머리 위가 아니라 화면 상단 고정)
+      /* ★ 2026-09-25(워크플로 #14): ① 위치 — 종전 전폭(x8~W-8)은 왼쪽 약 1/3 이 기여도 패널(.contrib x6~156·y40~)에, 오른쪽 끝이 절전 버튼
+         (x W-50~)에 가려졌다(실측). 기여도 오른쪽~절전 왼쪽 사이로 옮긴다(좁은 화면이면 종전 전폭으로 후퇴).
+         ② 잔상 — 맞은 만큼 연한 띠가 0.25초 머문 뒤 초당 50%씩 따라 내려온다(피해량이 눈에 보이게). ③ HP % 표기.
+         잔상 값은 그리기 전용 필드(_gh*)에 벽시계로만 계산한다 — 시뮬은 읽지 않는다(결정론 무관). draw 보간이 되돌리는 x/y/t 와 별개 필드.
+         연출 줄이기(fxFlash 끔)면 잔상 없음. */
       const bossM=mobs.find(m=>m.boss);
-      if(bossM){ ctx.fillStyle='#2a0d0b'; ctx.fillRect(8,42,W-16,10);
-        ctx.fillStyle='#d84a3f'; ctx.fillRect(8,42,(W-16)*clamp(bossM.hp/bossM.hpMax,0,1),10);
-        ctx.strokeStyle='#5a1f18'; ctx.strokeRect(8,42,W-16,10); }
+      if(bossM){
+        let bx=162, bw=W-56-bx; if(bw<120){ bx=8; bw=W-16; }
+        const r=clamp(bossM.hp/bossM.hpMax,0,1), now=(typeof performance!=='undefined'&&performance.now)?performance.now():Date.now();
+        if(typeof bossM._gh!=='number' || !fxOn('fxFlash')){ bossM._gh=r; bossM._ghR=r; bossM._ghT=now; bossM._ghL=now; }
+        if(r<bossM._ghR) bossM._ghT=now;                 // 새 피해 → 머무름 타이머 재시작
+        bossM._ghR=r;
+        const gdt=Math.min(0.1,(now-bossM._ghL)/1000); bossM._ghL=now;
+        if(r>=bossM._gh) bossM._gh=r; else if(now-bossM._ghT>250) bossM._gh=Math.max(r, bossM._gh-0.5*gdt);
+        ctx.fillStyle='#2a0d0b'; ctx.fillRect(bx,42,bw,10);
+        if(bossM._gh>r){ ctx.fillStyle='#ffd8a0'; ctx.fillRect(bx+bw*r,42,bw*(bossM._gh-r),10); }
+        ctx.fillStyle='#d84a3f'; ctx.fillRect(bx,42,bw*r,10);
+        ctx.strokeStyle='#5a1f18'; ctx.strokeRect(bx,42,bw,10);
+        ctx.font="bold 9px 'Malgun Gothic'"; ctx.textAlign='right'; ctx.lineWidth=2.5; ctx.strokeStyle='rgba(0,0,0,.75)'; ctx.fillStyle='#fff3e0';
+        const pt=(r>0&&r<0.01?'<1':String(Math.ceil(r*100)))+'%';
+        ctx.strokeText(pt, bx+bw-3, 50.5); ctx.fillText(pt, bx+bw-3, 50.5); }
     } else {
       // WAVE + 사냥 대상 라벨 (좌상단)
       const td=tierDef();
@@ -3740,7 +3759,7 @@ const Battle = (()=>{
       const pop = comboPop>0 ? 1+(comboPop/0.22)*0.35 : 1;
       const size = Math.min(26, 15+combo*0.35);
       ctx.save();
-      ctx.translate(W/2, Math.max(46, H*0.11)); ctx.scale(pop,pop);
+      ctx.translate(W/2, mode==='dungeon' ? Math.max(84, H*0.22) : Math.max(46, H*0.11)); ctx.scale(pop,pop);   // ★ 2026-09-25(#14): 던전은 부제(y34)·보스 바(y42~52) 아래로
       ctx.globalAlpha = clamp(comboT/0.5, 0, 1)*0.95;
       ctx.fillStyle = combo>=20?'#c05ad0':combo>=10?'#ffd36a':'#f0a24a';
       ctx.font=`bold ${size.toFixed(0)}px 'Malgun Gothic'`; ctx.textAlign='center';
@@ -4097,7 +4116,7 @@ const Battle = (()=>{
   function refreshParty(){ layoutHeroes(); }
   function contributions(){ const tot=heroes.reduce((a,h)=>a+h.dmgDone,0)||1; return heroes.map(h=>({job:h.job,pct:Math.round(h.dmgDone/tot*100)})); }
   window.addEventListener('resize', ()=>{ resize(); });
-  function setHunt(){ if(mode==='dungeon') return; mobs=[]; wave=1; lastBossWave=0; wiped=0; layoutHeroes(); }
+  function setHunt(){ if(mode==='dungeon') return; mobs=[]; wave=1; lastBossWave=0; wiped=0; combo=0; comboT=0; comboPop=0; layoutHeroes(); }   // 콤보 초기화: 사냥터를 바꿔도 이어지던 것(#14)
   /* ★ M1: 헤드리스 완주 러너 — 렌더 없이 FIXED_DT만 최대 속도로 반복한다. 던전이 끝나면
      (승패 확정으로 mode가 'hunt'로 복귀하면) 즉시 멈춘다. 담금질 마당(M4)의 "인스턴트 시뮬"이
      그대로 이 함수를 호출하게 될 통로다 — 검증 하네스와 실제 기능이 같은 경로를 타게 한다. */
@@ -9020,9 +9039,15 @@ function resolveCraft(forceSuccess){
   // 제작 결과 팝업 (G-30: 성공 시 '제작 성공' 타이틀 + 상단 '확인' 헤더바 + 부위 아이콘 + 플레이버)
   /* ★ v5.123: [확인]이 유일한 동작이므로 ✕ 없이(noX). 종전의 b2-head '확인' 헤더바는
      버튼이 아니라 죽은 텍스트로 렌더되고 있어 제거 — 하단 [확인] 버튼 하나로 통일. */
+  /* ★ 2026-09-25(워크플로 #17): 결과 팝업 뒤 잔상 — 대장간이면 '제작 중 · 남은 시간'·즉시완성 버튼이, 홈에서 자연 완료면 closeModal 이 비우지 않은
+     마지막 모달 본문(예: 상점)이 팝업 뒤에 비쳤다(검증 실측). 대장간이거나 모달이 닫혀 있으면 대장간을 새로 그린 뒤 띄운다.
+     다른 모달을 보고 있는 중이면 그 화면을 빼앗지 않는다(종전대로 그 위에 띄움 — [확인]이 대장간으로 보낸다). */
+  if(!currentModal || currentModal==='forge') openModal('forge', slot);
   const G=GRADES[grade]; const b=subBody(ok?'제작 성공':'제작 결과', {noX:true});   // ★ v5.1 대장간 위 오버레이
-  if(ok) b.appendChild(el('div','result-card',`<div class="rc-icon grade-${grade}" style="color:${G.color}">${equipImg(slot,3)}</div><div class="rc-title win" style="color:${G.color};font-size:20px">${G.name} ${slot}</div><div class="small mut">${itemFlavor(slot)}</div><div class="small mut">인벤토리에 추가되었습니다.</div>`));
-  else b.appendChild(el('div','result-card',`<div class="rc-icon">💥</div><div class="rc-title lose">제작 실패</div><div class="small mut">재료 90% 환급 · 다시 도전하세요</div>`));
+  /* 연출 크기 = 희소성(v5.190 원칙): N·R 은 제목 팝만, E 는 보라 광선(작게), L 은 금 광선(+legendaryFlash). 실패는 흔들림. */
+  const rays = grade==='L' ? '<div class="rc-rays"></div>' : grade==='E' ? '<div class="rc-rays rr-e"></div>' : '';
+  if(ok) b.appendChild(el('div','result-card rc-anim rc-win',`<div class="rc-icon grade-${grade}" style="color:${G.color}">${rays}${equipImg(slot,3)}</div><div class="rc-title win" style="color:${G.color};font-size:20px">${G.name} ${slot}</div><div class="small mut">${itemFlavor(slot)}</div><div class="small mut">인벤토리에 추가되었습니다.</div>`));
+  else b.appendChild(el('div','result-card rc-anim rc-lose',`<div class="rc-icon">💥</div><div class="rc-title lose">제작 실패</div><div class="small mut">재료 90% 환급 · 다시 도전하세요</div>`));
   /* ★ v5.123: 종전 onclick 이 openModal('forge') 만 불러서 — 이 팝업은 _subKey 미등록
      오버레이라 openModal 이 닫아 주지 않는다 — 대장간이 팝업 '뒤'에서 다시 그려질 뿐,
      팝업은 ✕로만 닫혔다(대표 제보). closeSub() 로 팝업을 닫고 대장간으로 복귀한다. */
@@ -9387,8 +9412,11 @@ function arenaResult(win, foeName, foeCP, foeTier){
     S.arenaSession.l++; S.arenaSession.w=0;          // 패 스트릭 누적 · 승은 끊김
     S.arenaRank=Math.min(999999, Math.round(S.arenaRank*1.03) + ri(1,4)); }
   const nt=arenaTierOf(S.arenaPts);
-  if(nt>S.arenaTier){ S.arenaTier=nt; toast(`${TIERS[S.arenaTier]} 승급!`); }
-  else if(nt<S.arenaTier){ S.arenaTier=nt; toast(`${TIERS[S.arenaTier]}(으)로 강등…`); }
+  /* ★ 2026-09-25(워크플로 #17): 승급·강등은 결과 카드 안 배너로 — 종전 토스트 한 줄은 일반 알림과 구분이 안 됐다.
+     growthBurst(중앙 오버레이 1.4초)는 바로 아래 티어 비교열을 덮어 쓰지 않는다(검증 실측). 결과 카드가 없는 튜토리얼 경로만 토스트. */
+  let tierMove=0;
+  if(nt>S.arenaTier){ S.arenaTier=nt; tierMove=1; }
+  else if(nt<S.arenaTier){ S.arenaTier=nt; tierMove=-1; }
   sfx(win?'win':'fail');
   /* ★ v5.290: 튜토리얼 8단계(투기장) 종료 즉시 미션 완료 팝업 — 종전엔 결과 카드 3초 →
      홈 복귀 → tutPoll(0.5s 간격) 순으로 돌아, 전투가 끝나고도 최대 ~3.5초 뒤에야 팝업이
@@ -9400,13 +9428,17 @@ function arenaResult(win, foeName, foeCP, foeTier){
   if(!S.seenTutorial && S.tut && S.tut.missionPending){
     S.tut.missionPending=false;
     toast(win?'투기장 승리!':'투기장 패배…');
+    if(tierMove) toast(tierMove>0 ? `${TIERS[S.arenaTier]} 승급!` : `${TIERS[S.arenaTier]}(으)로 강등…`);
     openModal('missionReward');
     return;
   }
   setModalTitle('투기장'); const b=$('#modalBody'); b.innerHTML='';
   // ★ G-91: 결과 카드 상단 세션 승패 배너
   b.appendChild(el('div','ar-session',`${S.arenaSession.w}승 ${S.arenaSession.l}패`));
-  b.appendChild(el('div','result-card',`<div class="rc-icon">${win?eImg("🏆",2):'💥'}</div><div class="rc-title ${win?'win':'lose'}">${win?'WIN':'Loss'}</div><div class="small mut">vs ${foeName} · ${foeTier||''} (전투력 ${fmt(foeCP)})</div>`));
+  /* ★ 2026-09-25(워크플로 #17): 던전 결과와 같은 문법(rc-anim 제목 팝·승리 광선·패배 흔들림) — 투기장만 정지 카드였다. 0.34초라 3초 자동 연전 안에 끝난다. */
+  b.appendChild(el('div','result-card rc-anim '+(win?'rc-win':'rc-lose'),`<div class="rc-icon">${win?'<div class="rc-rays"></div>':''}${win?eImg("🏆",2):'💥'}</div><div class="rc-title ${win?'win':'lose'}">${win?'WIN':'Loss'}</div><div class="small mut">vs ${foeName} · ${foeTier||''} (전투력 ${fmt(foeCP)})</div>`));
+  if(tierMove){ b.appendChild(el('div','ar-promo '+(tierMove>0?'up':'dn'), tierMove>0 ? `▲ <b>${TIERS[S.arenaTier]}</b> 승급!` : `▼ ${TIERS[S.arenaTier]}(으)로 강등`));
+    if(tierMove>0) setTimeout(()=>sfx('awaken'), 260); }
   // 변경 전 → 변경 후 2열 (결과창 레이아웃)
   const cmp=el('div'); cmp.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:6px;margin:8px 0;text-align:center;align-items:center';
   // ★ v4.8: 비교란은 점수 / 티어 / 연승 3줄뿐이다. '순위' 는 우리가 임의로 넣은 4번째 줄이라 뺀다.

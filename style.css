@@ -1525,6 +1525,16 @@ body.fx-noflash .hr-art .hr-rays{ display:none; }
 .dg-chip.dg-pop{ animation:chipPop .3s cubic-bezier(.2,.9,.3,1.4) both; }
 @keyframes chipPop{ 0%{ transform:translateY(8px) scale(.6); opacity:0; } 100%{ transform:none; opacity:1; } }
 body.fx-noflash .result-card .rc-rays{ display:none; }
+/* ★ 2026-09-25(워크플로 #17): 제작 결과(.sub-pop 안) — 광선(z:-1)이 불투명한 팝업 배경 밑에 깔려 안 보였다(검증 실측) → 카드에 쌓임 맥락을 준다.
+   E 는 보라 광선을 작게(희소성 = 연출 크기). 투기장 승급·강등 배너. */
+.sub-pop .result-card{ position:relative; isolation:isolate; }
+.result-card .rc-rays.rr-e{ width:150px; height:150px; margin:-75px 0 0 -75px;
+  background:repeating-conic-gradient(from 0deg, rgba(178,120,236,.30) 0deg 8deg, transparent 8deg 26deg); }
+.ar-promo{ margin:2px auto 4px; padding:5px 12px; width:max-content; max-width:100%; border-radius:8px; text-align:center;
+  font-size:var(--fs-base); font-weight:800; letter-spacing:.02em; animation:rcPop .36s cubic-bezier(.2,.9,.3,1.35) .12s both; }
+.ar-promo.up{ color:#ffe7a8; background:linear-gradient(180deg,rgba(120,80,20,.75),rgba(60,36,8,.75)); border:1px solid #d9a84a; box-shadow:0 0 14px rgba(242,178,58,.35); }
+.ar-promo.dn{ color:#e6c2bd; background:rgba(60,24,22,.6); border:1px solid #7a3a34; }
+@media (prefers-reduced-motion: reduce){ .ar-promo{ animation:none; } }
 @media (prefers-reduced-motion: reduce){ .result-card .rc-rays{ animation:none; } .result-card.rc-lose .rc-title{ animation:rcPop .3s ease-out both; } }
 
 /* ★ 2026-09-25: 드랍 비행체(game.js flyLoot) — 바깥은 가로 선형, 안쪽은 세로 가속(ease-in)이라 합성 궤적이 곡선이 된다.
