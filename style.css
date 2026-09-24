@@ -182,6 +182,7 @@ body{
 #side-float .fb{ width:42px; height:42px; cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
   background:linear-gradient(180deg,rgba(36,26,16,.92),rgba(18,13,8,.8)); border:1px solid var(--frame); border-radius:9px;
   box-shadow:0 3px 8px rgba(0,0,0,.5); }
+#side-float .fb{ position:relative; }   /* ★ 2026-09-25(#5 2차): 모험 버튼 점(.rdot) 기준점 — 버튼이 늘어나도 어긋나지 않게 */
 #side-float .fb .gi{ font-size:var(--fs-xl); } #side-float .fb span{ font-size:var(--fs-xs); color:#cdbf9f; }
 #side-float .fb:active{ filter:brightness(1.3); }
 

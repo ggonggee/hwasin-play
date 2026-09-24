@@ -1612,6 +1612,8 @@ function freshState(){
     dgSeen:{},        // ★ 2026-09-25(워크플로 #11): 던전 계열별 첫 클리어 기록 — [즉시 결과] 노출 조건(dgSkipOK)
     awayBank:{ days:0, gold:0, stones:0, box:0, hi:0 },   // ★ 2026-09-25(워크플로 #26): 복귀 적립(부재 최대 7일분 탑 소탕·잔불 몫) — awayAccrue
     _awayFrom:'',     // ★ #18(2차): 숨김 탭 중 날짜가 넘어간 경우의 부재 적립 기준일(awayCatchUp 이 소비) — 이관 플래그 아님
+    advSeenDay:'',    // ★ #5(2차): 오늘 모험 화면을 열었는지(모험 버튼 점 소등) — 이관 플래그 아님
+    guideFinBanner:0, // ★ #5(2차): 길잡이 완주 1회 배너 0=없음 1=표시 중 2=봤음(기존 완주 세이브는 0 → 뜨지 않음)
     _wbdmg:0,        // 월드보스 누적 데미지(서버 랭킹 반영)
     wbScore:0,        // ★ v4.1 A1-2: 월드보스 누적 점수(정수 'N점') — 보상과 무관한 별도 적립
     ddDay:null,       // 요일던전에서 선택 중인 요일(null=오늘)
@@ -2083,6 +2085,12 @@ function huntUpgradeTier(){
   const safe=huntSafeTier();
   return safe > Math.max(S.huntTier||0, S.huntHintSeen|0) ? safe : -1;
 }
+/* ★ 2026-09-25(워크플로 2차 #5): 모험 버튼 점 — 오늘 모험 화면을 아직 안 열었고 남은 입장이 있을 때만(오늘 봤으면 소등, advSeenDay).
+   'forgetrial' 은 넣지 않는다 — advLeftBadge('forgetrial') 가 monthlyState 를 불러 5초 틱에서 월 경계 부작용(정산)을 일으킨다. 약탈은 길잡이 중 '잠김'(done) 이라 자동 제외. */
+function advDotOn(){
+  if(!S || !S.seenTutorial || S.advSeenDay===today()) return false;
+  return ['dailydungeon','golddungeon','worldboss','tower','raid','embermaze'].some(k=>{ const b=advLeftBadge(k); return b && !b.done; });
+}
 function heroFuseAvail(){ return !!(S && S.seenTutorial) && HERO_ROSTER.some(r=>heroFuseReady(r.hero_id)); }   // #6(2차) 영웅 버튼 점 조건
 function refreshClaimBadges(){
   /* ★ v5.269: 미수령 오프라인 정산 배지 — offlinePending(방치 골드)이 쌓여 있어도
@@ -2100,6 +2108,7 @@ function refreshClaimBadges(){
   /* ★ 2026-09-25(워크플로 2차 #6): 합성 가능한 영웅이 있으면 영웅 버튼 점 — 튜토리얼 직후 이미 조각 185/80 이 모여 있어도 알림이 없었다(실측).
      튜토리얼 중엔 끈다(7단계 손가락이 [합성]을 짚는다). 합성은 레벨 100% 승계의 순수 상승이라 켜진 채 남는 점이 없다. */
   _setDot(document.querySelector('[data-modal="hero"]'), heroFuseAvail());
+  _setDot(document.querySelector('[data-modal="adventure"]'), advDotOn());   // #5(2차) 오늘 남은 모험이 있고 아직 안 열어 봤으면
   _setDot(document.getElementById('btnMenuToggle'), q||a||n||od||m);
   /* ★ v5.271: 칭호 개선 가능 — [data-modal="titles"] 항목(드로어 내 칭호). ☰ 합산. */
   titleSyncOwn(true);   // ★ 2026-09-25: 달성한 칭호를 보유로 기록(5초 주기) — #11(2차): 새로 달성하면 알림
@@ -5374,7 +5383,20 @@ function updateGuideBanner(){
   /* ★ 2026-09-25(리뷰 확정): 전투(던전·투기장) 중에는 숨긴다 — 배너(z7)가 투기장 헤더 #ar-head(상대·타이머, z6)를 매치 내내 덮었고,
      배너 높이만큼 내려간 시계(.timepod)가 기여도 패널(.contrib top:40 고정)의 영웅 이름을 덮었다. 전투 중엔 제작 안내가 쓸모없고,
      숨기면 --gbh 가 0 이 되어 HUD 가 원래 자리로 돌아간다. 전투 시작·종료 전환은 0.5초 HUD 틱(syncGuideBannerFight)이 잡는다. */
-  if(!S.seenTutorial || S.guideStep>=GUIDE_CHAIN.length || Battle.inDungeon()){ bn.classList.add('hidden'); syncGuideOffset(); return; }
+  const fin = S.guideStep>=GUIDE_CHAIN.length;
+  if(!S.seenTutorial || Battle.inDungeon() || (fin && S.guideFinBanner!==1)){ bn.classList.add('hidden'); syncGuideOffset(); return; }
+  const rwEl=bn.querySelector && bn.querySelector('.gb-rw');
+  /* ★ 2026-09-25(워크플로 2차 #5): 길잡이 완주 직후 1회 배너 — 종전엔 완주하면 배너가 사라지고 1.9초 토스트('약탈 해금')뿐이라, 약탈이 어디 있는지도
+     오늘 남은 모험 12회도 보이지 않았다(실측). [모험]을 열면(adventure render) 2 로 바뀌어 사라진다. 상시 순환 배너는 하지 않는다(검증 결론). */
+  if(fin){
+    bn.classList.remove('hidden'); bn.classList.remove('short');
+    const gt=$('#gbTxt'), txt='길잡이 완주 · 약탈이 열렸습니다 — 매일 던전·탑은 [모험]에서'; if(gt && gt.textContent!==txt) gt.textContent=txt;
+    const ic=$('#gbGoal'); if(ic) ic.innerHTML=eImg('🧭',1.15);
+    if(rwEl && rwEl.style) rwEl.style.display='none';
+    const go=$('#gbGo'); if(go && go.textContent!=='모험') go.textContent='모험';
+    syncGuideOffset(); return;
+  }
+  if(rwEl && rwEl.style && rwEl.style.display==='none') rwEl.style.display='';
   const g=GUIDE_CHAIN[S.guideStep], need=GUIDE_NEED[S.guideStep]||1, prog=S.guideProg||0;
   bn.classList.remove('hidden');
   /* ★ v5.109: 길잡이 목표 아이콘도 아이콘 팩을 쓴다(종전엔 이모지 그대로 노출).
@@ -5404,7 +5426,8 @@ function guideCheck(ev, data){
   try{ if(g.rw) g.rw(); }catch(e){}
   toast(`길잡이 ${s+1}단계 완료! ${g.rewardIcon} X${fmt(g.rewardQty)}`);
   // ★ v5.126: 시스템 공지 문구를 재작성했다. 게이팅 조건(9단계 완료→약탈 해금)은 유지, 문구만 바꿨다.
-  if(S.guideStep>=GUIDE_CHAIN.length){ sysLog('길잡이 아홉 걸음을 모두 마치면 약탈의 문이 열립니다.'); toast('길잡이 완주 · 약탈 해금'); }
+  if(S.guideStep>=GUIDE_CHAIN.length){ sysLog('길잡이 아홉 걸음을 마쳤습니다 — 약탈의 문이 열렸습니다([모험] → 약탈).'); toast('길잡이 완주 · 약탈 해금');
+    S.guideFinBanner=1; try{ updateGuideBanner(); }catch(e){} }   // #5(2차): 완주 1회 배너
   updateGuideBanner(); refreshHUD();
 }
 
@@ -7766,6 +7789,9 @@ const MODALS = {
      모달과 어긋난다. 입장권 보유는 반영하지 않는다(모달의 가능 횟수 표기와 같은 의미 유지).
      보스는 재료 소모형이라 일일 횟수가 없어 배지를 달지 않는다. */
   adventure:{ title:'모험', render(b){
+    /* #5(2차): 오늘 모험을 봤으면 모험 버튼 점 소등 · 완주 배너는 여기서 끝 */
+    S.advSeenDay=today(); _setDot(document.querySelector('[data-modal="adventure"]'), false);
+    if(S.guideFinBanner===1){ S.guideFinBanner=2; try{ updateGuideBanner(); }catch(e){} }
     b.appendChild(el('div','hint','던전·보스·약탈 — 전투 콘텐츠를 한 곳에서.'));
     const g=el('div','adv-grid');
     [ ['dailydungeon','요일던전','ci_dailydungeon'], ['golddungeon','골드던전','ci_golddungeon'],
@@ -10265,7 +10291,9 @@ function wire(){
   /* ★ 2026-09-25: 골드가 모자란 단계면 [골드던전]으로(오늘 남은 횟수가 있을 때) — 대장간에 가 봐야 '골드가 부족합니다' 뿐이다. */
   const gbGo=$('#gbGo'); if(gbGo) gbGo.addEventListener('click',()=>{ const g=guideTarget();
     if(g && guideGoldShort()>0 && dailyLeft('gold',3)>0 && !busyFight()){ openModal('golddungeon'); return; }
-    if(g) openModal('forge', g.slot); else openModal('quest'); });
+    if(g) openModal('forge', g.slot);
+    else if(S.guideFinBanner===1 && !(Battle.inDungeon && Battle.inDungeon())) openModal('adventure');   // #5(2차) 완주 배너 → 모험
+    else openModal('quest'); });
   const gbn=$('#guide-banner'); if(gbn && typeof ResizeObserver==='function') new ResizeObserver(()=>syncGuideOffset()).observe(gbn);   // 배너 높이 변화(줄바꿈·배율) 추적
   $('#battle').addEventListener('click',()=>{ $('#sidemenu').classList.add('hidden'); });
   document.querySelectorAll('[data-modal]').forEach(elm=>{ elm.addEventListener('click',()=>{ sfx('tap'); $('#sidemenu').classList.add('hidden'); openModal(elm.dataset.modal); }); });

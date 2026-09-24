@@ -2423,6 +2423,25 @@ step('퀘스트 기본 탭(주간 우선) · 길드 레이드 결과 뒤 복귀'
   S.guideStep=keep.gs;
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ 2026-09-25(워크플로 2차 #5): 길잡이 완주 뒤 — 모험 버튼 점(오늘 안 봤고 남은 입장 있을 때) · 완주 1회 배너(모험을 열면 끝) · 배지 틱이 월 롤오버를 일으키지 않음. */
+step('길잡이 완주 뒤 모험 점 · 완주 1회 배너', ()=>{
+  const errs=[], S=ev('S'), bn=ev("$('#guide-banner')");
+  const keep={ gs:S.guideStep, st:S.seenTutorial, ad:S.advSeenDay, gf:S.guideFinBanner, mk:JSON.parse(JSON.stringify(S.monthly||{})), pl:S._pendingLoginToast, cnt:JSON.parse(JSON.stringify(S.daily.counts)) };
+  S.seenTutorial=true; S.guideStep=ev('GUIDE_CHAIN').length; S.advSeenDay=''; ev('rollDaily')(); S.daily.counts={};
+  if(!ev('advDotOn')()) errs.push('완주·오늘 미열람·남은 입장 있음인데 모험 점 꺼짐');
+  // 완주 순간 → 배너 1(표시) → 모험 render → 2(숨김)·점 꺼짐
+  S.guideFinBanner=1; ev('updateGuideBanner')(); if(bn.classList.contains('hidden')) errs.push('완주 배너 미표시');
+  const b=new Node2('div'); ev('MODALS').adventure.render(b);
+  if(S.guideFinBanner!==2) errs.push('모험을 열었는데 완주 배너 상태 '+S.guideFinBanner);
+  if(!bn.classList.contains('hidden')) errs.push('모험을 열었는데 완주 배너가 남음');
+  if(ev('advDotOn')()) errs.push('오늘 모험을 봤는데 점 유지');
+  S.guideFinBanner=0; ev('updateGuideBanner')(); if(!bn.classList.contains('hidden')) errs.push('기존 완주 세이브(0)에 배너가 뜸');
+  // 배지 틱은 월 롤오버를 일으키지 않는다(forgetrial 제외 이유)
+  S.monthly={ key:'1999-1', base:{kills:0,crafts:0,summons:0,towerTries:0}, claimed:{} }; S.advSeenDay=''; const pl0=JSON.stringify(S._pendingLoginToast||null);
+  ev('refreshClaimBadges')(); if(S.monthly.key!=='1999-1' || JSON.stringify(S._pendingLoginToast||null)!==pl0) errs.push('refreshClaimBadges 가 월 롤오버를 일으킴');
+  S.guideStep=keep.gs; S.seenTutorial=keep.st; S.advSeenDay=keep.ad; S.guideFinBanner=keep.gf; S.monthly=keep.mk; S._pendingLoginToast=keep.pl; S.daily.counts=keep.cnt; ev('updateGuideBanner')();
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ 2026-09-25(워크플로 2차 #9·#11·#10·#4·#15): 성장·보상 순간 연출 — 합성 등장 · 세트 발동 카드 · 칭호 획득 알림 · 수령음 · 골드 레벨업 전후 카드 · 탑 웨이브 돌파. */
 step('2차 C묶음 — 합성 등장·세트 카드·칭호 알림·수령음·레벨업 카드·웨이브 돌파', ()=>{
   const errs=[], S=ev('S'), root=ev("$('#modal-root')");
