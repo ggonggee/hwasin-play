@@ -1422,6 +1422,13 @@ const ATTEND_DAYS = [
 ];
 /* ★ B9/G-134: 공지 — 제목 밴드 + 양피지 서술형 본문 (목록 → 상세 2단) */
 const NOTICES = [
+  /* ★ v5.364: 3차 발견 K2 — UI 조작이 전투 상태를 초기화하던 것. 이용자 불리 정정(무한 궁극기 우회 제거) 포함이라 [수정]으로 알린다. */
+  { cat:'[수정]', ic:'⚔️', t:'레벨업·장착을 해도 전투가 흔들리지 않습니다', d:'2026-09-25',
+    body:'군주들에게 알립니다.<br><br>'+
+      '· 레벨업·장착·강화·제작 완료 같은 조작을 할 때마다 영웅이 처음부터 다시 배치되며 궁극기가 곧바로 다시 터지고, 전투 중이면 <b>기여도와 누적 피해가 0 으로 초기화</b>되던 오류를 고쳤습니다. 월드보스·길드 토벌에서 전투 중에 성장 버튼을 눌러도 이제 피해 기록이 줄지 않습니다. 화면을 회전해도 마찬가지입니다.<br>'+
+      '· 궁극기에는 전용 효과음이 붙습니다(레전더리 제작·+5 강화 같은 희귀한 순간의 소리와 구분).<br>'+
+      '· 전투 중에 제작이 끝나면 결과 창은 전투가 끝난 뒤에 뜹니다(전투 화면을 가리지 않게).<br>'+
+      '· 조작을 반복해 궁극기를 계속 다시 쓰던 우회는 사라집니다. 평소처럼 두는 사냥의 처치·골드는 그대로입니다.' },
   /* ★ v5.363: 3차 발견 A묶음(K1·K4·K5) — 첫 세션 흐름. 루비 상점 제작서 설명 정정 포함(숨기지 않고 알린다). */
   { cat:'[개선]', ic:'📜', t:'긴 제작은 제작서로 즉시 완성 · 소환 알림 · 길잡이 보상 표시', d:'2026-09-25',
     body:'군주들에게 알립니다.<br><br>'+
@@ -2336,10 +2343,11 @@ function sfx(type){
     const P={ hit:[220,0.06,'square',0.05], crit:[440,0.09,'square',0.08], craft:[520,0.16,'triangle',0.12], fail:[150,0.2,'sawtooth',0.1],
       summon:[330,0.26,'sine',0.09], legendary:[660,0.45,'triangle',0.14], coin:[880,0.05,'square',0.04], tap:[300,0.03,'square',0.035],
       awaken:[520,0.3,'sine',0.12], win:[440,0.2,'triangle',0.11], boss:[92,0.16,'sine',0.22], bossdown:[196,0.3,'triangle',0.13],
-      claim:[587,0.2,'triangle',0.12] };   // claim: 보상 수령(#10 2차) — coin(880 사각 단음)·craft 와 구분되는 상승음
+      claim:[587,0.2,'triangle',0.12],     // claim: 보상 수령(#10 2차) — coin(880 사각 단음)·craft 와 구분되는 상승음
+      ult:[110,0.35,'sawtooth',0.1] };    // ult: 궁극기(K2 3차) — 저음 하강 스윕. 종전 legendary 를 써서 한 세션 legendary 22회 중 19회가 궁극기였다(희소 사건 소리가 흐려짐)
     const p=P[type]||P.tap; o.type=p[2]; o.frequency.setValueAtTime(p[0],t);
     if(type==='craft'||type==='legendary'||type==='awaken'||type==='win'||type==='claim') o.frequency.exponentialRampToValueAtTime(p[0]*2,t+p[1]);
-    if(type==='fail'||type==='boss'||type==='bossdown') o.frequency.exponentialRampToValueAtTime(p[0]*0.5,t+p[1]);
+    if(type==='fail'||type==='boss'||type==='bossdown'||type==='ult') o.frequency.exponentialRampToValueAtTime(p[0]*0.5,t+p[1]);
     g.gain.setValueAtTime(p[3]*vol,t); g.gain.exponentialRampToValueAtTime(0.0001,t+p[1]);
     if(type==='coin') _coinG=g;
     o.start(t); o.stop(t+p[1]+0.03);
@@ -2947,7 +2955,7 @@ const Battle = (()=>{
     cv.width = Math.max(1, Math.round(W*dpr)); cv.height = Math.max(1, Math.round(H*dpr));
     ctx = cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
     _fx0=null;   /* ★ v5.174: 크기가 바뀌면 glow 그라디언트 좌표도 다시 만든다 */
-    layoutHeroes();
+    layoutHeroes(heroes.length ? 2 : 0);   // K2(3차): 창 회전·키보드로 크기가 바뀌어도 전투 상태는 유지(위치만 새로)
   }
   let partyCP=1, wiped=0, mode='hunt', dg=null; // mode: 'hunt'(홈 파밍) | 'dungeon'(던전 입장 전투)
   let foes=[];  /* ★ v5.84: 투기장 적 영웅 배열 (좌우 대치용) */
@@ -2963,13 +2971,22 @@ const Battle = (()=>{
      isHuntSolo = partySrc가 없고 mode가 hunt일 때만 true. */
   const HERO_CENTER_X = 0.50, HERO_CENTER_Y = 0.50;  // 홈 영웅 중앙 위치 (필드 중앙)
   function isHuntSolo(){ return !partySrc && mode==='hunt'; }
-  function layoutHeroes(){
+  /* ★ 2026-09-25(3차 발견 K2): keep — 0 = 전체 초기화(입장·사냥터 전환·편성 소스 교체) · 1 = 같은 영웅의 전투 상태를 이어받음(refreshParty)
+     · 2 = 상태는 잇되 위치는 새로(resize — 화면 크기가 바뀌었다).
+     종전 refreshParty 는 영웅을 새로 만들어 궁극기 쿨·누적 피해·체력·사망을 초기화했다 → 레벨업·장착·제작·강화 같은 UI 조작마다 궁극기가 즉시 재발동
+     (legendary 음·흔들림), 전투 중이면 기여도 0/0 · 결과 피해 −24~−81%(같은 시드 실측 — 월드보스 기록·길드 토벌 피해가 이 값을 쓴다), 창 회전·가상 키보드 resize 도 같은 경로.
+     ⚠ 이어받는 영웅은 bRnd(atkT) 를 **새로 뽑지 않는다** — 뽑으면 전투 중 갱신이 시드 난수 흐름을 밀어 같은 시드인데 결과가 달라진다(smoke D7 실측:
+       뽑게 둔 시안은 rngDrawCount 661→704·승→패). 전체 초기화 경로(입장·D1~D6)는 종전과 같이 뽑는다.
+     cp·lvl·grade·partyCP 는 새로 계산한다(레벨업한 전투력이 즉시 반영돼야 한다). */
+  function layoutHeroes(keep){
     const p = (partySrc || party)();
     const solo = isHuntSolo();
     /* ★ v5.107: 시련의 탑(soloSurvival)은 대표 영웅 1명을 중앙에 배치 */
     const survSolo = (dg && dg.soloSurvival);
     /* ★ v5.292: centerHold(일반 몹 던전)도 중앙 배치 — 영웅이 멈춰 서고 몹이 밀려온다 */
     const src = (solo || survSolo) ? [p[0]] : p;
+    /* 출전 구성(영웅 목록)이 같을 때만 잇는다 — 던전 → 홈 1인 복귀·편성 변경·리더 교체는 종전대로 새로(던전의 사망·체력을 홈 영웅이 이어받지 않게). */
+    const _prev = (keep && heroes.length && heroes.map(h=>h.hid).join(',')===src.map(h=>h&&h.hero_id).join(',')) ? new Map(heroes.map(h=>[h.hid,h])) : null;
     const useCenter = solo || survSolo || !!(dg && dg.centerHold);
     heroes = src.map((h,i)=>{
       /* ★ v5.292: useCenter 배치 — 솔로/탑은 정중앙 1명, centerHold(3인)는 중앙 삼각
@@ -2982,7 +2999,7 @@ const Battle = (()=>{
       return {
         hid:h.hero_id, job:h.job, cp:heroPower(h), dmgDone:0, lvl:h.level, grade:h.grade, name:h.name||h.job.name,
         x:cx, y:cy, baseX:cx, baseY:cy,
-        atkT: bRnd(0,0.6), face:h.job.emoji, color:h.job.color, ranged:heroRanged(h.hero_id), lungeT:0,   /* ★ M1: 시드 RNG */
+        atkT: (_prev && _prev.has(h.hero_id)) ? _prev.get(h.hero_id).atkT : bRnd(0,0.6), face:h.job.emoji, color:h.job.color, ranged:heroRanged(h.hero_id), lungeT:0,   /* ★ M1: 시드 RNG · K2: 이어받으면 뽑지 않음 */
         hp:1, dead:false, respT:0,
         skillCD:[0,0,0,0],
         animFrame:0, animT:0, skillAnim:null, skillAnimT:0,  /* ★ v5.36: 스프라이트 애니메이션 */
@@ -3000,6 +3017,13 @@ const Battle = (()=>{
         shieldT: (S.equips||[]).some(e=>e&&e.equipped&&(!e.heroId||e.heroId===h.hero_id)&&slotSchema(e.slot).part==='방패') ? 17 : undefined,
       };
     });
+    if(_prev){ const samePos = keep===1;
+      heroes.forEach(h=>{ const o=_prev.get(h.hid); if(!o) return;
+        h.skillCD=o.skillCD.slice(); h.atkT=o.atkT; h.dmgDone=o.dmgDone; h.hp=o.hp; h.dead=o.dead; h.respT=o.respT; h.lungeT=o.lungeT;
+        h.skillAnim=o.skillAnim; h.skillAnimT=o.skillAnimT; h.animFrame=o.animFrame; h.animT=o.animT;
+        h._lockTarget=o._lockTarget; h._lockUntil=o._lockUntil; h._row=o._row;
+        if((h.shieldT===undefined)===(o.shieldT===undefined)) h.shieldT=o.shieldT;   // 방패를 새로 끼웠거나 뺐으면 새 값
+        if(samePos){ h.x=o.x; h.y=o.y; h.baseX=o.baseX; h.baseY=o.baseY; } }); }
     partyCP = Math.max(1, heroes.reduce((a,h)=>a+h.cp,0));
     /* ★ 2026-09-10: 필드에 서는 영웅이 확정되는 유일한 지점이라 여기서 시트를 데운다.
        파티를 바꾸거나 홈↔던전을 오갈 때도 자동으로 따라온다(refreshParty→layoutHeroes). */
@@ -3351,7 +3375,7 @@ const Battle = (()=>{
             jobId:HERO_FX_OVERRIDE[h.hid]||h.job.id, hid:h.hid, frame:0, ox:h.x, oy:h.y+10 });   /* ★ v5.102: hid 추가 */
           if(isUltimate){
             shake = Math.max(shake, 0.4);
-            sfx('legendary');
+            sfx('ult');   // K2(3차): legendary 는 L 제작·+5 강화·세트 발동·영웅 등장 같은 희소 사건 전용(v5.352 bossdown 분리와 같은 원칙)
           }
         }
         const finalDmg = Math.round(dmg * skillMul);
@@ -4485,7 +4509,7 @@ const Battle = (()=>{
     if(g) w.setAttribute('data-grade', g); else w.removeAttribute('data-grade');
   }
   function start(){ if(running) return; running=true; preloadHeroSheets(); preloadSkillFx(); last=performance.now(); acc=0; resize(); applyStageTint(); requestAnimationFrame(loop); }
-  function refreshParty(){ layoutHeroes(); }
+  function refreshParty(){ layoutHeroes(1); }   // K2(3차): 전투 상태를 이어받는 갱신(layoutHeroes 주석)
   function contributions(){ const tot=heroes.reduce((a,h)=>a+h.dmgDone,0)||1; return heroes.map(h=>({job:h.job,pct:Math.round(h.dmgDone/tot*100)})); }
   window.addEventListener('resize', ()=>{ resize(); });
   function setHunt(){ if(mode==='dungeon') return; mobs=[]; wave=1; lastBossWave=0; wiped=0; combo=0; comboT=0; comboPop=0; layoutHeroes(); }   // 콤보 초기화: 사냥터를 바꿔도 이어지던 것(#14)
@@ -9757,7 +9781,9 @@ function craftAutoCheck(){
      resolveCraft() 와 미묘하게 달랐던 것 — ① 칭호 스트릭(craftFail/craftWin) 미반영
      ② 재료 환급이 레시피 기준이 아니라 등급 풀 뿌리기 ③ 팝업에 ✕+[확인] 동시 노출
      (v5.123 noX 정책 미적용). 자연 만료도 확정/즉시와 같은 단일 경로로 판정한다. */
-  if(S.craft && Date.now()>=S.craft.endAt) resolveCraft();
+  /* ★ 2026-09-25(3차 발견 K2): 전투 중·결과 카드 3초 동안은 판정을 미룬다 — 종전엔 전투 5초에 제작이 자연 완료되면 대장간과 결과 팝업이 전투 화면을 덮고
+     (던전 입장 때 closeModal 로 currentModal 이 비어 있다), 결과 카드 타이머의 closeModal 이 제작 결과 팝업을 지웠다. 결과는 같고 표시만 전투 뒤로 늦어진다. */
+  if(S.craft && Date.now()>=S.craft.endAt && !(Battle.inDungeon && Battle.inDungeon()) && currentModal!=='dgResult' && currentModal!=='arenaResult') resolveCraft();
 }
 
 /* ------- 소환 ------- */

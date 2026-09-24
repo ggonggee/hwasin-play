@@ -3373,6 +3373,26 @@ step('D1 · 동일 시드 100회 실행 → 해시 100% 동일', ()=>{
   console.log(`     시드 0x${seed.toString(16)} · 100회 해시 = ${firstR.hash} (전부 동일)`);
 });
 
+/* ★ 2026-09-25(3차 발견 K2): 전투 도중 refreshParty(레벨업·장착·제작 완료 같은 UI 갱신) — 종전엔 영웅을 새로 만들어 궁극기 쿨·누적 피해를 0 으로 되돌려
+   결과 피해가 −24~−81% 흔들렸다(월드보스·길드 토벌 기록이 그 값). 이제 같은 시드면 중간에 몇 번 갱신해도 결과 해시가 끝까지 관람과 같아야 한다. */
+step('D7 · 전투 중 refreshParty(UI 갱신) → 쿨·기여도 보존 · 결과 해시 동일', ()=>{
+  const seed=0xC0FFEE, base=runSeeded(seed, driverPlain);
+  let snap=null;
+  const withRefresh = runSeeded(seed, (B)=>{
+    for(let k=0;k<100 && B.inDungeon();k++) B.pumpFrame(0.05);   // 5초
+    const cd0=JSON.stringify(B.skillCDs()), ct0=JSON.stringify(B.contributions().map(c=>c.pct));
+    B.refreshParty(); B.refreshParty();
+    snap={ cd0, cd1:JSON.stringify(B.skillCDs()), ct0, ct1:JSON.stringify(B.contributions().map(c=>c.pct)) };
+    for(let k=0;k<60 && B.inDungeon();k++) B.pumpFrame(0.05);
+    B.refreshParty();
+    const r=B.runUntilDone(D_MAX_TICKS); if(!r.finished) throw new Error('완주 못 함'); });
+  const errs=[];
+  if(snap.cd0!==snap.cd1) errs.push('갱신 뒤 궁극기 쿨 초기화 '+snap.cd0+' → '+snap.cd1);
+  if(snap.ct0!==snap.ct1) errs.push('갱신 뒤 기여도 변화 '+snap.ct0+' → '+snap.ct1);
+  if(withRefresh.hash!==base.hash) errs.push('결과 해시 변화 '+JSON.stringify(base.detail)+' → '+JSON.stringify(withRefresh.detail));
+  if(errs.length) throw new Error(errs.join(' | '));
+  console.log(`     전투 중 갱신 3회 = 끝까지 관람 = ${base.hash}`);
+});
 step('D2 · 서로 다른 시드 20개 → 서로 다른 해시(중복 0)', ()=>{
   const seeds = Array.from({length:20}, (_,i)=> (0x1000 + i*0x9E3779B1) >>> 0);
   const hashes = seeds.map(s=>runSeeded(s, driverPlain).hash);
