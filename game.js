@@ -8803,10 +8803,13 @@ function playSummon(res){
       // ★ v4.7: 재료 소환 결과는 4열×5행=20으로 설계. 영웅 조각 결과(G-60)만 4열로 고치고 여기엔 미적용이었다.
       const g=el('div','grid'); g.style.gridTemplateColumns='repeat(4,1fr)'; g.style.gap='5px'; g.style.marginTop='8px';
       // ★ v5.4: 상자를 열면 등급 색 사각형이 아니라 **실제로 받은 재료**가 나온다(아이템 아이콘으로 표시).
-      const openOne=(c,i)=>{ if(c.dataset.open) return; setTimeout(()=>{ const gr=c.dataset.g, mk=c.dataset.k; c.dataset.open='1';
-        c.className='cell gframe grade-'+gr; c.style.aspectRatio='1';
-        c.innerHTML=`<div class="ei" style="font-size:20px">${matIcon(mk)}</div><div class="cn" style="font-size:7.5px">${mk}</div>`;
-        sfx('tap'); }, i*35); };
+      /* ★ 2026-09-25: 상자 열기 = 카드 뒤집기(flip-in). 영웅·레전더리 등급 상자는 열리기 직전 등급색으로 먼저 빛난다(예고 0.28초) —
+         '뭔가 좋은 게 나온다' 는 기대의 순간을 만든다(연출 문법만 차용). 모두 열기는 70ms 간격(종전 35ms — 너무 빨라 읽을 수 없었다). */
+      const openOne=(c,i)=>{ if(c.dataset.open) return; c.dataset.open='1'; const gr=c.dataset.g, mk=c.dataset.k, big=(gr==='E'||gr==='L');
+        const reveal=()=>{ c.className='cell gframe grade-'+gr+' flip-in'; c.style.aspectRatio='1';
+          c.innerHTML=`<div class="ei" style="font-size:20px">${matIcon(mk)}</div><div class="cn" style="font-size:7.5px">${mk}</div>`;
+          sfx(gr==='L'?'legendary':gr==='E'?'craft':'tap'); };
+        setTimeout(()=>{ if(big){ c.classList.add('pre-'+gr); setTimeout(reveal, 280); } else reveal(); }, i*70); };
       const cells=(res.list||[]).map(it=>{ const gr=(it&&it.g)||it, mk=(it&&it.k)||it;
         const c=el('div','cell gframe'); c.style.aspectRatio='1'; c.innerHTML='<div class="ei" style="font-size:22px">'+eImg('📦',1.8)+'</div>';
         c.dataset.g=gr; c.dataset.k=mk; c.onclick=()=>openOne(c,0); g.appendChild(c); return c; });
@@ -8817,9 +8820,10 @@ function playSummon(res){
       if(res.legend) b.appendChild(el('div','center legend-burst',`<div class="ei" style="font-size:56px">🌟</div><div class="big lgd">레전더리 조각 획득!</div>`));
       // ★ B4/G-60: 결과 그리드 5열 → 4열 (X20 = 4열 × 5행)
       const g=el('div','grid'); g.style.gridTemplateColumns='repeat(4,1fr)'; g.style.marginTop='8px';
+      let _di=0;   // ★ 2026-09-25: 결과 카드가 한 장씩 뒤집히며 깔린다(90ms 간격 flip-in)
       for(const id in res.gained){ const j=JOBS.find(x=>x.id===id)||JOBS[0];
         const best=classBest(id); const gr=best?best.grade:'N';
-        const c=el('div','cell gframe grade-'+gr);
+        const c=el('div','cell gframe grade-'+gr+' flip-in'); c.style.animationDelay=(_di++*90)+'ms';
         c.innerHTML=`<div class="ei">${jobIcon(j.id)}</div><div class="cn">${j.name}<br>조각 ×${res.gained[id]}</div>`; g.appendChild(c); }
       b.appendChild(g);
     }
@@ -8846,7 +8850,11 @@ function heroRevealFx(list, gained){
     const r=list[i++]; const e=heroEntry(r.hero_id); const G=GRADES[r.grade];
     b2Overlay('영웅 등장',(bd,close)=>{
       bd.appendChild(el('div','center hr-shard',`조각 X ${fmt((gained&&gained[r.class_id])||0)}`));
-      bd.appendChild(el('div','hr-art',jobIcon(e.job.id)));
+      /* ★ 2026-09-25: 직업 아이콘 → 실제 영웅 초상 + 등급색 광선·후광. '영웅이 왔다' 는 순간인데 종전엔 직업 아이콘(모든 같은 직업 영웅이
+         같은 그림)이라 누가 왔는지 그림으로 알 수 없었다. 초상이 없으면(heroPortrait 가 빈 값) 종전 아이콘으로 대체. */
+      const pic=heroPortrait(r.hero_id, 6.5) || jobIcon(e.job.id);
+      const art=el('div','hr-art hr-g-'+r.grade, `<div class="hr-rays"></div><div class="hr-pic">${pic}</div>`); art.style.setProperty('--hg', G.color);
+      bd.appendChild(art);
       bd.appendChild(el('div','hr-plate',`<b style="color:${G.color}">${G.name}</b> ${e.name}<div class="small mut">${e.job.name}</div>`));
       const ok=el('button','btn gold wide','확인'); ok.onclick=()=>{ close(); next(); };
       bd.appendChild(ok);
