@@ -5927,9 +5927,10 @@ const MODALS = {
       cbtn.onclick=()=>{
         if(S.records<cCost){ toast('영웅 기록서가 부족합니다.'); return; }
         if((S.stones||0)<cStones){ toast('강화석이 부족합니다.'); return; }
+        const cp0=totalCP();   // ★ 2026-09-25: 달성 연출의 전후 비교
         S.records-=cCost; S.stones-=cStones; S.awakenCrystal=(S.awakenCrystal||0)+1;
         sfx('awaken'); Battle.refreshParty();
-        toast(`각성의 결정 ✦${S.awakenCrystal}! 계정 전체 스탯 +0.5%`);
+        growthBurst(`각성의 결정 ✦${S.awakenCrystal}`, [cpDeltaLine(cp0, totalCP()), '계정 전체 스탯 +0.5%'], S.awakenCrystal%5===0?'mile':'up');
         sysLog(`<span class="lgd">각성의 결정</span> <span class="lgd">✦${S.awakenCrystal}단계</span> 달성`);
         openModal('awaken'); refreshHUD(); save();   /* ★ v5.309: 기록서·강화석 소모 확정 즉시 저장 */
       };
@@ -5964,8 +5965,9 @@ const MODALS = {
         for(const k of Object.keys(S.shards)){ if(rem<=0) break; const t=Math.min(S.shards[k]||0,rem); S.shards[k]-=t; rem-=t; }
         for(const k of Object.keys(S.heroShards||{})){ if(rem<=0) break; const t=Math.min(S.heroShards[k]||0,rem); S.heroShards[k]-=t; rem-=t; }
       }
+      const cp0=totalCP();   // ★ 2026-09-25: 달성 연출의 전후 비교
       S.awaken++; sfx('awaken'); Battle.refreshParty();
-      toast(`${deep?'심화 각성':'각성'} +${S.awaken}! 계정 전체 스탯 +1.5%`);
+      growthBurst(`${deep?'심화 각성':'각성'} +${S.awaken}`, [cpDeltaLine(cp0, totalCP()), '계정 전체 스탯 +1.5%'], S.awaken%5===0?'mile':'up');
       sysLog(`${deep?'<span class="lgd">심화 각성</span>':'각성'} <span class="lgd">+${S.awaken}단계</span> 달성`);
       guideCheck('awaken'); openModal('awaken'); refreshHUD();
     };
@@ -8583,6 +8585,17 @@ function enhBurst(e, e0, destroyed){
   root.appendChild(b);
   setTimeout(()=>{ try{ b.remove(); }catch(_){} }, 1400);
 }
+/* ★ 2026-09-25: 성장 달성 연출 공용판 — enhBurst 와 같은 카드(.enh-burst)를 각성·결정 등 다른 성장 순간에도 쓴다.
+   kind: 'up' | 'mile'(5단계마다 이정표). 줄(lines)은 HTML — 호출부가 숫자만 넣는다. */
+function growthBurst(title, lines, kind){
+  const root=$('#modal-root'); if(!root) return;
+  root.querySelectorAll('.enh-burst').forEach(n=>n.remove());
+  const cls = kind==='mile' ? 'up eb-mile' : 'up';
+  const b=el('div','enh-burst eb-'+cls, `<div class="eb-card"><div class="eb-rays"></div><div class="eb-t">${title}</div>${(lines||[]).map(l=>`<div class="eb-l">${l}</div>`).join('')}</div>`);
+  root.appendChild(b);
+  setTimeout(()=>{ try{ b.remove(); }catch(_){} }, 1400);
+}
+function cpDeltaLine(cp0, cp1){ const p=cp0>0?((cp1-cp0)/cp0*100):0; return `전투력 ${fmt(cp0)} → <b>${fmt(cp1)}</b> <span class="eb-pct">(+${p.toFixed(1)}%)</span>`; }
 function openEnhance(e){
   const b=subBody('강화');   // ★ v5.1 착용창 위 오버레이
   b.appendChild(el('div','center',`<div class="ei" style="font-size:52px">${equipImg(e.slot,2.5)}</div><div class="big" style="color:${GRADES[e.grade].color}">${GRADES[e.grade].name} ${e.slot} +${e.enh}</div>`));
