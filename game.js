@@ -1341,6 +1341,17 @@ const ATTEND_DAYS = [
 ];
 /* ★ B9/G-134: 공지 — 제목 밴드 + 양피지 서술형 본문 (목록 → 상세 2단) */
 const NOTICES = [
+  /* ★ v5.330: 버프 적용 정정 안내 — 이용자에게 불리한 정정(프리미엄 방치 ×4→×2)이 포함되므로 숨기지 않고 알린다.
+     동시에 약속만 있고 적용되지 않던 버프(훈련소·길드·길드장·무쇠 캠프)가 이제 실제로 적용됨을 알린다. */
+  { cat:'[수정]', ic:'🛠️', t:'버프 적용 오류를 바로잡았습니다 — 표시와 실제가 같아집니다', d:'2026-09-25',
+    body:'군주들에게 알립니다.<br><br>일부 버프가 안내와 다르게 적용되던 오류를 바로잡았습니다.<br><br>'+
+      '· <b>🛡️ 이제 실제로 적용됩니다</b> — 훈련소 경험치(레벨당 +0.2%), 길드 가입 골드·경험치 +5%, 길드장 골드·경험치 +35%, '+
+      '무쇠 캠프 점령 경험치 +50%, 마을회관 방치 골드(레벨당 +0.2%). 그동안 안내만 되고 적용되지 않았습니다.<br>'+
+      '· <b>💎 골드 프리미엄</b> — 방치 골드가 안내된 +100%가 아니라 두 번 겹쳐 +300%로 들어가던 오류를 안내대로 +100%로 바로잡았습니다. '+
+      '처치 골드 +100%는 그대로입니다.<br>'+
+      '· <b>🔨 장비 분해</b> — 환급 골드에 골드 버프가 붙어 표시된 금액보다 많이 들어가던 것을 표시 금액 그대로 지급하도록 바로잡았습니다.<br>'+
+      '· <b>🗡️ 약탈 활성화</b> — 안내 문구를 실제 효과(약탈 보상 골드 +20%)에 맞게 고쳤습니다.<br><br>'+
+      '[버프] 화면의 합계도 이제 실제로 적용되는 값을 그대로 보여 드립니다.' },
   /* ★ v5.322: 2026-09-24~25 개선 묶음 안내 — 오프라인 12시간(이용자 이득)과 새 화면 요소를 알린다.
      공지 추가로 미열람 점이 자동 점등(NOTICES.length vs noticeSeen 관례). */
   { cat:'[업데이트]', ic:'⚔️', t:'대장간이 더 뜨거워졌습니다 — 방치 정산 12시간 · 전투 연출 개편', d:'2026-09-25',
@@ -3343,7 +3354,7 @@ const Battle = (()=>{
     /* ★ v5.29.1: 경험치 버프(expUntil) + 칭호 경험치 효과 모두 반영.
        종전엔 titleExpMul()만 써서 상점 '경험치+100%' 버프가 안 먹었었음.
        ★ v5.295: 주간 축제 '성장 축제'(×1.2)도 같은 관문 — 벤치 분배(×0.5)는 이 배수를 상속한다. */
-    const expMul = titleExpMul() * ((S.buffs && S.buffs.expUntil > Date.now()) ? 2 : 1) * festivalMul('exp');
+    const expMul = heroExpMul();   // ★ 2026-09-25: 훈련소·길드·무쇠 캠프 포함 정본 관문(종전엔 칭호·프리미엄·축제만)
     /* ★ v5.183: 처치 경험치가 사냥터 등급에 비례(N1 · R2 · E4 · L8, 보스는 5배).
        종전엔 킬당 1 고정이라 필요량(레벨×250) 대비 성장이 이차적으로 느려졌고(시뮬 200h
        Lv49 정체 실측), 상위 사냥터로 옮겨도 레벨링이 빨라지지 않아 '더 강한 몬스터를
@@ -4052,11 +4063,27 @@ function goldBuffMul(){
   if(S.buffs.goldPactUntil>now) pct+=0.5;     // 결정 가호 +50% (v5.247)
   return 1+pct;
 }
+/* ★ 2026-09-25: 획득 배율 관문 단일화 — '표시되는 배율 = 실제로 곱해지는 배율' (코드리뷰 워크플로 발견, 실측 근거).
+   종전 결함: ① 프리미엄 골드가 idleTick(×2)과 addGold(goldBuffMul ×2)에서 두 번 곱해져 방치 골드가 약속 ×2 가 아닌 ×4
+   ② 마을회관 계수가 적용 0.05%p/Lv · 표시 0.2%p/Lv(v4.7 실측 정본)로 달랐다 ③ 훈련소(유료 판매)·길드 +5%·길드장 +35%
+   (창설 확인창 약속)·무쇠 캠프 경험치 +50%(점령 확인창 약속)가 **어디에도 곱해지지 않았다** ④ 버프 화면 합계가 실제와 달랐다.
+   → 아래 관문 함수만 곱하고, 버프 화면·정산·절전의 '분당 골드' 표시도 전부 이 함수에서 파생한다.
+   U1(비감소) 판단: 약속을 지우지 않고 **구현해 지킨다**. 기본 상태(마을 Lv1·길드 미가입·무점령)는 전부 ×1 이라 시뮬 곡선·결정론 불변. */
+function villHallMul(){ return 1 + Math.max(0,((S&&S.villHall)||1)-1)*VILL_BUFF_PP/100; }    // 마을회관 — 방치 골드
+function villTrainMul(){ return 1 + Math.max(0,((S&&S.villTrain)||1)-1)*VILL_BUFF_PP/100; }  // 훈련소 — 경험치
+function guildGainMul(){ return 1 + (guildJoined()?0.05:0) + (S&&S.guildMaster?0.35:0); }     // 길드 +5% · 길드장 +35%(합산)
+function addGoldMul(){ return (1 + arenaGoldBuffPct()/100) * titleGoldMul() * goldBuffMul() * festivalMul('gold') * guildGainMul(); }
+/* 방치 골드 전용 배율(addGold 관문 위에 추가로 곱해지는 것). 프리미엄은 여기 넣지 마라 — addGold 가 이미 곱한다(이중 적용 사고). */
+function idleGoldMul(){ return villHallMul() * costumeGoldMul() * (holdOwn('mine')?1.8:1); }
+function idleGoldPerMin(){ return 18885 * idleGoldMul() * addGoldMul(); }   // 정산·절전·버프 화면의 '1분당 획득 골드' 정본
+function heroExpMul(){ return titleExpMul() * ((S.buffs && S.buffs.expUntil > Date.now()) ? 2 : 1) * festivalMul('exp')
+  * villTrainMul() * guildGainMul() * (holdOwn('camp')?1.5:1); }
 function addGold(n, raw){
   // ★ F2: 칭호의 '몬스터 골드 획득량 +X%' 는 골드 획득 단일 관문인 여기서 한 번만 곱한다.
   // ★ v5.247: 결정 가호(골드 +50%·1시간)도 같은 관문 — raw(고정 보상)에는 적용하지 않는다.
   // ★ v5.295: 주간 축제 '골드 축제'도 같은 관문(×1.2) — raw 계약 보상은 여전히 제외.
-  if(!raw) n = n * (1 + arenaGoldBuffPct()/100) * titleGoldMul() * goldBuffMul() * festivalMul('gold');
+  // ★ 2026-09-25: 길드 버프도 이 관문(addGoldMul) — raw 계약 보상(분해 환급 등)은 제외.
+  if(!raw) n = n * addGoldMul();
   S.gold = Math.min(GOLD_CAP, S.gold + n);
 }
 // ★ B7/G-100: '제작 시간 -50%' 구독 버프 배율 (상점 버프탭에서 구매, 30일)
@@ -4068,12 +4095,9 @@ function craftTimeMul(){ return ((S && S.buffs && S.buffs.craftUntil > Date.now(
    ⚠미확정: 단계별 % 값은 미판독으로 종전 5%p 등차를 유지한다. */
 function personalRankBuffPct(){ const t=clamp((S&&S.arenaTier)|0, 0, TIERS.length-1); return [5,10,15,20,25,30,35][t] || 5; }
 function idleTick(dt){
-  let buff = 1 + (S.villHall-1)*0.0005; // +0.05%p/Lv (확정)
-  if(S.buffs && S.buffs.goldUntil>Date.now()) buff *= 2; // 골드 부스트 상품 +100%
-  // ★ F2: 칭호 골드 버프는 addGold() 에서 일괄 적용한다(여기서 곱하면 이중 적용).
-  buff *= costumeGoldMul();  // 코스튬 골드 버프(착용형 +20% · 보유형 passive +20%)
-  if(holdOwn('mine')) buff *= 1.8; // 점령전: 용암 광산 골드 +80% (★ B8/G-109 holds 스키마 객체화)
-  addGold(18885/60 * dt * buff);
+  /* ★ 2026-09-25: 방치 골드 배율은 idleGoldMul() 하나(마을회관 0.2%p/Lv·코스튬·용암 광산). 프리미엄(goldUntil)은
+     addGold 관문이 곱한다 — 여기서 또 ×2 하던 줄이 약속 ×2 를 ×4 로 만들었다(실측 346→1,385G/s). */
+  addGold(18885/60 * dt * idleGoldMul());
   S.playSec += dt;
   S._tk = (S._tk||0) + dt; if(S._tk>=40){ S._tk=0; S.ticket=Math.min(30,S.ticket+1); }
   S._vm = (S._vm||0) + dt; if(S._vm>=30){ S._vm=0; S.villMat=Math.min(9999,S.villMat+1); } // 마을재료 방치 드랍
@@ -5313,7 +5337,9 @@ function doSalvageBulk(grade){
     const again=salvageBulk(grade);                    // 차감 직전 재검증(같은 패턴)
     if(!again.count){ toast('이미 처리되었습니다.'); return; }
     S.equips=S.equips.filter(e=>e.equipped||e.grade!==grade);
-    addGold(again.gold);
+    /* ★ 2026-09-25: 환급은 raw — 견적(salvageValue)=지급. 골드 버프가 붙으면 제작가를 넘어 제작→분해 순환 이익이 생겼다
+       (실측: L 제작가 1,200만 · 견적 600만 · 프리미엄+칭호 실지급 1,320만). v5.187 '분해는 항상 손실' 원칙 복원. */
+    addGold(again.gold, true);
     S.stats.salvages=(S.stats.salvages||0)+again.count;   // ★ v5.219: 업적 집계
     toast(`${GRADES[grade].name} 등급 ${again.count}개 분해 · 골드 +${fmt(again.gold)}`);
     sysLog(`일괄 분해 — ${GRADES[grade].name} ${again.count}개 → 골드 ${fmt(again.gold)}`);
@@ -7252,7 +7278,7 @@ const MODALS = {
      영웅 상태바 → 통화줄 → 배터리+대형 시계 → 3행×4열(12칸) 그리드 → 2분할 카드 순.
      절전 '시작' 기능은 power 모달로 분리했다. */
   settle:{ title:'방치 정산', render(b){
-    const rate=Math.round(18885*(1+(S.villHall-1)*0.0005)*costumeGoldMul()*titleGoldMul());   // ★ F2 칭호 골드 버프 반영
+    const rate=Math.round(idleGoldPerMin());   // ★ 2026-09-25: 실제 방치 관문(idleGoldPerMin)과 같은 식 — 종전엔 계수 0.0005·버프 일부 누락
     // ① 영웅 상태바 — {직업} {N}LV [경험치바 %]
     const p0=(typeof party==='function')?party()[0]:null;
     if(p0){
@@ -7633,14 +7659,14 @@ const MODALS = {
        ★ G-116: 단일 ON/OFF 텍스트 토글 → [활성화][비활성화] 2버튼 상시 노출(선택된 쪽 초록 테두리) */
     const tg=el('div','pack');
     tg.innerHTML=`<div class="pic">⚡</div><div class="info"><div class="t">약탈 활성화</div>`
-      + `<div class="d">활성화 시 길드레이드 피해 +50%, 골드 획득량 +20%</div>`
+      + `<div class="d">활성화 시 길드레이드 피해 +50%, 약탈 보상 골드 +20%</div>`
       + `<div class="d rd-risk">활성화 중에는 다른 군주의 피약탈 대상이 됩니다.</div></div>`;
     b.appendChild(tg);
     const oo=el('div','rd-onoff');
     [['활성화',true],['비활성화',false]].forEach(([label,on])=>{
       const bt=el('button','rd-ob'+(S.raidOn===on?' on':''),label);
       bt.onclick=()=>{ if(S.raidOn===on) return; S.raidOn=on; S.raidVictim=on;
-        toast(on?'약탈 활성화 — 길드레이드 피해 +50% · 골드 획득량 +20%':'약탈 비활성화'); openModal('raid'); };
+        toast(on?'약탈 활성화 — 길드레이드 피해 +50% · 약탈 보상 골드 +20%':'약탈 비활성화'); openModal('raid'); };
       oo.appendChild(bt);
     });
     b.appendChild(oo);
@@ -7824,34 +7850,33 @@ const MODALS = {
      코스튬·각성·칭호는 캐릭터 스탯창으로, 점령전은 홀드 상태(길드)로, 광고 제거는 상점으로 이관했다. */
   buff:{ title:'버프', render(b){
     const now=Date.now();
-    const joined  = (S.guildJoined===undefined) ? true : !!S.guildJoined;   // B8 미가입 분기 도입 전에는 가입 상태
+    /* ★ 2026-09-25: 합계를 손으로 더하지 않고 실제 관문 함수에서 파생한다 — 표시 = 적용(종전엔 적용 안 되는 항목이 더해지고
+       적용되는 투기장 순위·가호·축제는 빠져 있었다). */
+    const joined  = guildJoined();
     const master  = !!S.guildMaster;
-    const rankPct = personalRankBuffPct();
-    const costPct = Math.round((costumeGoldMul()-1)*100);
-    const holdPct = holdOwn('mine') ? 80 : 0;   // ★ B8/G-109: holds 가 {own,score,mine} 객체가 되어 truthy 판정 불가
-    // ★ F2: 칭호 효과를 TITLES[].e 에서 직접 읽어 집계에 반영한다(하드코딩 id 분기 제거).
+    const arenaPct = arenaGoldBuffPct();
     const wornTitle = TITLE_BY_ID[S.title] || null;
-    const tGoldPct = Math.round(titleEff('gold')*100), tExpPct = Math.round(titleEff('exp')*100);
-    const goldPct = (S.villHall-1)*VILL_BUFF_PP + (S.buffs.goldUntil>now?100:0) + (joined?5:0) + (master?35:0)
-                  + rankPct + costPct + holdPct + tGoldPct;
-    const expPct  = (S.villTrain-1)*VILL_BUFF_PP + (S.buffs.expUntil>now?100:0) + (joined?5:0) + (master?35:0) + tExpPct;
+    const idleGoldPct = (idleGoldMul()*addGoldMul()-1)*100, killGoldPct = (addGoldMul()-1)*100;
+    const expPct  = (heroExpMul()-1)*100;
     const days = ts => ts>now ? `${Math.ceil((ts-now)/86400000)}일 남음` : '미보유';
     /* ★ v5.217: 보유 버프 4종 추가(고서·물약·각성·세트) — v5.210~215 로 구현된
        보유형 버프가 버프 화면에 없었다. '내가 무엇을 받고 있는가'의 전체 목록이 한곳에. */
     const tomeKinds=new Set((S.equips||[]).filter(e=>e&&e.slot&&e.slot.indexOf('고서')>=0).map(e=>e.slot)).size;
     const potKinds=new Set((S.equips||[]).filter(e=>e&&e.slot&&e.slot.indexOf('물약')>=0).map(e=>e.slot)).size;
     const setsOn=activeSets().filter(x=>x.c>0);
-    b.appendChild(el('div','center small mut','현재 적용 중인 버프 집계 (15종)'));
+    b.appendChild(el('div','center small mut','현재 적용 중인 버프 집계 (17종)'));
     [ ['📕','고서 보유',        tomeKinds>0?`계정 스탯 +${(tomeKinds*3)}% (${tomeKinds}종)`:'미보유'],
       ['🧪','물약 보유',        potKinds>0?`자연 회복 +${(potKinds*100)}% (${potKinds}종)`:'미보유'],
       ['⚡','각성',             `+${(S.awaken*1.5).toFixed(1)}% (${S.awaken}단계${(S.awakenCrystal||0)>0?` · 결정 ✦${S.awakenCrystal}`:''})`],
       ['🧩','세트 효과',        setsOn.length?setsOn.map(x=>`${x.n} ${x.c}`).join(' · '):'미착용'],
-      ['🪙','최종 골드',        `+${goldPct.toFixed(2)}%`],
-      ['📈','최종 경험치',      `+${expPct.toFixed(2)}%`],
-      ['🗡️','약탈 활성화 버프', S.raidOn ? '길드레이드 피해 +50% · 골드 획득 +20%' : '비활성'],
+      ['🪙','최종 골드',        `방치 +${idleGoldPct.toFixed(1)}% · 처치 +${killGoldPct.toFixed(1)}%`],
+      ['📈','최종 경험치',      `+${expPct.toFixed(1)}%`],
+      ['🗡️','약탈 활성화 버프', S.raidOn ? '길드레이드 피해 +50% · 약탈 보상 골드 +20%' : '비활성'],
       ['🛡️','길드 버프',        joined ? '골드 +5% · 경험치 +5%' : '길드 미가입'],
       ['👑','길드장 버프',      master ? '골드, 경험치 획득량 35% 증가' : '미보유'],
-      ['🏅','개인랭크 버프',    rankPct>0 ? `${TIERS[S.arenaTier]||'브론즈'} · 골드 +${rankPct}%` : '미보유'],
+      ['🏅','투기장 순위 버프', arenaPct>0 ? `${S.arenaRank}위 · 골드 +${arenaPct}%` : '순위권 밖'],
+      ['⛺','무쇠 캠프 점령',   holdOwn('camp') ? '경험치 +50%' : '미점령'],
+      ['⛏️','용암 광산 점령',   holdOwn('mine') ? '방치 골드 +80%' : '미점령'],
       ['💎','골드 프리미엄',    days(S.buffs.goldUntil)],
       ['📘','경험치 프리미엄',  days(S.buffs.expUntil)],
       ['🔨','제작 프리미엄',    S.buffs.craftUntil>now ? `제작 시간 -50% · ${Math.ceil((S.buffs.craftUntil-now)/86400000)}일 남음` : '미보유'],
@@ -8199,7 +8224,7 @@ function pwBodyHTML(){
   const lv = p0 ? p0.level : 1;
   const pct = clamp(((S.stats&&S.stats.kills)||0)%100, 0, 100);
   // ⑤ 1분당 획득 골드 — settle 모달과 같은 산식(마을회관·코스튬·칭호 버프 반영)
-  const rate = Math.round(18885*(1+((S.villHall||1)-1)*0.0005)*costumeGoldMul()*titleGoldMul());
+  const rate = Math.round(idleGoldPerMin());   // ★ 2026-09-25: 실제 방치 관문과 같은 식
   // ⚠비전미확인 — 촬영대기: 카운트다운의 의미가 불명이라 '다음 1분 정산까지 남은 시간'으로 표시만 한다(경제 영향 없음).
   const cd = 60 - (Math.floor(S.playSec||0)%60);
   const cells=pwCells();
@@ -8552,7 +8577,7 @@ function itemDetail(e, heroId){ _itemDetailHeroId=heroId||null;
          골드를 복제하던 결함의 2차 방어선(1차는 openModal 의 closeSub). */
       if(!S.equips.includes(e)){ closeSub(); toast('이미 처분된 장비입니다.'); return; }
       S.equips=S.equips.filter(x=>x!==e);
-      addGold(gold);
+      addGold(gold, true);   // ★ 2026-09-25: 환급 raw(견적=지급) — doSalvageBulk 주석 참조
       S.stats.salvages=(S.stats.salvages||0)+1;   // ★ v5.219: 업적 집계
       toast(`${GRADES[e.grade].name} ${e.slot} 분해 · 골드 +${fmt(gold)}`);
       sysLog(`장비 분해 — ${GRADES[e.grade].name} ${e.slot} → 골드 ${fmt(gold)}`);

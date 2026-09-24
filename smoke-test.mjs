@@ -2255,6 +2255,36 @@ step('세이브·입력 문자열 HTML 제거 — 가져오기 세이브 태그 
   ev('load')();
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ 2026-09-25 회귀: 획득 배율 '표시 = 적용' — ① 프리미엄 방치 골드가 idleTick·addGold 두 번 곱해져 ×4 였다
+   ② 분해 환급에 골드 버프가 붙어 제작가를 넘었다(순환 이익) ③ 훈련소·길드·무쇠 캠프 경험치가 어디에도 안 곱해졌다. */
+step('획득 배율 관문 — 프리미엄 방치 ×2 · 분해 환급 raw · 훈련소/캠프 경험치 적용', ()=>{
+  const errs=[], S=ev('S');
+  const keep={ gold:S.gold, buffs:JSON.parse(JSON.stringify(S.buffs||{})), villTrain:S.villTrain, holds:JSON.parse(JSON.stringify(S.holds||{})), equips:S.equips, gj:S.guildJoined, gm:S.guildMaster, guild:S.guild };
+  S.buffs=S.buffs||{}; delete S.buffs.goldUntil; delete S.buffs.goldPactUntil; delete S.buffs.expUntil;
+  // ① 프리미엄 방치 골드: 같은 조건에서 goldUntil 만 켰을 때 정확히 2배
+  S.gold=0; ev('idleTick')(1); const base=S.gold;
+  S.buffs.goldUntil=Date.now()+3600e3; S.gold=0; ev('idleTick')(1); const prem=S.gold;
+  const ratio=prem/base; if(Math.abs(ratio-2)>1e-6) errs.push('프리미엄 방치 골드 배율 '+ratio.toFixed(3)+' (약속 2)');
+  // ② 분해 환급: 프리미엄+가호가 켜져도 지급 = 견적
+  S.buffs.goldPactUntil=Date.now()+3600e3;
+  const e={grade:'L', slot:'용암 대검', enh:0, equipped:false, id:'smk_raw'}; S.equips=[e];
+  const quote=ev('salvageBulk')('L').gold; S.gold=0;
+  ev('doSalvageBulk')('L'); const root=ev("document.getElementById('modal-root')"); const y=findBtnByText(root,'예'); if(y) y.onclick(); else errs.push('일괄 분해 [예] 없음');
+  if(Math.round(S.gold)!==Math.round(quote)) errs.push('분해 환급 '+Math.round(S.gold)+' ≠ 견적 '+Math.round(quote));
+  // ③ 경험치: 훈련소 Lv501(+100%)·무쇠 캠프(+50%)가 heroExpMul 에 곱해진다
+  delete S.buffs.goldUntil; delete S.buffs.goldPactUntil;
+  S.guildJoined=false; S.guildMaster=false; S.guild=null; S.villTrain=1; S.holds={};
+  const x0=ev('heroExpMul')();
+  S.villTrain=501; const x1=ev('heroExpMul')();
+  S.holds={ camp:{own:true} }; const x2=ev('heroExpMul')();
+  if(Math.abs(x1/x0-2)>1e-9) errs.push('훈련소 Lv501 경험치 배율 '+(x1/x0).toFixed(3)+' (기대 2)');
+  if(Math.abs(x2/x1-1.5)>1e-9) errs.push('무쇠 캠프 경험치 배율 '+(x2/x1).toFixed(3)+' (기대 1.5)');
+  S.guildJoined=true; S.guildMaster=true; const x3=ev('heroExpMul')();
+  if(Math.abs(x3/x2-1.4)>1e-9) errs.push('길드+길드장 경험치 배율 '+(x3/x2).toFixed(3)+' (기대 1.4)');
+  // 원복
+  S.gold=keep.gold; S.buffs=keep.buffs; S.villTrain=keep.villTrain; S.holds=keep.holds; S.equips=keep.equips; S.guildJoined=keep.gj; S.guildMaster=keep.gm; S.guild=keep.guild;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ 2026-09-25: 정체 계단 패널 — wipeRemedies 는 heroPower 를 '잠깐 바꿔 계산하고 되돌리는' 가정 계산을 한다
    (장비 강화 +1 을 e.enh 에 임시 반영, 빈 부위는 가짜 장비를 S.equips 에 임시 삽입). 되돌리기가 빠지면 버튼 하나 안 눌렀는데
    장비가 강화되거나 유령 장비가 세이브에 박힌다 → 호출 전후 S.equips·전투력이 비트 단위로 같아야 한다. */
