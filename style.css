@@ -1197,6 +1197,9 @@ body.fx-noflash .hr-art .hr-rays{ display:none; }
 @keyframes otpulse{ 0%,100%{ opacity:1; } 50%{ opacity:.55; } }
 .ar-head .ah-time{ font-size:var(--fs-xl); font-weight:800; color:#f6ecd4; letter-spacing:.06em; }
 #stage-wrap.arena-on .timepod{ display:none; }
+#stage-wrap.arena-on .contrib{ top:60px; }   /* 대전 헤더(.ar-head 높이 약 55px)가 기여도 첫 줄을 15px 덮었다(실측) — 투기장에서만 헤더 아래로 */
+/* ★ 2026-09-25(워크플로 #14): 모든 전투(던전·보스·탑·투기장) 중 홈 전용 HUD 숨김 — 기여도 패널·보스 HP 바 왼쪽을 덮었다. 토글은 game.js syncGuideBannerFight */
+#stage-wrap.fight-on .timepod, #stage-wrap.fight-on #festChip, #stage-wrap.fight-on #cpChip{ display:none; }
 
 /* ============================================================
    [B8] 길드·약탈 전용 (G-105~G-116) — 신규 클래스만 추가, 기존 규칙 수정 0건

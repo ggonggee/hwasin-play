@@ -2297,6 +2297,57 @@ step('즉시 결과 — 노출 조건 · 1회 지급 · 계열 기록 · 복귀�
   S.dgSeen=keep.seen; S.guideStep=keep.gs; S.stones=keep.st; S._tower=keep.tw; S.stats.ddStage=keep.dd; S.stats.emberBest=keep.eb;
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ 2026-09-25(리뷰 확정): 인트로 보상 팝업 ✕ → introDone 미설정 → 재생 시 튜토리얼 0단계 되감김. 실행 경로로 검사한다
+   (종전 테스트는 소스 정규식만 봐서 이 경로를 못 잡았다). + 길잡이 배너 전투 중 숨김 · 소환 수량 칩 라벨. */
+step('인트로 ✕ 건너뛰기 — 남은 보상 1회 지급 · introDone · 튜토리얼 되감김 없음', ()=>{
+  const errs=[]; ev('_saveSealed = false; _tabLost = false'); ev('save')();
+  const raw=store.get('hwasin_save_v1'); let S=ev('S');
+  S.introDone=false; S.seenTutorial=false; const t=ev('tutState')(); t.introResGiven=true; t.introClaimed={0:true};
+  S.tutStep=3; S.attendLastDate='x'; S.claimed.attend={};
+  const tk0=S.tickHero, g0=S.gold;
+  ev('introRewards')();
+  if(ev('currentModal')!=='introReward') errs.push('보상 팝업 미표시: '+ev('currentModal'));
+  ev('closeModal')();   // ✕
+  if(!(t.introClaimed[1] && t.introClaimed[2])) errs.push('남은 칸 미지급: '+JSON.stringify(t.introClaimed));
+  if(S.introDone!==true) errs.push('introDone 미설정');
+  if(S.tickHero!==tk0+1) errs.push('소환권 '+(S.tickHero-tk0)+' (기대 +1)');
+  if(!(S.gold>g0)) errs.push('첫 방치 골드 미지급');
+  ev('nextDialogue')(); ev('nextDialogue')();   // 튜토리얼 시작 대사 2줄 넘김 → 콜백
+  if(S.tutStep!==3) errs.push('튜토리얼 되감김: tutStep '+S.tutStep+' (기대 3)');
+  const tk1=S.tickHero; ev('introRewards')(); ev('closeModal')();
+  if(S.tickHero!==tk1) errs.push('재진입 시 중복 지급');
+  store.set('hwasin_save_v1', raw); ev('load')();
+  if(errs.length) throw new Error(errs.join(' | '));
+});
+step('잠긴 창 복귀 정산 차단 · 배경 로드 탭 숨김 시각 포착', ()=>{
+  const errs=[], S=ev('S'), doc=ev('document'), vis=doc._ev && doc._ev.visibilitychange;
+  if(typeof vis!=='function') throw new Error('visibilitychange 핸들러 미등록');
+  const keep={ hidden:doc.hidden, p:S.offlinePending, ls:S.lastSeen };
+  ev('_saveSealed = true'); ev('_tabHideTs='+(ev('Date.now()')-3600e3)); doc.hidden=false; S.offlinePending=0;
+  vis();
+  if((S.offlinePending||0)!==0) errs.push('잠긴 창에서 복귀 정산 '+S.offlinePending);
+  ev('_saveSealed = false; _tabLost = false'); ev('_tabHideTs=0');
+  // 배경 로드: 부팅 경로 소스 — load() 뒤에서 document.hidden 이면 _tabHideTs 를 잡는다(초기값이 아니라)
+  const boot=js.slice(js.indexOf("  load();\n  /* ★ 2026-09-25(리뷰 확정): 배경에서"), js.indexOf('  wire(); refreshHUD(); applyFxClass();'));
+  if(!/if\(document\.hidden && !_tabHideTs\) _tabHideTs=Date\.now\(\);/.test(boot)) errs.push('배경 로드 탭 _tabHideTs 포착이 load() 뒤에 없다');
+  if(!/let _tabHideTs=0;/.test(js)) errs.push('_tabHideTs 초기값 변경됨(0 이어야 — 정산 순서)');
+  doc.hidden=keep.hidden; S.offlinePending=keep.p; S.lastSeen=keep.ls;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
+step('길잡이 배너 — 전투 중 숨김(투기장 헤더·기여도 가림 방지) · 소환 수량 칩 라벨', ()=>{
+  const errs=[], S=ev('S'), B=ev('Battle'), bn=ev("$('#guide-banner')");
+  const keep={ st:S.seenTutorial, gs:S.guideStep };
+  S.seenTutorial=true; S.guideStep=0; ev('updateGuideBanner')();
+  if(bn.classList.contains('hidden')) errs.push('평시 배너 숨김');
+  ev('enterDungeonFight')({ name:'스모크배너 · 1단계', col:'#fff', foeCP:1, kind:'mobs', count:1, dur:5 });
+  if(!bn.classList.contains('hidden')) errs.push('전투 중 배너 노출');
+  B.finishNow(); ev('syncGuideBannerFight')();
+  if(bn.classList.contains('hidden')) errs.push('전투 뒤 배너 미복귀');
+  ev('closeModal')();
+  if(js.includes("['10회',")) errs.push("소환 수량 칩 '10회' 고정 라벨 잔존");
+  S.seenTutorial=keep.st; S.guideStep=keep.gs; ev('updateGuideBanner')();
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ 2026-09-25(워크플로 #13): 모험 타일 남은 횟수 배지 — 각 모달의 게이트 키와 같은 값 · 읽기 전용(카운트 불변). */
 step('모험 타일 배지 — 게이트 키 일치 · 읽기 전용', ()=>{
   const errs=[], S=ev('S'), B=ev('advLeftBadge'), ms=ev('monthlyState')();

@@ -4955,6 +4955,11 @@ function introRewards(){
       S.shards[r.class_id]=(S.shards[r.class_id]||0)+HERO_SHARD_NEED.R; });
     _t.introResGiven=true; save();
   }
+  /* ★ 2026-09-25(리뷰 확정): 보상 팝업을 ✕ 로 닫으면 closeModal 이 튜토리얼만 시작하고 introDone 을 남기지 않아, 새로고침마다 인트로가 재생되고
+     남은 보상을 마저 받는 순간 startGuidedTutorial 이 한 번 더 돌아 진행 중인 튜토리얼을 0단계로 되감았다.
+     ✕ = '건너뛰기' — 남은 칸을 지금 전부 지급(칸별 introClaimed 멱등 기록 그대로 → 중복·유실 없음)하고 인트로를 끝낸다. */
+  _introSkip=()=>{ for(let k=0;k<rewards.length;k++){ if(_t.introClaimed[k]) continue; rewards[k].act(); if(k===2) addGold(720000); _t.introClaimed[k]=true; }
+    S.introDone=true; save(); refreshHUD(); toast('남은 환영 보상을 모두 받았습니다'); };
   _introActive=true; let i=0;
   (function showNext(){
     while(i<rewards.length && _t.introClaimed[i]) i++;        // ★ v5.115: 이미 받은 칸은 건너뛴다
@@ -4963,7 +4968,7 @@ function introRewards(){
          노드가 남아 있어(closeModal 은 on 클래스만 뗀다) 비정상 경로로 재클릭되면
          startGuidedTutorial 이 다시 돌아 tutStep 을 0 으로 되돌릴 수 있었다. */
       if(S.introDone){ _introRunning=false; closeModal(); return; }
-      S.introDone=true; save(); _introActive=false; startGuidedTutorial(); return; }
+      S.introDone=true; save(); _introActive=false; _introSkip=null; startGuidedTutorial(); return; }
     const idx=i, r=rewards[i++]; setModalTitle('보상 획득'); const b=$('#modalBody'); b.innerHTML='';
     if(idx===1){
       // ② 7일 출석 전체 그리드 — 1일차만 체크된 상태로 노출
@@ -4995,7 +5000,10 @@ function startGuidedTutorial(){
   /* ★ v5.28.1: 튜토리얼 시작 시 자동전투 명시적 ON — 토글 표시 일치.
      전투는 항상 돌지만 Off로 표시되면 "왜 안 싸우지?" 혼란 유발. */
   S.autoBattle = true; syncAutoBat();
-  showDialogue(['먼저 몬스터를 사냥해 실력을 증명하세요. 하단 [몬스터]에서 사냥터를 고를 수 있습니다.','미션은 화면을 여는 것이 아니라 실제로 완료해야 진행됩니다.'], ()=>{ _introRunning=false; S.tutStep=0; _tutProg=0; tutState().base={}; renderTutorial(); });
+  showDialogue(['먼저 몬스터를 사냥해 실력을 증명하세요. 하단 [몬스터]에서 사냥터를 고를 수 있습니다.','미션은 화면을 여는 것이 아니라 실제로 완료해야 진행됩니다.'], ()=>{ _introRunning=false;
+    /* 이미 진행 중인 튜토리얼은 되감지 않는다 — 구세이브(✕ 로 인트로를 건너뛰어 introDone 이 없는 채 진행한 이용자)가 인트로를 마저 끝낼 때의 0단계 리셋 차단. */
+    if(!(S.tutStep>0)){ S.tutStep=0; _tutProg=0; tutState().base={}; }
+    renderTutorial(); });
 }
 // --- 길잡이 배너 (제작 체인) ---
 /* ★ 길잡이 9단계 — 전부 '제작' 이벤트로만 진행되는 순수 제작 체인.
@@ -5043,9 +5051,22 @@ function syncGuideOffset(){
   const v = h>0 ? (h+4)+'px' : '0px';
   if(sw._gbh!==v){ sw._gbh=v; sw.style.setProperty('--gbh', v); }
 }
+let _gbInFight=false;
+/* 캐시 비교만 하면 직전 전투 종료를 놓친 채 다음 전투가 시작될 때(틱 사이) 숨김을 건너뛴다 — 전투 중엔 실제 배너 표시 상태를 본다. */
+function syncGuideBannerFight(){
+  const f=Battle.inDungeon(), bn=$('#guide-banner'), sw=$('#stage-wrap');
+  /* ★ 2026-09-25(워크플로 #14): 전투 중 홈 전용 HUD(시계·축제·전투력 칩)를 숨긴다 — 기여도 패널(.contrib top:40)과 보스 HP 바(y=42) 왼쪽을
+     덮어 '누가 몇 % 기여하는지'를 읽을 수 없었다(실측 스크린샷). 투기장은 종전부터 arena-on 으로 같은 처리를 했다 — 모든 전투로 넓힌다. */
+  if(sw && sw.classList.contains('fight-on')!==f) sw.classList.toggle('fight-on', f);
+  if(f){ _gbInFight=true; if(bn && !bn.classList.contains('hidden')) updateGuideBanner(); }
+  else if(_gbInFight){ _gbInFight=false; updateGuideBanner(); }
+}
 function updateGuideBanner(){
   const bn=$('#guide-banner'); if(!bn) return;
-  if(!S.seenTutorial || S.guideStep>=GUIDE_CHAIN.length){ bn.classList.add('hidden'); syncGuideOffset(); return; }
+  /* ★ 2026-09-25(리뷰 확정): 전투(던전·투기장) 중에는 숨긴다 — 배너(z7)가 투기장 헤더 #ar-head(상대·타이머, z6)를 매치 내내 덮었고,
+     배너 높이만큼 내려간 시계(.timepod)가 기여도 패널(.contrib top:40 고정)의 영웅 이름을 덮었다. 전투 중엔 제작 안내가 쓸모없고,
+     숨기면 --gbh 가 0 이 되어 HUD 가 원래 자리로 돌아간다. 전투 시작·종료 전환은 0.5초 HUD 틱(syncGuideBannerFight)이 잡는다. */
+  if(!S.seenTutorial || S.guideStep>=GUIDE_CHAIN.length || Battle.inDungeon()){ bn.classList.add('hidden'); syncGuideOffset(); return; }
   const g=GUIDE_CHAIN[S.guideStep], need=GUIDE_NEED[S.guideStep]||1, prog=S.guideProg||0;
   bn.classList.remove('hidden');
   /* ★ v5.109: 길잡이 목표 아이콘도 아이콘 팩을 쓴다(종전엔 이모지 그대로 노출).
@@ -5121,8 +5142,8 @@ function openModal(key, arg){   // ★ B3/G-45: arg 전달 (예: openModal('equi
   $('#modal-root').classList.add('on');
   if(!same) tutorialProgress(key);
 }
-let _introActive=false;
-function closeModal(){ closeSub(); $('#modal-root').classList.remove('on'); currentModal=null; if(_introActive){ _introActive=false; startGuidedTutorial(); } tutFingerTick();
+let _introActive=false, _introSkip=null;
+function closeModal(){ closeSub(); $('#modal-root').classList.remove('on'); currentModal=null; if(_introActive){ _introActive=false; const sk=_introSkip; _introSkip=null; if(sk) sk(); startGuidedTutorial(); } tutFingerTick();
   /* 대기 중이던 전멸 분석을 띄운다. 250ms 사이 다른 화면이 열리면(closeModal(); openModal(X) 패턴 — 이 파일에 흔하다) 버리지 말고
      다시 대기시켜 그 화면을 닫을 때 띄운다(코드리뷰 2026-09-25 발견: 종전엔 여기서 조용히 유실됐다 — queueWipeAdvice 와 대칭). */
   if(_wipePending!==null){ const t=_wipePending; _wipePending=null; setTimeout(()=>{ if(!currentModal) showWipeAdvice(t); else if(_wipePending===null) _wipePending=t; }, 250); } }
@@ -6409,7 +6430,8 @@ const MODALS = {
           const cd=el('div','b2-flavor',`소모: ${costTxt}`); bd.appendChild(cd);
           let n=1;
           if(multi && S.seenTutorial && S.tickHero>1){
-            const maxN=S.tickHero, opts=[['1회',1],['10회',Math.min(10,maxN)],[`최대 ${fmt(maxN)}회`,maxN]].filter((o,i,a)=>i===0||o[1]>a[i-1][1]);
+            /* 라벨 = 실제 값 — 종전 '10회' 고정 문자열은 소환권 2~9장일 때 실제로는 N회를 소환하면서 '10회'로 표기했다(리뷰 확정). */
+            const maxN=S.tickHero, opts=[['1회',1],[`${Math.min(10,maxN)}회`,Math.min(10,maxN)],[`최대 ${fmt(maxN)}회`,maxN]].filter((o,i,a)=>i===0||o[1]>a[i-1][1]);
             const ch=el('div','sum-n');
             const paint=()=>{ ch.querySelectorAll('.sum-n-c').forEach((c,i)=>c.classList.toggle('on', opts[i][1]===n));
               qd.innerHTML=`<div class="sum-qty">X ${fmt(qty*n)}</div>`; cd.textContent=`소모: 소환권 ${fmt(n)}`; };
@@ -9290,6 +9312,7 @@ function arenaFight(){
     dmgMul:ARENA_DMG_MUL, foeHeroes,
     onEnd:(win)=>arenaResult(win, foeName, foeCP, foeTier) });
   arenaHeadShow(foeName, foeTier);
+  syncGuideBannerFight();   // 길잡이 배너가 #ar-head 를 덮지 않게 즉시 숨긴다(0.5초 틱을 기다리지 않음)
 }
 function arenaResult(win, foeName, foeCP, foeTier){
   arenaHeadHide();
@@ -9545,7 +9568,7 @@ function enterDungeonFight(cfg){
        ⚠ endDungeon·loop 에서 부르지 마라: 결정론 검사(D 시나리오)는 startDungeon 을 직접 부르므로 거기서 부르면 기준 해시가 바뀌고,
        loop 는 렌더 경로에서 시뮬 상태를 바꾸게 된다. */
     onEnd:(win,stats)=>{ _dgCfg=null; try{ showDungeonResult(cfg,win,stats); } finally { Battle.refreshParty(); } } });
-  tickDgSkip();
+  tickDgSkip(); syncGuideBannerFight();
 }
 /* ★ v4.5.1: 던전 결과창 "뭘 받았다" — 보상 함수를 하나하나 고치지 않고
    실행 전후 지갑을 비교해 실제 증가분만 칩으로 보여준다(투기장 델타와 같은 취지).
@@ -9618,7 +9641,7 @@ function tickForge(){
 function gameLoop(ts){
   const dt=Math.min(0.1,(ts-lastFrame)/1000||0); lastFrame=ts;
   idleTick(dt); chatTick(dt); craftAutoCheck(); tutFingerTick();
-  hudT-=dt; if(hudT<=0){ hudT=0.5; refreshHUD(); tickClock(); tickForge(); reviveHUDTick(); tickDgSkip(); }
+  hudT-=dt; if(hudT<=0){ hudT=0.5; refreshHUD(); tickClock(); tickForge(); reviveHUDTick(); tickDgSkip(); syncGuideBannerFight(); }
   requestAnimationFrame(gameLoop);
 }
 setInterval(()=>{ save(); refreshClaimBadges(); try{ updateGuideBanner(); }catch(e){} }, 5000);   // ★ 2026-09-25: 골드가 차면 배너가 '부족'에서 원래대로(글자는 바뀔 때만 씀)   /* ★ v5.162: 배지 갱신 동반 — 전투 중 미션 달성도 5초 안에 점이 켜진다 */
@@ -9641,6 +9664,9 @@ function _visibilitySettle(hideTs, nowTs){
   return add;
 }
 document.addEventListener('visibilitychange', ()=>{
+  /* ★ 2026-09-25(리뷰 확정): 잠긴 창(loseTab)·가져오기/초기화 직후 새로고침 대기 창은 저장하지 않는다 — 받을 수 없는 '복귀 정산' 토스트를 띄우지 않는다.
+     _saveSealed 는 한 번 켜지면 새로고침으로만 풀리고, 새로고침 뒤엔 computeOffline 이 저장된 lastSeen 으로 정산하므로 건너뛰어도 잃는 정산이 없다. */
+  if(_saveSealed) return;
   if(document.hidden){ _tabHideTs=Date.now(); return; }
   const ts=_tabHideTs; _tabHideTs=0;
   if(ts) _visibilitySettle(ts, Date.now());
@@ -9858,7 +9884,12 @@ window.addEventListener('error', (e)=>{ reportFatal('script', e.error || e); });
 window.addEventListener('unhandledrejection', (e)=>{ reportFatal('promise', e.reason || e); });
 
 window.addEventListener('DOMContentLoaded',()=>{
-  load(); wire(); refreshHUD(); applyFxClass();
+  load();
+  /* ★ 2026-09-25(리뷰 확정): 배경에서 열린 탭(새 탭 배경 열기·세션 복원)은 숨김 '전이'가 없어 _tabHideTs 가 0 으로 남는다 → save 가 5초마다
+     lastSeen 을 '지금'으로 밀어, 한 번도 안 보고 닫으면 그 구간 방치 수익이 사라졌다(재현: 3시간 → 10분만 인정). load(computeOffline 이
+     로드 시각까지 정산) **뒤에** 잡아야 겹쳐 세지 않는다 — _tabHideTs 초기값에 넣지 마라(정산보다 먼저 실행돼 순서가 뒤집힌다). */
+  if(document.hidden && !_tabHideTs) _tabHideTs=Date.now();
+  wire(); refreshHUD(); applyFxClass();
   scheduleUIScale();
   /* ★ v5.201: 접속 보상 토스트 플러시 — rollDaily 가 load() 안에서 돌아 이 시점에야
      #toast 상자가 살아 있다. 보상은 이미 지급됨(sysLog도 load 중 기록). */
