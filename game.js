@@ -4450,6 +4450,16 @@ function tutTarget(){
   return null;
 }
 let _fingerEl=null, _fingerTarget=null, _fingerWait=null;
+/* 튜토리얼 손 — 손끝이 SVG 좌표 (15,1) 에 오도록 그렸다. CSS(.tut-finger svg) 가 그 점을 #tutFinger 의 원점에
+   맞춘다(left:-15px; top:-1px). 모양을 고치면 손끝 좌표와 CSS 오프셋을 함께 고쳐야 한다. 높이 = TUT_HAND_H. */
+const TUT_HAND_H = 54;
+const TUT_HAND_SVG = '<div class="tf-rot"><svg class="tf-hand" viewBox="0 0 40 54" width="40" height="54" aria-hidden="true">'
+  + '<g id="tutHandShape"><rect x="10" y="1" width="10" height="31" rx="5"/><rect x="7" y="21" width="27" height="27" rx="9"/>'
+  + '<rect x="19" y="16" width="8" height="17" rx="4"/><rect x="26" y="19" width="8" height="15" rx="4"/>'
+  + '<rect x="1" y="26" width="14" height="9" rx="4.5" transform="rotate(35 8 30)"/></g>'
+  + '<use href="#tutHandShape" fill="#2b1b0c" stroke="#2b1b0c" stroke-width="4" stroke-linejoin="round"/>'
+  + '<use href="#tutHandShape" fill="#fff3dc"/>'
+  + '<rect x="8" y="45" width="25" height="8" rx="2" fill="#d19a3c" stroke="#2b1b0c" stroke-width="2"/></svg></div>';
 function clearFinger(){
   document.querySelectorAll('.tut-highlight').forEach(e=>e.classList.remove('tut-highlight'));
   if(_fingerEl) _fingerEl.style.display='none'; _fingerTarget=null;
@@ -4464,7 +4474,7 @@ function tutFingerTick(){
   if(waiting!==_fingerWait){ _fingerWait=waiting; renderTutorial(); }
   if(waiting && st.waitTxt){ const w=$('#onboard .ob-wait'); if(w){ const txt=(typeof st.waitTxt==='function')?st.waitTxt():st.waitTxt; if(w.textContent!==txt) w.textContent=txt; } }
   if(!t){ if(_fingerTarget) clearFinger(); return; }
-  if(!_fingerEl){ _fingerEl=el('div','tut-finger','👆'); _fingerEl.id='tutFinger'; $('#device').appendChild(_fingerEl); }
+  if(!_fingerEl){ _fingerEl=el('div','tut-finger',TUT_HAND_SVG); _fingerEl.id='tutFinger'; $('#device').appendChild(_fingerEl); }
   if(t!==_fingerTarget){
     document.querySelectorAll('.tut-highlight').forEach(e=>e.classList.remove('tut-highlight'));
     t.classList.add('tut-highlight'); _fingerTarget=t;
@@ -4475,8 +4485,20 @@ function tutFingerTick(){
      배율로 나눠 되돌린다(v5.108). 매 프레임 다시 재므로 스크롤·팝인 애니메이션 뒤에도 따라간다. */
   const ui=(typeof UI_SCALE==='number' && UI_SCALE>0)?UI_SCALE:1;
   _fingerEl.style.display='';
-  _fingerEl.style.left=((r.left-dr.left+r.width/2)/ui-12)+'px';
-  _fingerEl.style.top=((r.top-dr.top)/ui-26)+'px';
+  /* ★ 2026-09-25: 손끝이 버튼 '안쪽' 을 짚는다(대표 지적: "손끝이 가리켜야 할 부분을 가리켜야 한다").
+     종전엔 위를 향한 👆 이모지를 버튼 '위쪽'(top-26)에 두어 손끝은 허공을 향하고 손바닥이 버튼 윗변에
+     걸쳤다 — 무엇을 누르라는 건지 애매했다. 게다가 이모지는 OS 글꼴마다 손끝 위치가 달라 좌표를
+     맞출 수가 없다. 그래서 손끝 좌표가 고정된 SVG 손(TUT_HAND_SVG)으로 바꾸고, 요소(#tutFinger)
+     자체를 '손끝 한 점' 에 둔다(크기 0 — CSS 가 그 점을 기준으로 손을 그린다).
+     · 기본: 손이 아래에서 올라와 버튼 가로 중앙·세로 60% 지점을 짚는다(라벨을 가리지 않게 손은 아래로).
+     · 아래 공간이 모자라면(하단 내비 등) 뒤집어 위에서 내려와 40% 지점을 짚는다(.tf-down). */
+  const tx=(r.left-dr.left+r.width/2)/ui;
+  const h=r.height/ui, top=(r.top-dr.top)/ui, devH=$('#device').offsetHeight||812;
+  const down = top + h*0.6 + TUT_HAND_H > devH - 4;
+  const ty = down ? top + h*0.4 : top + h*0.6;
+  _fingerEl.classList.toggle('tf-down', down);
+  _fingerEl.style.left=tx+'px';
+  _fingerEl.style.top=ty+'px';
 }
 /* STEP 안내 박스가 손가락 목표를 덮으면 전장 아래쪽(.ob-low)으로 비킨다 (2026-09-24).
    실측 결함: 소환 모달이 열린 채 STEP 7(영웅 합성)로 넘어가면 손가락이 좌상단 ✕ 를 짚는데, 모달 위로 올라온
