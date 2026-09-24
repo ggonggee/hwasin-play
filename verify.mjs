@@ -187,6 +187,7 @@ const refU=[...new Set(refs)];
    _monTicketRefund 그 이관이 남기는 환불 안내량. 표시하고 0 으로 지운다(없으면 안내 생략). */
 const FS_EXEMPT = new Set(['_huntV','_tk','_vm','_monTicketV','_monTicketRefund',
   '_pendingLoginToast',
+  '_titleGuildV',   // ★ 2026-09-25: 길드 칭호 조건 변경의 1회 이관 플래그 — freshState 에 넣으면 mergeDefaults 가 먼저 채워 이관이 스킵된다(AGENTS 3). 신규 세이브는 load() 신규 분기에서 1.
   '_towerPrevForBanner']);   // ★ v5.208: 탑 신기록 판정용 직전 기록 캡처 — 휘발성(입장~결과창 사이만).   // ★ v5.201: 접속 보상 토스트 플러시 큐 — 휘발성(부팅 중 rollDaily→DOMContentLoaded 사이만 존재). 세이브될 필요 없음.
 const notInFS=refU.filter(x=>!FS_KEYS.includes(x));
 console.log('[C] freshState에 없는 S.필드 참조:', notInFS.length? JSON.stringify(notInFS):'없음 ✅');

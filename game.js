@@ -1280,16 +1280,24 @@ const TITLES = [
     cond:'‘작열’ 세트 8세트 달성',
     have:()=>{ try{ return setPieceCount('작열')>=8; }catch(e){ return false; } } },
   { id:'pioneer',    g:'L',  n:'지혜의 대장장이', fx:'몬스터 골드 획득량 +20%', e:{gold:0.20},
-    cond:'길드 랭킹 1위 — 최강 길드의 증명',
-    have:()=>{ try{ return guildJoined() && guildTotalScore()>=GUILD_RANK[0][1]; }catch(e){ return false; } } },
+    cond:'길드 기여 점수 51,000점(랭킹 1위 점수) 달성 — 최강 길드의 증명',
+    /* ★ 2026-09-25: 내 기여(S.guildScore)만 센다 — 종전 guildTotalScore 는 가입한 NPC 길드의 기준 점수를 더해, 1위 길드에 [신청] 한 번으로
+       레전더리 칭호 2종을 얻었다(검증 워크플로 #19 실측). 이미 얻은 이용자는 mergeDefaults 1회 이관으로 보존(U1). 51,000 = GUILD_RANK[0][1]. */
+    have:()=>{ try{ return guildJoined() && (S.guildScore||0)>=GUILD_RANK[0][1]; }catch(e){ return false; } } },
   // 27·28 두 칭호는 조건·수치가 완전히 동일한 별개 칭호다(중복 지급). 구조를 그대로 유지한다.
   { id:'outlaw',     g:'L',  n:'그림자 상인',  fx:'몬스터 골드 획득량 +20%', e:{gold:0.20},
-    cond:'길드 랭킹 1위 — 최강 길드의 증명',
-    have:()=>{ try{ return guildJoined() && guildTotalScore()>=GUILD_RANK[0][1]; }catch(e){ return false; } } },
+    cond:'길드 기여 점수 51,000점(랭킹 1위 점수) 달성 — 최강 길드의 증명',
+    /* ★ 2026-09-25: 내 기여(S.guildScore)만 센다 — 종전 guildTotalScore 는 가입한 NPC 길드의 기준 점수를 더해, 1위 길드에 [신청] 한 번으로
+       레전더리 칭호 2종을 얻었다(검증 워크플로 #19 실측). 이미 얻은 이용자는 mergeDefaults 1회 이관으로 보존(U1). 51,000 = GUILD_RANK[0][1]. */
+    have:()=>{ try{ return guildJoined() && (S.guildScore||0)>=GUILD_RANK[0][1]; }catch(e){ return false; } } },
 ];
 const TITLE_BY_ID = {}; TITLES.forEach(t=>TITLE_BY_ID[t.id]=t);
 function titleGradeColor(g){ return (TITLE_GRADES[g]||TITLE_GRADES.N).c; }
 // 소유 판정 — 조건 달성 또는 상점/패키지 지급(S.titleOwn)
+/* ★ 2026-09-25: 달성한 칭호를 보유로 기록한다(조건형 칭호가 달성 순간에만 보유로 보이다 조건을 잃으면 목록에서 사라지고, 착용 효과만
+   남던 불일치 — 검증 워크플로 #19). 한 번 달성하면 계속 보유. t.own(용암 — 보유 시 스폰 동작)은 제외(현행 유지). */
+function titleSyncOwn(){ if(!S || typeof TITLES==='undefined') return; S.titleOwn=S.titleOwn||{};
+  TITLES.forEach(t=>{ if(t.own || S.titleOwn[t.id]) return; let ok=false; try{ ok=!!(t.have&&t.have()); }catch(e){} if(ok) S.titleOwn[t.id]=true; }); }
 function titleOwned(t){
   if(S && S.titleOwn && S.titleOwn[t.id]) return true;
   try{ return !!(t.have && t.have()); }catch(e){ return false; }
@@ -1596,6 +1604,7 @@ function load(){
   //   화염 N(도르카) + 빙결 N(리엔) 시작 보유.
   S.heroes.HERO_001 = { level:1, own:true };
   S.heroes.HERO_002 = { level:1, own:true };
+  S._titleGuildV = 1;   // ★ 2026-09-25: 신규 세이브는 길드 칭호 이관(mergeDefaults) 대상이 아니다 — freshState 에 넣지 않는 이관 플래그(AGENTS 3)
 }
 /* ★ B4/G-50: 구세이브 마이그레이션 — S.heroes 의 직업키({grade,level,own})를 hero_id 키로 변환한다.
    구조상 '직업 X를 g등급까지 승급'은 '해당 직업의 g등급 이하 영웅을 전부 보유'와 동등하므로
@@ -1721,6 +1730,12 @@ function mergeDefaults(){ scrubSaveStrings(S); deepFill(S, freshState());   // �
     S.huntTier = HUNT_MIGRATE_V47[S.huntTier]; }
   S._huntV = 47;
   S.huntTier = clamp(S.huntTier||0, 0, HUNT_TIERS.length-1);
+  /* ★ 2026-09-25: 길드 칭호(pioneer·outlaw) 조건을 '내 기여 점수'로 좁히기 전에 옛 조건(가입 길드 기준 점수 + 내 기여)으로 이미 얻은
+     이용자는 보유로 기록해 둔다(U1 비감소). 1회만(_titleGuildV). */
+  if(S._titleGuildV!==1){ try{ if(guildJoined() && guildBaseScore()+(S.guildScore||0)>=GUILD_RANK[0][1]){ S.titleOwn=S.titleOwn||{}; S.titleOwn.pioneer=true; S.titleOwn.outlaw=true; } }catch(e){} S._titleGuildV=1; }
+  /* ★ 2026-09-25: 착용 중인 칭호는 보유로 기록 — 조건을 잃어도 효과가 남던 불일치를 '보유'로 맞춘다(착용 효과가 이미 적용 중이라 줄지 않는다). */
+  try{ if(S.title && TITLE_BY_ID[S.title] && !TITLE_BY_ID[S.title].own){ S.titleOwn=S.titleOwn||{}; S.titleOwn[S.title]=true; } }catch(e){}
+  titleSyncOwn();
 }
 /* ★ 저장 실패 사용자 알림 — 기존엔 빈 catch 로 저장 실패를 완전히 삼켰다. 방치형 게임에서
    저장 실패(QuotaExceeded·시크릿 모드·스토리지 비활성)를 모른 채 플레이하면 진행도가 통째로 날아간다.
@@ -1921,6 +1936,7 @@ function refreshClaimBadges(){
   _setDot(document.querySelector('[data-modal="mail"]'), m);
   _setDot(document.getElementById('btnMenuToggle'), q||a||n||od||m);
   /* ★ v5.271: 칭호 개선 가능 — [data-modal="titles"] 항목(드로어 내 칭호). ☰ 합산. */
+  titleSyncOwn();   // ★ 2026-09-25: 달성한 칭호를 보유로 기록(5초 주기)
   const tu=titleUpgradeable();
   _setDot(document.querySelector('[data-modal="titles"]'), tu);
   if(tu) _setDot(document.getElementById('btnMenuToggle'), true);
@@ -8229,6 +8245,7 @@ const MODALS = {
   }},
   /* ★ B9/G-118·G-119: 칭호 — (보유)/(도감) 2뷰 토글. 착용중 칭호는 해제 불가([착용중] disabled). */
   titles:{ title:'칭호', render(b){
+    titleSyncOwn();   // ★ 2026-09-25: 화면을 열 때도 달성분을 보유로 기록
     let view = MODALS.titles._view || '보유';
     const body=el('div');
     const foot=el('button','btn sm wide',''); foot.style.marginTop='10px';

@@ -2255,6 +2255,27 @@ step('세이브·입력 문자열 HTML 제거 — 가져오기 세이브 태그 
   ev('load')();
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ 2026-09-25 회귀(워크플로 #19): 1위 NPC 길드 [신청] 한 번으로 레전더리 칭호 2종 / 조건형 칭호 달성 후 조건을 잃으면 보유 목록에서
+   사라지는데 착용 효과는 남던 불일치 / 옛 조건으로 이미 얻은 이용자 보존(1회 이관). */
+step('칭호 — 길드 1클릭 차단 · 달성 보유 기록 · 기존 획득 이관', ()=>{
+  const errs=[], S=ev('S');
+  const keep={ gj:S.guildJoined, gm:S.guildMaster, gn:S.guildName, g:S.guild, gs:S.guildScore, own:JSON.parse(JSON.stringify(S.titleOwn||{})), ruby:S.ruby, v:S._titleGuildV, rank:S.guildRank };
+  const T=id=>ev('TITLE_BY_ID')[id], owned=id=>ev('titleOwned')(T(id));
+  S.titleOwn={}; S.guildJoined=false; S.guild=null; S.guildName=''; S.guildScore=0;
+  ev('guildApply')('강철결의');
+  if(owned('pioneer')||owned('outlaw')) errs.push('1위 길드 신청만으로 길드 칭호 보유');
+  S.guildScore=51000; if(!owned('pioneer')) errs.push('기여 51,000 인데 pioneer 미보유');
+  // 조건형 칭호: 루비 75,000 → sync → 루비 0 → 보유 유지
+  S.titleOwn={}; S.guildScore=0; S.ruby=75000; ev('titleSyncOwn')(); S.ruby=0;
+  if(!owned('ironhand')) errs.push('달성한 조건형 칭호가 조건 상실 후 보유에서 사라짐');
+  // 이관: 옛 조건(가입 길드 기준 점수 + 내 기여)으로 달성 상태였던 구세이브 → mergeDefaults 후 보유
+  S.titleOwn={}; S._titleGuildV=undefined; S.guildJoined=true; S.guildName='강철결의'; S.guild='강철결의'; S.guildScore=0;
+  ev('mergeDefaults')();
+  if(!(S.titleOwn.pioneer && S.titleOwn.outlaw)) errs.push('기존 획득자 이관 누락');
+  if(S._titleGuildV!==1) errs.push('이관 플래그 미설정');
+  S.guildJoined=keep.gj; S.guildMaster=keep.gm; S.guildName=keep.gn; S.guild=keep.g; S.guildScore=keep.gs; S.titleOwn=keep.own; S.ruby=keep.ruby; S._titleGuildV=keep.v; S.guildRank=keep.rank;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ 2026-09-25 회귀(워크플로 #23·#9): ① 숨긴 채 창을 닫으면 숨김 구간 방치 수익이 증발(save 가 lastSeen 을 '지금'으로 밀었다)
    ② 환영 우편(루비 100) 미수령 배지 없음 ③ 인트로 '7일 출석 1일차'가 실제 출석을 수령하지 않음. */
 step('숨김 중 저장 lastSeen · 우편 배지 · 인트로 출석 1일차 실수령', ()=>{
