@@ -2270,6 +2270,33 @@ step('영웅 소환 여러 회 — 집계 보존 · 소환권 한도', ()=>{
   S.tickHero=keep.tick; S.stats.summons=keep.sum; S.shards=keep.shards; S.heroes=keep.heroes; S.summonFail=keep.fail; S.heroShards=keep.hs;
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ 2026-09-25(워크플로 #11): 즉시 결과 — 첫 클리어 전엔 숨김 · 1회 지급 · 계열 기록 · 복귀처(길잡이 뒤에만) · 무음 구간 닫힘. */
+step('즉시 결과 — 노출 조건 · 1회 지급 · 계열 기록 · 복귀처', ()=>{
+  const errs=[], S=ev('S'), B=ev('Battle'), fam=ev('dgFamily'), ok=ev('dgSkipOK');
+  const keep={ seen:JSON.parse(JSON.stringify(S.dgSeen||{})), gs:S.guideStep, st:S.stones, tw:S._tower, dd:S.stats.ddStage, eb:S.stats.emberBest };
+  if(fam('황금 용광로 3단계')!=='황금 용광로' || fam('정령의 시련 · 섬멸 2단계')!=='정령의 시련' || fam('불꽃의 탑')!=='불꽃의 탑') errs.push('계열 키 파생');
+  S.dgSeen={}; S._tower=0; S.stats.ddStage=0; S.stats.emberBest=0;
+  const cfg={ name:'스모크시련 · 1단계', col:'#fff', foeCP:1, kind:'mobs', count:1, dur:5, reward:()=>{ S.stones+=7; } };
+  if(ok(cfg)) errs.push('첫 클리어 전인데 노출');
+  S.guideStep=ev('GUIDE_CHAIN').length; ev("currentModal='golddungeon'");
+  ev('enterDungeonFight')(cfg);
+  if(!B.inDungeon()) errs.push('입장 실패');
+  if(cfg._back!=='golddungeon') errs.push('복귀처 '+cfg._back);
+  const st0=S.stones; const r=B.finishNow();
+  if(!r || !r.finished || B.inDungeon()) errs.push('즉시 결과 미완주');
+  if(S.stones-st0!==7) errs.push('보상 '+(S.stones-st0)+' (기대 7, 1회)');
+  if(ev('currentModal')!=='dgResult') errs.push('결과창 미표시: '+ev('currentModal'));
+  if(!S.dgSeen['스모크시련']) errs.push('계열 클리어 미기록');
+  if(!ok({ name:'스모크시련 · 3단계' })) errs.push('같은 계열 다른 단계 미노출');
+  if(ev('_instantRun')!==0 || ev('_dgCfg')!==null) errs.push('무음 구간/진행 cfg 미정리');
+  if(B.finishNow()!==null) errs.push('던전 밖 finishNow 가 null 아님');
+  ev('closeModal')();
+  S.guideStep=0; ev("currentModal='golddungeon'"); const c2={ name:'스모크시련 · 2단계', col:'#fff', foeCP:1, kind:'mobs', count:1, dur:5 };
+  ev('enterDungeonFight')(c2); if(c2._back!==null) errs.push('길잡이 중 복귀처 설정됨'); B.finishNow(); ev('closeModal')();
+  S.dgSeen={}; S._tower=3; if(!ok({ name:'불꽃의 탑' })) errs.push('탑 기록 보유자 소급 미인정');
+  S.dgSeen=keep.seen; S.guideStep=keep.gs; S.stones=keep.st; S._tower=keep.tw; S.stats.ddStage=keep.dd; S.stats.emberBest=keep.eb;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ 2026-09-25(워크플로 #13): 모험 타일 남은 횟수 배지 — 각 모달의 게이트 키와 같은 값 · 읽기 전용(카운트 불변). */
 step('모험 타일 배지 — 게이트 키 일치 · 읽기 전용', ()=>{
   const errs=[], S=ev('S'), B=ev('advLeftBadge'), ms=ev('monthlyState')();
@@ -2713,6 +2740,21 @@ step('D4 · 헤드리스 완주(runUntilDone) = 실시간 프레임 펌프(pumpF
   const realtime = runSeeded(seed, driverRealtime60fps).hash;
   if(headless!==realtime) throw new Error(`헤드리스 ${headless} ≠ 실시간(60fps 펌프) ${realtime}`);
   console.log(`     헤드리스 = 실시간(60fps 대리) = ${headless}`);
+});
+
+/* ★ 2026-09-25(워크플로 #11): [즉시 결과] 는 '관람 도중' 누른다 — 실시간 펌프로 일부 진행한 뒤 finishNow 로 끝낸 결과가
+   끝까지 관람한 결과와 같아야 한다(보상을 따로 계산하는 경로가 생기면 여기서 깨진다). 중단 지점 3곳(0.5·10·20초 — 전부 전투 도중인지 검사한다). */
+step('D6 · 관람 중 즉시 결과(finishNow) = 끝까지 관람(60fps 펌프) 동일 해시', ()=>{
+  const seed = 0x5EED0611;
+  const watched = runSeeded(seed, driverRealtime60fps).hash;
+  const cut=[];
+  for(const frames of [30, 600, 1200]){
+    const h = runSeeded(seed, (B)=>{ for(let i=0;i<frames && B.inDungeon();i++) B.pumpFrame(1/60); if(B.inDungeon()){ cut.push(frames); const r=B.finishNow(); if(!r||!r.finished) throw new Error('finishNow 미완주'); } }).hash;
+    if(h!==watched) throw new Error(`${frames}프레임 뒤 즉시 결과 ${h} ≠ 끝까지 관람 ${watched}`);
+  }
+  if(ev('_instantRun')!==0) throw new Error('무음 구간이 닫히지 않음: '+ev('_instantRun'));
+  if(cut.length<3) throw new Error('전투 도중 중단 지점이 3곳 미만: '+JSON.stringify(cut));
+  console.log(`     즉시 결과(전투 도중 ${cut.join('/')}프레임에서 중단) = 끝까지 관람 = ${watched}`);
 });
 
 step('D5 · 전투 스텝 중 비시드 Math.random 직접 호출 0건 (연출/보상 지대 제외, 후킹 검사)', ()=>{

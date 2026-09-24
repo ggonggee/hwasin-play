@@ -1373,6 +1373,13 @@ const ATTEND_DAYS = [
 ];
 /* ★ B9/G-134: 공지 — 제목 밴드 + 양피지 서술형 본문 (목록 → 상세 2단) */
 const NOTICES = [
+  /* ★ v5.339: 즉시 결과·결과 뒤 복귀·모험 남은 횟수 — 후반 일일 루틴 시간 단축(워크플로 #11·#13). 보상 규칙은 그대로라 [업데이트]. */
+  { cat:'[업데이트]', ic:'⏩', t:'이미 이긴 던전은 바로 결과를 받으세요 — 즉시 결과 · 모험 남은 횟수', d:'2026-09-25',
+    body:'군주들에게 알립니다.<br><br>매일 반복하는 던전 전투를 더 빨리 끝낼 수 있게 했습니다.<br><br>'+
+      '· <b>⏩ 즉시 결과</b> — 한 번 이상 클리어한 던전(요일던전·골드던전·시련의 탑·월드보스·잔불의 미궁 등)은 전투 중 전장 오른쪽 아래의 [즉시 결과]로 남은 전투를 바로 끝낼 수 있습니다. '+
+      '끝까지 지켜본 것과 <b>결과·보상이 똑같습니다</b>. 처음 도전하는 던전에서는 나오지 않습니다.<br>'+
+      '· <b>↩️ 결과 뒤 복귀</b> — 길잡이를 마친 군주는 결과창이 닫히면 들어왔던 던전 화면으로 돌아가 바로 다음 입장을 할 수 있습니다.<br>'+
+      '· <b>🔢 남은 횟수</b> — 모험 화면의 각 던전에 오늘 남은 횟수가 표시됩니다. 일일 임무는 받은 자리에서 이어서 받을 수 있고, 웨이브 상자 교환 창은 교환 후에도 열려 있습니다.' },
   /* ★ v5.333: 용광로 시련 난이도 정상화 — 라이브 난이도가 오르는 변경이라 숨기지 않고 알린다. */
   { cat:'[수정]', ic:'⚒️', t:'용광로 시련이 안내대로 장기전이 됩니다', d:'2026-09-25',
     body:'군주들에게 알립니다.<br><br>매월 1회 도전하는 <b>용광로 시련</b>은 "45초 안에 처치하는 장기전"으로 안내되었지만, 오류로 수호자의 체력이 설계의 1/3만 적용되어 너무 빨리 끝났습니다.<br><br>'+
@@ -1535,7 +1542,8 @@ function freshState(){
     goldAuto:false,   // 골드던전 '자동 입장' 토글
     _tower:0,         // 시련의 탑 최고 도달 웨이브
     towerBox:0,       // 웨이브 도달 상자 — [교환] 으로 재료 환전
-    _wbdmg:0,         // 월드보스 누적 데미지(서버 랭킹 반영)
+    dgSeen:{},        // ★ 2026-09-25(워크플로 #11): 던전 계열별 첫 클리어 기록 — [즉시 결과] 노출 조건(dgSkipOK)
+    _wbdmg:0,        // 월드보스 누적 데미지(서버 랭킹 반영)
     wbScore:0,        // ★ v4.1 A1-2: 월드보스 누적 점수(정수 'N점') — 보상과 무관한 별도 적립
     ddDay:null,       // 요일던전에서 선택 중인 요일(null=오늘)
     buffs:{ goldUntil:0, expUntil:0, craftUntil:0, adFree:false }, // 상점 버프(구독 만료ts·영구 플래그) ★ B7/G-100 craftUntil 신규
@@ -2008,6 +2016,7 @@ function flyLoot(cv, cx, cy, kind){
    순수 DOM 연출 — 전투 상태·시드 난수를 건드리지 않는다(던전 결정론 경로에서도 불리지만 해시와 무관).
    연출 문법(경고 띠·비네트·타이밍)만 참고했고 문구·모양은 자체 조어다. */
 function bossBanner(name, col){
+  if(_instantRun>0) return;   // 즉시 결과 중 — 이미 끝난 싸움의 경고 배너(+지연 효과음)를 띄우지 않는다
   const host=$('#stage-wrap'); if(!host) return;
   host.querySelectorAll('.boss-banner').forEach(n=>n.remove());
   const b=el('div','boss-banner', `<div class="bb-vig"></div><div class="bb-band"><div class="bb-line"></div>`
@@ -2026,7 +2035,12 @@ function applyFxClass(){ try{ document.body.classList.toggle('fx-noflash', !fxOn
 /* ---- SFX (Web Audio 합성음, 외부 파일 없음) ---- */
 let _actx=null;
 function initAudio(){ if(_actx) return; try{ _actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} }
+/* ★ 2026-09-25(워크플로 #11): 즉시 결과(Battle.finishNow) 동안 켜지는 무음 구간 — 남은 전투를 한 프레임에 소화하면
+   효과음이 한꺼번에 울린다(실측: 탑 1회 coin 319·legendary 8·fail 2 — 오실레이터 수백 개 동시 생성). 우두머리 경고 배너도 생략.
+   표시 전용 플래그다 — 전투 상태·시드 난수와 무관. */
+let _instantRun=0;
 function sfx(type){
+  if(_instantRun>0) return;
   if(!_actx || !(S&&S.settings&&S.settings.sound)) return;
   /* ★ v5.200: 마스터 볼륨(S.settings.vol 0~1, 기본 1=종전 음량) — 설정에서 조절.
      개별 효과음 파라미터(P 표)는 그대로 두고 출력 게인에만 곱한다. */
@@ -4082,6 +4096,20 @@ const Battle = (()=>{
     while(mode==='dungeon' && dg && !dg.done && ticks < cap){ stepOnce(FIXED_DT); ticks++; }
     return { ticks, finished: !(mode==='dungeon' && dg && !dg.done) };
   }
+  /* ★ 2026-09-25(워크플로 #11): [즉시 결과] — 남은 전투를 runUntilDone 으로 한 번에 소화한다. 결과는 관람과 **같다**:
+     같은 stepOnce(FIXED_DT) 경로이고(smoke D4·D6 이 해시로 게이트), 전투 중 이용자 입력이 없다(스킬 완전 자동 — #chat .sk 는 안내 토스트뿐).
+     따라서 보상·시드·의뢰 집계는 그대로이고 시간만 준다. 여기서 바꾸는 것은 표시 전용 값뿐이다:
+     무음 구간(_instantRun), 콤보·흔들림 잔상(종전 실측 '324 연속 처치!'), 렌더 보간 기준(snapPositions — 안 하면 1프레임 튄다).
+     ⚠ 결과를 '계산해서 지급'하는 별도 경로를 만들지 마라 — 관람 결과와 어긋나는 순간 결정론 전제가 깨진다. */
+  function finishNow(){
+    if(mode!=='dungeon' || !dg || dg.done) return null;
+    let r=null;
+    _instantRun++;
+    try{ r=runUntilDone(); } finally { _instantRun--; }
+    combo=0; comboT=0; comboPop=0; shake=0;
+    snapPositions();
+    return r;
+  }
   return { start, resize, refreshParty, contributions, wave:()=>wave, setHunt, partyCP:()=>partyCP, startDungeon, inDungeon:()=>mode==='dungeon',
            setPartySource:(fn)=>{ partySrc = (typeof fn==='function') ? fn : null; layoutHeroes(); },
            /* ★ v5.32: 스킬 쿨타임 UI 업데이트용 노출. */
@@ -4099,7 +4127,7 @@ const Battle = (()=>{
               이제는 고정폭 스텝으로 올바르게 누산된다(예전엔 update(dt)를 그 dt 그대로 돌렸다). */
            stepFrame:(dt)=>{ pumpFrame(dt||FIXED_DT); },
            /* ★ M1: 결정론 검증·향후 원정 시드 재현용 노출. */
-           FIXED_DT, pumpFrame, runUntilDone,
+           FIXED_DT, pumpFrame, runUntilDone, finishNow,
            setSeed:(seed)=>setBattleSeed(seed),
            rngChecksum:()=>_rngChecksum, rngDrawCount:()=>_rngDrawCount,
            isCosmeticZone:()=>_cosmeticDepth>0 };
@@ -9471,9 +9499,41 @@ function towerExchange(){
   ov.appendChild(pop); ov.onclick=ev=>{ if(ev.target===ov) ov.remove(); };
   root.appendChild(ov);
 }
+/* ★ 2026-09-25(워크플로 #11): 즉시 결과·결과 뒤 복귀 — 후반 일일 전투 루틴이 '이미 이긴 싸움 관람' 7.7분·75탭이었다
+   (적 전투력 고정이라 18~90배 차이여도 전투 시간은 스폰 간격에 묶여 줄지 않는다).
+   · 노출 조건: 그 던전 계열을 한 번 이상 클리어(승리 또는 race 완주)했을 때만 — 첫 클리어의 긴장(탑 신기록 배너 등)을 보존.
+     계열 키 = 이름의 ' · ' 앞부분에서 'N단계'를 뗀 것(단계마다 따로 세지 않는다 — 결과가 관람과 같으므로 누락 위험이 없다).
+     기존 이용자는 이미 있는 최고 기록(탑·요일·미궁)으로 소급 인정.
+   · 투기장(Battle.startDungeon 직접 호출)은 대상 아님 — _dgCfg 가 없으면 버튼이 뜨지 않는다. */
+let _dgCfg=null, _dgResultSfx=null, _dgLastBack=null;
+const DG_BACK_OK = new Set(['dailydungeon','golddungeon','boss','worldboss','tower','embermaze','forgetrial','raid','conquest']);
+function dgFamily(name){ return String(name||'').split(' · ')[0].replace(/\s*\d+단계$/,'').trim(); }
+function dgSkipOK(cfg){
+  if(!cfg || !S) return false;
+  const f=dgFamily(cfg.name);
+  return !!((S.dgSeen && S.dgSeen[f]) || (f==='불꽃의 탑' && (S._tower||0)>0) ||
+    (f==='정령의 시련' && (S.stats.ddStage||0)>0) || (f==='잔불의 미궁' && (S.stats.emberBest||0)>0));
+}
+function tickDgSkip(){
+  const b=$('#dgSkip'); if(!b) return;
+  if(!b._wired){ b._wired=true;
+    b.onclick=()=>{ if(!_dgCfg || !Battle.inDungeon()) return;
+      sfx('tap'); _dgResultSfx=null;
+      Battle.finishNow();
+      if(_dgResultSfx) sfx(_dgResultSfx);   // 무음 구간에서 삼킨 승패 효과음만 한 번 들려준다
+      tickDgSkip(); };
+  }
+  const on=!!(_dgCfg && Battle.inDungeon() && dgSkipOK(_dgCfg));
+  if(b.classList.contains('hidden')===on) b.classList.toggle('hidden', !on);
+}
 function enterDungeonFight(cfg){
   if(busyFight()) return;
+  /* 결과 뒤 복귀할 콘텐츠 화면 — 길잡이를 마친 뒤에만(초반 흐름은 홈으로 돌아가 배너·길잡이를 보게 둔다). closeModal 전에 캡처. */
+  cfg._back = S.guideStep<GUIDE_CHAIN.length ? null : DG_BACK_OK.has(currentModal) ? currentModal
+    : currentModal==='dgResult' ? _dgLastBack : null;   // 골드던전 '자동 입장' 연전은 결과창에서 재입장한다 — 첫 판의 복귀처를 잇는다
+  _dgLastBack = cfg._back;
   closeModal(); sysLog(`${cfg.name} 입장`); sfx('tap');
+  _dgCfg=cfg;
   /* ★ 2026-09-25: hpMul·overtime 전달 — 종전 래퍼는 고정 필드만 넘겨 용광로 시련의 hpMul:3(v5.301 장기전화 설계)이 **라이브에서 한 번도
      적용되지 않았다**(v5.301 실측은 startDungeon 직접 호출로 잰 값). 확인창은 '장기전(45초 안에 처치)'을 약속한다 → 설계대로 적용.
      새 전투 옵션을 추가하면 여기서도 넘겨야 한다(검사: smoke '던전 래퍼 옵션 전달'). */
@@ -9484,7 +9544,8 @@ function enterDungeonFight(cfg){
        setPartySource(null) 복귀와 같은 자리. 결과창(보상·resultExtra)을 먼저 만들고 재배치는 뒤에 — 예외가 나도 finally 로 복귀.
        ⚠ endDungeon·loop 에서 부르지 마라: 결정론 검사(D 시나리오)는 startDungeon 을 직접 부르므로 거기서 부르면 기준 해시가 바뀌고,
        loop 는 렌더 경로에서 시뮬 상태를 바꾸게 된다. */
-    onEnd:(win,stats)=>{ try{ showDungeonResult(cfg,win,stats); } finally { Battle.refreshParty(); } } });
+    onEnd:(win,stats)=>{ _dgCfg=null; try{ showDungeonResult(cfg,win,stats); } finally { Battle.refreshParty(); } } });
+  tickDgSkip();
 }
 /* ★ v4.5.1: 던전 결과창 "뭘 받았다" — 보상 함수를 하나하나 고치지 않고
    실행 전후 지갑을 비교해 실제 증가분만 칩으로 보여준다(투기장 델타와 같은 취지).
@@ -9511,7 +9572,8 @@ function showDungeonResult(cfg, win, stats){
   const _w0 = walletSnap();
   if(rewarded && cfg.reward) cfg.reward(stats||{});
   const _gains = rewarded ? walletDiff(_w0, walletSnap()) : [];
-  sfx(win?'win':'fail');
+  _dgResultSfx = win?'win':'fail'; sfx(_dgResultSfx);   // 즉시 결과(무음 구간)면 버튼 핸들러가 이 값으로 한 번 재생한다
+  if(win || cfg.race){ (S.dgSeen && typeof S.dgSeen==='object' ? S.dgSeen : (S.dgSeen={}))[dgFamily(cfg.name)]=1; }   // [즉시 결과] 노출 조건(dgSkipOK)
   setModalTitle(cfg.name); const b=$('#modalBody'); b.innerHTML='';
   // ★ v4.8: race 던전(탑·월드보스·길드레이드) 결과창 제목은 3곳 모두 '결과' 로 통일한다('전투 종료' 는 쓰지 않는다)
   const title = win?'도전 성공!':(cfg.race?'결과':'도전 실패');
@@ -9533,6 +9595,8 @@ function showDungeonResult(cfg, win, stats){
   $('#modal-root').classList.add('on'); currentModal='dgResult';
   setTimeout(()=>{ if(currentModal!=='dgResult') return;
     if(cfg.autoNext && cfg.autoNext()) return;   // ★ B5/G-67: 골드던전 '자동 입장' 연전
+    /* ★ 2026-09-25(워크플로 #11): 들어온 콘텐츠 화면으로 복귀(연속 입장 2탭 절감) — 길잡이 중이거나 목록 밖이면 종전대로 홈 */
+    if(cfg._back && MODALS[cfg._back] && !Battle.inDungeon()){ openModal(cfg._back); return; }
     closeModal(); }, 3000);
   refreshHUD();
 }
@@ -9554,7 +9618,7 @@ function tickForge(){
 function gameLoop(ts){
   const dt=Math.min(0.1,(ts-lastFrame)/1000||0); lastFrame=ts;
   idleTick(dt); chatTick(dt); craftAutoCheck(); tutFingerTick();
-  hudT-=dt; if(hudT<=0){ hudT=0.5; refreshHUD(); tickClock(); tickForge(); reviveHUDTick(); }
+  hudT-=dt; if(hudT<=0){ hudT=0.5; refreshHUD(); tickClock(); tickForge(); reviveHUDTick(); tickDgSkip(); }
   requestAnimationFrame(gameLoop);
 }
 setInterval(()=>{ save(); refreshClaimBadges(); try{ updateGuideBanner(); }catch(e){} }, 5000);   // ★ 2026-09-25: 골드가 차면 배너가 '부족'에서 원래대로(글자는 바뀔 때만 씀)   /* ★ v5.162: 배지 갱신 동반 — 전투 중 미션 달성도 5초 안에 점이 켜진다 */
