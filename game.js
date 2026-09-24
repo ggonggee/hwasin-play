@@ -6814,7 +6814,7 @@ const MODALS = {
     ['투구','목걸이','상의','하의','신발'].forEach(k=>colL.appendChild(mkSlot(k,k)));
     ['무기','방패','반지','정수'].forEach(k=>colR.appendChild(mkSlot(k,k)));
     const center=el('div','eq-center');
-    const hero=el('div','eq-hero'); hero.innerHTML=jobIcon(heroJob.id); center.appendChild(hero);
+    const hero=el('div','eq-hero'); { const pp=HERO_PORTRAIT[cur.hero_id]; hero.innerHTML = pp ? `<img class="por-img" src="assets/heroes/portraits/${pp}.webp" alt="">` : jobIcon(heroJob.id); } center.appendChild(hero);   // U4(2차): 초상(없으면 직업 아이콘)
     const nm=el('div','small'); nm.style.color=GRADES[heroGrade].color; nm.style.fontWeight='700'; nm.textContent=`${GRADES[heroGrade].name} ${cur.name}`; center.appendChild(nm);
     // 10번째 슬롯 — 벨트(중앙 하단)
     const beltWrap=el('div','eq-beltrow'); beltWrap.appendChild(mkSlot('벨트','벨트')); center.appendChild(beltWrap);
@@ -9225,8 +9225,15 @@ function heroDetail(hidOrJob){
   if(!e){ toast('영웅을 찾을 수 없습니다.'); openModal('hero'); return; }
   const j=e.job, hid=e.hero_id, G=GRADES[e.grade];
   const st=heroSlot(hid);
+  /* U4(2차): 같은 영웅 상세를 다시 그릴 때(레벨업·강화·탭 전환) 스크롤을 보존한다 — subBody 가 하위 화면을 새로 만들어 매번 맨 위로 튀었다. */
+  let _keepTop=0; try{ const mr=$('#modal-root'), ov=mr && Array.from(mr.children||[]).find(c=>c.classList && c.classList.contains('sub-ovl'));
+    const hd=ov && ov.querySelector('.sub-head'), sb=ov && ov.querySelector('.sub-body');
+    if(hd && sb && String(hd.textContent||'').indexOf(e.name)===0) _keepTop=sb.scrollTop|0; }catch(_){}
   const b=subBody(e.name);   // ★ v5.1 착용창/영웅목록 위 오버레이
-  b.appendChild(el('div','center',`<div class="ei" style="font-size:52px">${jobIcon(j.id)}</div>
+  if(_keepTop) setTimeout(()=>{ try{ b.scrollTop=_keepTop; }catch(_){} }, 0);   // 본문을 다 그린 뒤
+  /* U4(2차): 가운데 그림 = 영웅 초상(assets/heroes/portraits — 9종). 종전엔 직업 아이콘이라 같은 직업 영웅이 구분되지 않았다. 초상이 없으면 직업 아이콘. */
+  const _pp=HERO_PORTRAIT[hid];
+  b.appendChild(el('div','center',`<div class="hd-por" style="--gc:${G.color}">${_pp?`<img class="por-img" src="assets/heroes/portraits/${_pp}.webp" alt="">`:jobIcon(j.id)}</div>
     <div class="big" style="color:${G.color}">${G.name} · ${e.name}</div>
     <div class="small mut">${j.name} · ${j.el} · ${j.role} · ${j.pos} · 주스탯 ${j.stat}</div>
     <div class="big" style="margin:6px 0">전투력 ${fmt(heroPower(e))}</div>`));   // ★ 2026-09-25: 귀속 장비 포함(종전 {grade,level} 만 넘겨 장비가 빠진 값을 표시)
