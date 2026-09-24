@@ -1921,8 +1921,10 @@ step('주간 축제 — 3테마 순환 결정론·골드 관문 배율·배지·
     if(!chip||!String(chip._html||'').includes(ev('festival()').n)) errs.push('배지 미갱신');
     if(!/D-[1-7]/.test(String(chip._html||''))) errs.push('D-N 카운트다운 없음');
     if(S.gold!==gBefore) errs.push('렌더만으로 골드 변동');
-    /* 공지·도움말 진입점 — v5.303: [0]은 잔불·용광로 통합 공지, 축제 공지는 존재 검사(some) */
-    if(!ev('NOTICES')[0].t.includes('잔불의 미궁')) errs.push('신규 콘텐츠 공지 없음([0])');
+    /* 공지·도움말 진입점 — 잔불·용광로 통합 공지와 축제 공지의 존재 검사(some).
+       ★ 2026-09-25: 종전엔 잔불 공지가 [0](최상단)이어야 했다 — 새 공지는 항상 맨 위에 추가되는 관례라(v5.322 공지)
+       위치 고정 검사는 공지를 하나 더할 때마다 깨진다. 지켜야 할 것은 '공지가 있다' 이지 순서가 아니다. */
+    if(!ev('NOTICES').some(n=>n.t.includes('잔불의 미궁'))) errs.push('신규 콘텐츠 공지 없음');
     if(!ev('NOTICES').some(n=>n.t.includes('축제'))) errs.push('축제 공지 없음');
     const hb=new Node2('div'); M.help.render(hb);
     if(!collectText(hb).includes('축제')) errs.push('도움말 축제 토픽 없음');
