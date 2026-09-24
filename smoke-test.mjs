@@ -2403,6 +2403,19 @@ step('퀘스트 기본 탭(주간 우선) · 길드 레이드 결과 뒤 복귀'
   S.guideStep=keep.gs;
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ 2026-09-25(검증 발견): heroPower 를 객체 리터럴로 부를 땐 hero_id 필수 — 빠지면 영웅 귀속 장비가 통째로 빠진 전투력이 된다
+   (전투 중 레벨업 직후 partyCP 160 vs 정본 239 실측). */
+step('heroPower 호출 — 귀속 장비 누락 경로 없음', ()=>{
+  const errs=[], S=ev('S'), hp=ev('heroPower');
+  for(const m of js.matchAll(/heroPower\(\{[^}]*\}\)/g)) if(!/hero_id|hid/.test(m[0])) errs.push('hero_id 없는 호출: '+m[0]);
+  const lead=ev('party')()[0]||ev('ownedHeroes')()[0]; const keep=S.equips.slice();
+  S.equips=[{ grade:'L', slot:'장비', enh:10, equipped:true, heroId:lead.hero_id }];
+  const full=hp(lead), viaId=hp({grade:lead.grade, level:lead.level, hero_id:lead.hero_id}), noId=hp({grade:lead.grade, level:lead.level});
+  if(viaId!==full) errs.push('hero_id 경유 '+viaId+' ≠ 정본 '+full);
+  if(!(noId<full)) errs.push('검사 전제(장비 귀속) 불성립');
+  S.equips=keep;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ 2026-09-25(워크플로 #18): 제작 진행률 = 실제 소요 시간 기준(버프 중 시작 즉시 50% 표기 결함) · 모루 빈/제작 중 표기 · 빈 상태 전폭 + [대장간으로]. */
 step('제작 진행률(버프 반영) · 모루 표기 · 빈 인벤토리 안내', ()=>{
   const errs=[], S=ev('S'), now=ev('Date.now()');

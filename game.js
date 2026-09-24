@@ -3515,7 +3515,9 @@ const Battle = (()=>{
         st.exp -= (st.level||1) * 250;
         st.level = (st.level||1) + 1;
         h.lvl = st.level;
-        h.cp = heroPower({grade:h.grade, level:st.level});
+        /* ★ 2026-09-25(검증 발견): hero_id 를 넘긴다 — 종전 {grade, level} 만 넘겨 이 영웅에게 귀속된 장비(heroId)가 전부 빠진 전투력으로
+           떨어졌다(실측: L+10 장비 리더 레벨업 직후 partyCP 160 vs 정본 239). refreshParty 주기 호출이 없어 방치 중엔 UI 를 만질 때까지 유지됐다. */
+        h.cp = heroPower({grade:h.grade, level:st.level, hero_id:h.hid});
         h.hp = 1; h.dead = false; h.respT = 0;
         const newLv = st.level;
         fx.push({ type:'lvup', x:h.x, y:h.y, t:0, color:'#ffd36a' });
@@ -8737,7 +8739,7 @@ function heroDetail(hidOrJob){
   b.appendChild(el('div','center',`<div class="ei" style="font-size:52px">${jobIcon(j.id)}</div>
     <div class="big" style="color:${G.color}">${G.name} · ${e.name}</div>
     <div class="small mut">${j.name} · ${j.el} · ${j.role} · ${j.pos} · 주스탯 ${j.stat}</div>
-    <div class="big" style="margin:6px 0">전투력 ${fmt(heroPower({grade:e.grade,level:e.level}))}</div>`));
+    <div class="big" style="margin:6px 0">전투력 ${fmt(heroPower(e))}</div>`));   // ★ 2026-09-25: 귀속 장비 포함(종전 {grade,level} 만 넘겨 장비가 빠진 값을 표시)
   const TABS=['강화','스탯','스킬','각성'];
   if(TABS.indexOf(_heroTab)<0) _heroTab='스탯';
   const tabrow=el('div','tabrow');
