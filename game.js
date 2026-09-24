@@ -698,10 +698,27 @@ const ARENA_GBUFF_ROWS = [
   ['7위',38],['8위',33],['9위',28],['10~14위',22],['15~20위',14],['21~30위',8],
   ['31~40위',4],
 ];
+/* ★ 2026-09-25: '매일 티어 골드' — 종전엔 표(투기장 [매일 보상] 탭)에만 있고 지급 코드가 없었다(검증 워크플로 실측: 레전더리 하루 경과 골드 +0).
+   이제 rollDaily 가 **이 표 그대로** 지급한다(표 = 지급 단일 정본). 수치는 종전 표의 1/10 — 원래 값(레전더리 2,500만/일)은
+   초반 방치 수입(약 2,700만/일)을 거의 두 배로 만들고, 투기장 매칭(적 CP ≈ 내 CP×0.85~1.15)상 승률이 성장과 무관하게 ~50%라
+   신규도 빠르게 상위 티어에 닿는다. 1/10 이면 레전더리도 초반 방치 수입의 ~9%, 후반엔 미미한 '매일 들를 이유' 수준. */
 const ARENA_TIER_ROWS = [
-  ['레전더리',25000000],['마스터',12000000],['다이아몬드',8000000],['플래티넘',4000000],
-  ['골드',1600000],['실버',800000],['브론즈',400000],
+  ['레전더리',2500000],['마스터',1200000],['다이아몬드',800000],['플래티넘',400000],
+  ['골드',160000],['실버',80000],['브론즈',40000],
 ];
+/* ★ 2026-09-25: 투기장 주간 순위 주사위(ARENA_DICE_ROWS) 지급 — arenaWeekRoll 이 리셋 직전 순위로 1회 지급.
+   'X400' 문자열 표를 그대로 읽는다(표 = 지급). 이번 주 1판 이상 한 경우만('참여한 모든 유저' 행 포함). */
+function arenaWeeklyDice(rank, participated){
+  if(!participated) return 0;
+  const num=s=>parseInt(String(s).replace(/[^\d]/g,''),10)||0;
+  for(const [lab,val] of ARENA_DICE_ROWS){
+    const m=/^(\d+)(?:~(\d+))?위$/.exec(lab); if(!m) continue;
+    const lo=+m[1], hi=m[2]?+m[2]:lo;
+    if(rank>=lo && rank<=hi) return num(val);
+  }
+  const all=ARENA_DICE_ROWS.find(r=>/참여/.test(r[0]));
+  return all?num(all[1]):0;
+}
 /* ★ N2: 주간 리셋(월요일 12시) 직후의 내 순위 — 신규 계정과 같은 자리로 되돌린다(freshState 와 동일 값). */
 const ARENA_RANK_RESET = 1088;
 /* ★ N2: 안내문 'ⓘ 투기장에선 모든 데미지가 50% 감소 됩니다.' — 투기장 전투에만 걸리는 양방향 데미지 배율.
@@ -1341,6 +1358,13 @@ const ATTEND_DAYS = [
 ];
 /* ★ B9/G-134: 공지 — 제목 밴드 + 양피지 서술형 본문 (목록 → 상세 2단) */
 const NOTICES = [
+  /* ★ v5.331: 투기장 보상 지급 시작 — 표에만 있고 지급되지 않던 약속을 이행. 표 금액 조정(1/10)도 숨기지 않고 알린다. */
+  { cat:'[업데이트]', ic:'🏟️', t:'투기장 보상이 실제로 지급됩니다 — 매일 티어 골드 · 주간 순위 주사위', d:'2026-09-25',
+    body:'군주들에게 알립니다.<br><br>투기장 [매일 보상] 표에 안내만 되고 지급되지 않던 보상을 이제 실제로 드립니다.<br><br>'+
+      '· <b>🪙 매일 티어 골드</b> — 날짜가 바뀌면 현재 투기장 티어에 따라 골드가 지급됩니다(브론즈 4만 ~ 레전더리 250만). '+
+      '다른 성장과의 균형을 위해 표의 금액을 조정했습니다. 투기장에 한 번 이상 입장한 군주가 대상입니다.<br>'+
+      '· <b>🎲 주간 순위 주사위</b> — 매주 월요일 정오 정산 때 지난주 순위에 따라 주사위가 지급됩니다(1위 400개 ~ 참여 40개). 지난주에 한 판 이상 겨룬 군주가 대상입니다.<br><br>'+
+      '보상 표는 투기장 화면에서 확인할 수 있습니다.' },
   /* ★ v5.330: 버프 적용 정정 안내 — 이용자에게 불리한 정정(프리미엄 방치 ×4→×2)이 포함되므로 숨기지 않고 알린다.
      동시에 약속만 있고 적용되지 않던 버프(훈련소·길드·길드장·무쇠 캠프)가 이제 실제로 적용됨을 알린다. */
   { cat:'[수정]', ic:'🛠️', t:'버프 적용 오류를 바로잡았습니다 — 표시와 실제가 같아집니다', d:'2026-09-25',
@@ -1391,8 +1415,10 @@ const NOTICES = [
       '· 대장간은 이제 <b>지금 만들 수 있는 것</b>부터 보여 줍니다. 실패한 벼림도 한 번에 다시 시작하세요.<br>'+
       '· 일일 임무가 참된 "일일"이 되었습니다 — 오늘의 실적이 오늘 채워집니다.<br><br>'+
       '쇠는 두드릴수록 단단해집니다. 군주님의 결정을 기다립니다.' },
-  { cat:'[점검]', ic:'🛠️', t:'주간 랭킹 정산 정기 점검 안내', d:'2026-07-27',
-    body:'군주님들께 알립니다.<br><br>매일 오전 <b>10:00 ~ 12:00</b> 사이 서버 랭킹 정산 점검이 진행됩니다. 점검 시간 동안에는 월드보스·길드 레이드·점령전 입장이 제한되며, 진행 중이던 전투는 자동으로 종료되고 보상은 그대로 지급됩니다.<br><br>길드 랭킹은 <b>매주 월요일 오전 11시</b>에 초기화됩니다. 초기화 직전에 획득한 기여도는 정산에 반영되지 않을 수 있으니 여유를 두고 참여해 주시기 바랍니다.<br><br>점검으로 불편을 드려 죄송합니다.' },
+  /* ★ 2026-09-25: 이 공지는 '매일 10~12시 점검·입장 제한'·'길드 랭킹 매주 초기화'를 안내했지만 둘 다 구현이 없었다(판정 코드 0).
+     실제 동작(투기장 주간 정산)만 안내하도록 고쳤다. 날짜는 원 공지일 유지. */
+  { cat:'[안내]', ic:'🛠️', t:'투기장 주간 랭킹 정산 안내', d:'2026-07-27',
+    body:'군주님들께 알립니다.<br><br>투기장 랭킹은 <b>매주 월요일 정오(12:00)</b>에 정산되고 새 주가 시작됩니다. 정산 때 지난주 순위에 따라 주사위가 지급되며, 새 주에는 점수가 초기화됩니다.<br><br>월드보스·길드 레이드·점령전은 시간 제한 없이 언제든 입장할 수 있습니다.' },
   { cat:'[이벤트]', ic:'🎉', t:'매월 루비 2배 프로모션', d:'2026-07-20',
     body:'화로에 불을 지필 시간입니다.<br><br>기간 중 루비 상품을 구매하시면 동일한 가격으로 <b>2배의 루비</b>를 지급받습니다. 계정당 각 상품 1회씩 적용되며, 프로모션 상품은 상점 루비 탭에서 초록 테두리로 표시됩니다.<br><br>구매 후 7일 이내에는 청약을 철회할 수 있습니다. [단, 이미 일부를 사용했거나 되돌릴 수 없는 경우는 제외]' },
   { cat:'[업데이트]', ic:'📜', t:'결정의 시대 데모 v0.1.0', d:'2026-07-15',
@@ -1781,6 +1807,17 @@ function rollDaily(){
     const rw=loginRewardGive(S.day);
     if(rw){ (S._pendingLoginToast=S._pendingLoginToast||[]).push(rw);
       sysLog(`${S.day}일차 접속 보상 — ${rw}`); }
+    /* ★ 2026-09-25: 투기장 매일 티어 골드(ARENA_TIER_ROWS 정본) — 투기장에 한 번이라도 들어간 이용자에게.
+       주차가 지났는데 투기장을 안 열어 리셋이 안 된 경우는 브론즈로 준다(옛 주차 레전더리가 영구 지급되는 구멍 방지 —
+       리셋 자체는 투기장 화면의 arenaWeekRoll 소관). raw: 표에 적힌 금액 그대로(골드 버프 이중 적용 없음). */
+    if(((S.stats&&S.stats.arenaEnters)||0)>0){
+      const stale = S.arenaWeek && S.arenaWeek!==arenaWeekKey();
+      const ti = stale ? 0 : clamp(S.arenaTier|0, 0, TIERS.length-1);
+      const row = ARENA_TIER_ROWS.find(r=>r[0]===TIERS[ti]);
+      if(row){ addGold(row[1], true);
+        (S._pendingLoginToast=S._pendingLoginToast||[]).push(`투기장 ${TIERS[ti]} 티어 골드 ${fmt(row[1])}`);
+        sysLog(`투기장 매일 보상 — ${TIERS[ti]} 티어 골드 ${fmt(row[1])}`); }
+    }
     /* ★ v5.284: 7일 출석 주기 반복 — claimed.attend 를 새 주기로 리셋하는 경로가 통째로
        없어 7일 완주자는 8일째부터 출석 보상이 영구히 끊겼다(일일 접속 훅 소멸 — 전수
        grep 실증: claimed.attend 참조 전부 읽기/수령뿐). rollDaily 는 자정 경과를 확정하는
@@ -4355,7 +4392,7 @@ function guildBaseScore(){ const r=GUILD_RANK.find(g=>g[0]===S.guildName); retur
 function guildTotalScore(){ return guildJoined() ? guildBaseScore() + (S.guildScore||0) : 0; }
 function guildMyGrade(){ return GUILD_GRADES[S.guildRank] ? S.guildRank : (S.guildMaster?'master':'member'); }
 function guildCanEditNotice(){ const g=guildMyGrade(); return guildJoined() && (g==='master'||g==='officer'); }
-const GUILD_NOTICE_DEFAULT = '길드 레이드는 매일 10:00~12:00에 진행합니다. 주 3회 이상 참여를 부탁드립니다.';
+const GUILD_NOTICE_DEFAULT = '길드 레이드는 매일 열려 있습니다. 주 3회 이상 참여를 부탁드립니다.';   // ★ 2026-09-25: 시간 제한 문구 삭제(판정 코드 없음)
 
 /* G-106: 헤더(정원 N/30 배지 + 타이틀 + [길드 공지]) + 누적점수 전폭 석판.
    길드 메인 / 랭킹 / 길드 레이드 / 점령전 어디로 전환해도 동일하게 유지된다. */
@@ -6359,7 +6396,6 @@ const MODALS = {
         s.onclick=openForm; form.appendChild(s); }
       info.appendChild(form);
       const fb=el('button','btn sm wide','진영 편성'); fb.onclick=openForm; info.appendChild(fb);
-      info.appendChild(el('div','center warn','- 입장 제한 시간 -<br>10:00 ~ 12:00'));
     }
     paintBox(); paintInfo();
 
@@ -6892,7 +6928,6 @@ const MODALS = {
     // ★ v4.8: 탑과 동일하게 랭킹 보상 서브화면 진입 버튼
     const wbrw=el('button','btn xs','랭킹 보상'); wbrw.onclick=()=>openModal('worldbossReward'); head.appendChild(wbrw);
     b.appendChild(head);
-    b.appendChild(el('div','dg-limit','- 입장 제한 시간 -  10:00 ~ 12:00'));
     b.appendChild(el('div','small mut','서버 랭킹 (누적 데미지)'));
     b.appendChild(dgRankList(WB_RANK.concat([[S.name, S.guildName||'무소속', S._wbdmg||0]])));
     const foot=el('div','dg-foot');
@@ -6946,7 +6981,6 @@ const MODALS = {
     const info=el('button','dg-i','i');
     info.onclick=()=>toast('웨이브가 오를수록 적이 강해집니다. 한 웨이브를 전멸시키면 제한시간 60초가 다시 채워집니다.');
     head.append(info, el('div','dg-title','불꽃의 탑')); b.appendChild(head);
-    b.appendChild(el('div','dg-limit','- 입장 제한 시간 -  10:00 ~ 12:00'));
     const rh=el('div','dg-rankhead');
     rh.appendChild(el('div','small mut','서버 랭킹 (도달 웨이브)'));
     const rw=el('button','btn xs','랭킹 보상'); rw.onclick=()=>openModal('towerReward'); rh.appendChild(rw);
@@ -7121,7 +7155,7 @@ const MODALS = {
         + JOBS.map(j=>`<div class="kv"><span>${jobIcon(j.id)} ${j.name} <span class="mut small">(${j.el}·${j.role})</span></span><b style="color:${j.color}">${j.id==='frost'?'마법 공격력':'공격력'}</b></div>`).join('')
         + '<div class="hr"></div><span class="mut small">※ 빙결술사만 마법 공격력을 사용하며, 나머지 4직업은 공격력을 사용합니다.</span>',
       // G-129: 길드 랭킹 리셋 규칙
-      '길드':'정원 30명. 길드 레이드·점령전으로 상시 버프를 얻습니다. 창설비 루비 600 또는 골드 3억(할인 시 루비 100 · 골드 1억).<br><br>길드 랭킹은 매주 월요일 오전 11시에 초기화됩니다.',
+      '길드':'정원 30명. 길드 레이드·점령전으로 상시 버프를 얻습니다. 창설비 루비 600 또는 골드 3억(할인 시 루비 100 · 골드 1억).',
       /* ★ v5.295: 주간 축제 — 테마 목록과 '이번 주'를 정본(FESTIVALS/festival)에서 파생시켜
          문구가 코드와 어긋날 수 없게 한다(도움말 수치 파생 관례).
          ★ v5.299: 다음 교체까지 남은 일수(daysToWeeklyReset 정본)도 함께. */
@@ -7587,7 +7621,6 @@ const MODALS = {
     const pb=el('div','pbar'); pb.appendChild(el('i')); pb.firstChild.style.width=hpPct+'%'; right.appendChild(pb);
     right.appendChild(el('div','center small mut',`보스 HP ${hpPct}% · 누적 데미지가 길드 점수가 됩니다`));
     foot.appendChild(right); b.appendChild(foot);
-    b.appendChild(el('div','dg-limit','- 입장 제한 시간 -  10:00 ~ 12:00'));
     const arow=el('div','gd-autorow');
     const ab=el('button','gd-auto'+(S.guildRaidAuto?' on':''),`⟳<span>자동<br>입장</span>`);
     ab.onclick=()=>{ S.guildRaidAuto=!S.guildRaidAuto; toast(`자동 입장 ${S.guildRaidAuto?'ON':'OFF'}`); openModal('guildRaid'); };
@@ -7604,9 +7637,8 @@ const MODALS = {
     guildHeadBlock(b);
     const hd=el('div','dg-head');
     const info=el('button','dg-i','i');
-    info.onclick=()=>toast('거점을 점령하면 길드 전체에 상시 버프가 적용됩니다. 점령 점수는 매주 월요일 오전 11시에 초기화됩니다.');
+    info.onclick=()=>toast('거점을 점령하면 길드 전체에 상시 버프가 적용됩니다. 점령한 거점의 버프는 계속 유지됩니다.');   /* ★ 2026-09-25: '매주 초기화' 문구 삭제 — 초기화 코드가 없고, 확인창은 '상시 적용'을 약속한다(리셋 구현은 기존 이용자 너프라 하지 않는다) */
     hd.append(info, el('div','dg-title','거점 점령')); b.appendChild(hd);
-    b.appendChild(el('div','dg-limit','- 입장 제한 시간 -  10:00 ~ 12:00'));
     b.appendChild(el('div','cq-my',`<span>내 길드 점수</span><b>${fmt(conquestMyScore())}</b>`));
     CONQUEST.forEach(c=>{
       const h=holdRec(c.id), mine=h.own;
@@ -8989,10 +9021,14 @@ function arenaWeekRoll(){
      즉시 save 관례와 같은 패턴으로 맞춘다(점수 리셋 자체는 멱등이라 피해는 없었음). */
   if(!S.arenaWeek){ S.arenaWeek=k; save(); return false; }   // 구세이브·첫 진입은 현재 주차로 봉인(즉시 초기화 금지)
   if(S.arenaWeek===k) return false;
+  /* ★ 2026-09-25: 주간 순위 주사위 — 리셋 '전' 순위로 1회 지급(ARENA_DICE_ROWS 정본). 종전엔 표만 있고 지급이 없었다. */
+  const _played = !!(S.arenaSession && ((S.arenaSession.w|0)+(S.arenaSession.l|0))>0);
+  const _dice = arenaWeeklyDice(S.arenaRank|0, _played);
   S.arenaWeek=k;
+  if(_dice>0){ S.dice=(S.dice||0)+_dice; sysLog(`투기장 주간 정산 — ${(S.arenaRank|0)<=40?(S.arenaRank|0)+'위':'참여'} 보상 주사위 ${_dice}`); }
   S.arenaPts=0; S.arenaTier=arenaTierOf(0); S.arenaStreak=0; S.arenaRank=ARENA_RANK_RESET;
   if(S.arenaSession) { S.arenaSession.w=0; S.arenaSession.l=0; }
-  toast('투기장 랭킹이 초기화되었습니다.');
+  toast(_dice>0 ? `투기장 주간 정산 — 주사위 ${_dice} 지급 · 랭킹이 초기화되었습니다.` : '투기장 랭킹이 초기화되었습니다.');
   save();
   return true;
 }

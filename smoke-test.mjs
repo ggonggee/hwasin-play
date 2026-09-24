@@ -2255,6 +2255,35 @@ step('세이브·입력 문자열 HTML 제거 — 가져오기 세이브 태그 
   ev('load')();
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ 2026-09-25 회귀: 투기장 '매일 티어 골드'·'주간 순위 주사위' — 표에만 있고 지급 코드가 없던 약속(검증 워크플로 실측 +0).
+   표(ARENA_TIER_ROWS·ARENA_DICE_ROWS)가 곧 지급 정본인지, 주차가 지난 옛 티어는 브론즈로, 미참여 주는 0 인지 본다. */
+step('투기장 매일 티어 골드·주간 주사위 — 표 = 지급', ()=>{
+  const errs=[], S=ev('S');
+  const keep={ gold:S.gold, dice:S.dice||0, daily:JSON.parse(JSON.stringify(S.daily)), day:S.day, tier:S.arenaTier, week:S.arenaWeek, rank:S.arenaRank,
+    pts:S.arenaPts, sess:S.arenaSession?JSON.parse(JSON.stringify(S.arenaSession)):null, ent:S.stats.arenaEnters, att:JSON.parse(JSON.stringify(S.claimed.attend||{})) };
+  const ROWS=ev('ARENA_TIER_ROWS'), TIERS=ev('TIERS');
+  const val=n=>ROWS.find(r=>r[0]===n)[1];
+  const roll=()=>{ S.daily.date='2000-01-01'; const g0=S.gold; ev('rollDaily')(); return Math.round(S.gold-g0); };
+  S.stats.arenaEnters=3; S.arenaWeek=ev('arenaWeekKey')(); S.arenaTier=6;
+  const g1=roll(); if(g1<val('레전더리')) errs.push('레전더리 티어 골드 미지급: +'+g1);
+  S.arenaWeek='1999-1-4'; const g2=roll();   // 주차가 지남 → 브론즈
+  if(g2<val('브론즈') || g2>=val('실버')+val('브론즈')) errs.push('지난 주차 티어가 브론즈로 지급되지 않음: +'+g2);
+  S.stats.arenaEnters=0; S.arenaWeek=ev('arenaWeekKey')(); const g3=roll();
+  if(g3>=val('브론즈')) errs.push('투기장 미입장인데 티어 골드 지급: +'+g3);
+  // 주간 주사위: 3위·참여 → 표의 3위 값 / 미참여 → 0
+  const D=ev('arenaWeeklyDice');
+  const three=parseInt(String(ev('ARENA_DICE_ROWS').find(r=>r[0]==='3위')[1]).replace(/\D/g,''),10);
+  if(D(3,true)!==three) errs.push('3위 주사위 '+D(3,true)+' ≠ '+three);
+  if(D(500,true)!==40) errs.push('참여 기본 주사위 '+D(500,true)+' ≠ 40');
+  if(D(1,false)!==0) errs.push('미참여 주에 주사위 지급');
+  S.arenaWeek='1999-1-4'; S.arenaRank=3; S.arenaSession={w:2,l:1,t:0}; const d0=S.dice||0;
+  ev('arenaWeekRoll')(); if((S.dice||0)-d0!==three) errs.push('주간 롤오버 주사위 '+((S.dice||0)-d0)+' ≠ '+three);
+  if(S.arenaRank!==ev('ARENA_RANK_RESET')) errs.push('롤오버 후 순위 리셋 안 됨');
+  // 원복
+  S.gold=keep.gold; S.dice=keep.dice; S.daily=keep.daily; S.day=keep.day; S.arenaTier=keep.tier; S.arenaWeek=keep.week; S.arenaRank=keep.rank;
+  S.arenaPts=keep.pts; S.arenaSession=keep.sess; S.stats.arenaEnters=keep.ent; S.claimed.attend=keep.att;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ 2026-09-25 회귀: 획득 배율 '표시 = 적용' — ① 프리미엄 방치 골드가 idleTick·addGold 두 번 곱해져 ×4 였다
    ② 분해 환급에 골드 버프가 붙어 제작가를 넘었다(순환 이익) ③ 훈련소·길드·무쇠 캠프 경험치가 어디에도 안 곱해졌다. */
 step('획득 배율 관문 — 프리미엄 방치 ×2 · 분해 환급 raw · 훈련소/캠프 경험치 적용', ()=>{
