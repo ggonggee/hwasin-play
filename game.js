@@ -1417,6 +1417,13 @@ const ATTEND_DAYS = [
 ];
 /* ★ B9/G-134: 공지 — 제목 밴드 + 양피지 서술형 본문 (목록 → 상세 2단) */
 const NOTICES = [
+  /* ★ v5.358: 대장간 주문(#3) — 장비를 다 맞춘 뒤에도 매일 '만들 이유'. */
+  { cat:'[업데이트]', ic:'📜', t:'대장간 주문이 열립니다 — 매일 3건의 납품 의뢰', d:'2026-09-25',
+    body:'군주들에게 알립니다.<br><br>장비를 모두 레전더리로 맞춘 뒤에도 대장간의 불이 꺼지지 않도록, 의뢰인들이 매일 장비를 주문합니다.<br><br>'+
+      '· <b>열리는 때</b> — 출격 리더가 10부위 모두 레전더리 장비를 입으면 열립니다(한 번 열리면 계속 유지).<br>'+
+      '· <b>주문</b> — 매일 3건. 영웅 장비 1~2개, 가끔 레전더리 장비 1개. 받은 날부터 3일 동안 유효하고, 완료했거나 기한이 지난 칸은 매일 0시에 새 주문으로 바뀝니다.<br>'+
+      '· <b>보상</b> — 전설 망치·주사위(레전더리 주문은 골드도 조금).<br>'+
+      '· <b>납품</b> — [제작] 화면 위쪽 \"대장간 주문\"에서. 입고 있지 않고 강화하지 않은 같은 장비만 납품됩니다. 주문한 장비를 만들면 제작 결과 창에서 바로 납품할 수 있습니다.' },
   /* ★ v5.357: 기기 시계 되감기 반복 지급 차단(#16) — 시계가 틀렸다가 교정된 이용자는 초기화가 늦게 열리므로(이미 앞당겨 쓴 날) 숨기지 않고 알린다. */
   { cat:'[수정]', ic:'🕰️', t:'기기 날짜를 되돌려도 초기화·보상이 반복되지 않습니다', d:'2026-09-25',
     body:'군주들에게 알립니다.<br><br>'+
@@ -1650,6 +1657,8 @@ function freshState(){
        base=주 시작 스냅샷(stats), claimed=의뢰별 1회성 수령. 진행도 상태라 freshState 소유
        (마이그레이션 판정 플래그 아님, 3-3 무관). */
     weekly:{ key:'', base:null, claimed:{} },
+    /* ★ #3(2차) 대장간 주문 — on=해금(리더 10부위 L, 한 번 열리면 유지) · day=마지막 갱신일 · list=3칸. 진행도 상태(이관 판정 플래그 아님). */
+    orders:{ on:0, day:'', list:[] },
     /* ★ v5.256: 월간 의뢰 — 일(미션)-주(의뢰)-월(의뢰) 리듬 완결. 주간(v5.249)과
        동일 패턴(키·스냅샷·의뢰별 1회성)을 월 규모로. */
     monthly:{ key:'', base:null, claimed:{} },
@@ -1665,6 +1674,7 @@ function freshState(){
             ddStage:0,                      // 요일던전 최고 클리어 단계
             emberBest:0,                    // ★ v5.294: 잔불의 미궁 최고 클리어 문(1~3) — ddStage 와 같은 '최고 기록' 축
             salvages:0,                     // ★ v5.219: 장비 분해 누적 (업적 축)
+            orders:0,                       // ★ #3(2차): 대장간 주문 납품 누적
             legendCrafts:0,                 // ★ v5.219: 레전더리 등급 제작 성공 누적 (업적 축)
             bossTop:0,                      // 레전더리 보스 처치 횟수
             rubyBox:0,                      // 루비 상자(충전 상품) 구매 횟수
@@ -2145,6 +2155,7 @@ function refreshClaimBadges(){
      튜토리얼 중엔 끈다(7단계 손가락이 [합성]을 짚는다). 합성은 레벨 100% 승계의 순수 상승이라 켜진 채 남는 점이 없다. */
   _setDot(document.querySelector('[data-modal="hero"]'), heroFuseAvail());
   _setDot(document.querySelector('[data-modal="adventure"]'), advDotOn());   // #5(2차) 오늘 남은 모험이 있고 아직 안 열어 봤으면
+  _setDot(document.querySelector('[data-modal="forge"]'), orderClaimable());   // #3(2차) 지금 납품할 수 있는 대장간 주문
   _setDot(document.getElementById('btnMenuToggle'), q||a||n||od||m);
   /* ★ v5.271: 칭호 개선 가능 — [data-modal="titles"] 항목(드로어 내 칭호). ☰ 합산. */
   titleSyncOwn(true);   // ★ 2026-09-25: 달성한 칭호를 보유로 기록(5초 주기) — #11(2차): 새로 달성하면 알림
@@ -5951,6 +5962,96 @@ function cancelCraft(){
   S.gold += (c.gold||0);
   S.craft=null; toast('제작 취소 · 100% 환급'); openModal('forge'); refreshHUD();
 }
+/* ★ 2026-09-25(워크플로 2차 #3): 대장간 주문서 — 장비를 다 맞춘 뒤 '제작'이 죽던 문제.
+   시뮬: 풀 600h 는 168h, 캐주얼 2400h 는 240h 이후 업그레이드 제작 0회 · E/L 재료는 보유 상한(900)에서 버려진다 · 분해는 항상 손실.
+   매일 3칸 — 주문 = 특정 E/L 장비 1~2개를 납품하면 전설 망치·주사위(L 은 원시 골드 조금)를 준다. 제작의 '고를 이유'와 적체 재료의 출구.
+   ⚠ 설계상 지킬 것(반박 검증 반영):
+   · 해금 = 리더가 10부위 전부 레전더리를 입은 뒤(한 번 열리면 유지). 업그레이드 구간에 열면 모루 1개를 두고 성장 제작과 경합한다.
+   · E 중심, L 은 하루 최대 1건·1개(3번째 칸의 절반). 최고 등급 3건이면 하루 9천만 골드·15시간 모루를 먹어 결정 가호·망치 구매를 밀어낸다.
+   · 골드 보상은 원시(addGold raw)·제작가 50% 미만 — 제작→납품 순환 이익 차단(v5.330 분해 환급 사고와 같은 유형).
+   · 기록서·탑 상자·강화석은 넣지 않는다(기록서·상자는 ✦ 병목을 바꾸고, 강화석은 후반에 가치가 없다).
+   · 생성은 날짜 문자열 해시 결정론 — Math.random 금지(새로고침마다 바뀌면 안 되고 시뮬 재현성 유지).
+   · 날짜 전환은 isLaterDay(#16) — 시계를 되돌려 새 주문을 뽑지 못한다. 미완료 주문은 받은 날 포함 3일(ORDER_TTL) 유지(캐주얼 부담).
+   · 납품 대상 = 미착용·영웅 귀속 없음·강화 0 인 같은 이름·등급 장비만. 클릭 시점 재조회 → 소모 → 지급 → 즉시 저장.
+   · '특수'(고서·물약 = 보유 효과)는 주문에 넣지 않는다 — 마지막 1개를 납품해 효과가 사라지는 사고 방지(salvageBulk 와 같은 이유). */
+const ORDER_SLOTS=3, ORDER_TTL=3;
+const ORDER_RW={ E1:{ h:1, d:10, g:0 }, E2:{ h:2, d:20, g:0 }, L1:{ h:4, d:40, g:2000000 } };   // g < CRAFT.L.gold×0.5(600만)
+function _ordHash(s){ let h=2166136261>>>0; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619)>>>0; } return h>>>0; }
+function orderGen(dayKey, i){
+  const h=_ordHash(String(dayKey)+'#'+i), g=(i===ORDER_SLOTS-1 && (h&1)) ? 'L' : 'E';
+  const pool=[]; FORGE_SLOTS.forEach(s=>{ if(!s.items || s.k==='특수') return; (s.items[g]||[]).forEach(it=>pool.push({ cat:s.k, n:it.n })); });
+  const it=pool[(h>>>4)%pool.length];
+  return { g, cat:it.cat, n:it.n, qty:(g==='L' ? 1 : 1+((h>>>12)&1)), born:dayIdx(dayKey), done:0 };
+}
+function orderRw(o){ return ORDER_RW[o.g+o.qty] || ORDER_RW.E1; }
+function orderLeaderAllL(){
+  const lead=party()[0]; if(!lead) return false;
+  const parts=new Set(S.equips.filter(e=>e.equipped && e.grade==='L' && (!e.heroId || e.heroId===lead.hero_id)).map(e=>slotKeyOf(e.slot)));
+  return parts.size>=10;
+}
+/* 읽기 겸 날짜 전환 — 잠겨 있으면 null. 5초 배지 틱에서도 불리므로 지급·차감은 넣지 마라(전환 시 목록 갱신·저장만). */
+function ordersState(){
+  if(!S) return null;
+  if(!S.orders || typeof S.orders!=='object' || !Array.isArray(S.orders.list)) S.orders={ on:0, day:'', list:[] };
+  const o=S.orders;
+  if(!o.on){ if(!S.seenTutorial || !orderLeaderAllL()) return null;
+    o.on=1; try{ sysLog('📜 대장간 주문이 열렸습니다 — 매일 3건, 장비를 납품하면 전설 망치·주사위'); if(_loopOn) toast('📜 대장간 주문이 열렸습니다 — [제작] 화면 위쪽', 4000); }catch(e){} }
+  const t=today();
+  if(o.day!==t && (!o.day || isLaterDay(o.day, t))){
+    const di=dayIdx(t);
+    for(let i=0;i<ORDER_SLOTS;i++){ const c=o.list[i];
+      if(!c || c.done || !isFinite(di) || !((di-(c.born|0)) < ORDER_TTL)) o.list[i]=orderGen(t, i); }
+    o.list.length=ORDER_SLOTS; o.day=t; save();
+  }
+  return o;
+}
+function orderCands(o){ return (S.equips||[]).filter(e=>!e.equipped && !e.heroId && e.grade===o.g && e.slot===o.n && !((e.enh|0)>0)); }
+function orderReady(o){ return !!o && !o.done && orderCands(o).length>=o.qty; }
+function orderClaimable(){ const st=ordersState(); return !!st && st.list.some(orderReady); }
+/* 순수 상태 함수(smoke 가 DOM 없이 검증) — 'ok'|'locked'|'bad'|'done'|'short'. 판정·소모·지급·저장이 한 곳(차감 전 재조회). */
+function orderDeliver(i){
+  const st=ordersState(); if(!st) return 'locked';
+  const o=st.list[i]; if(!o) return 'bad'; if(o.done) return 'done';
+  const c=orderCands(o); if(c.length<o.qty) return 'short';
+  const use=new Set(c.slice(0,o.qty)); S.equips=S.equips.filter(e=>!use.has(e));
+  const r=orderRw(o); S.hammers=(S.hammers||0)+r.h; S.dice=(S.dice||0)+r.d; if(r.g) addGold(r.g, true);
+  o.done=1; S.stats.orders=(S.stats.orders||0)+1; save();
+  return 'ok';
+}
+function orderRwTxt(r){ return `🔨 전설 망치 ${r.h} · 🎲 ${r.d}`+(r.g?` · 🪙 ${fmt(r.g)}`:''); }
+function ordStripHTML(st){ const nR=st.list.filter(orderReady).length, nD=st.list.filter(o=>o&&o.done).length;
+  return `📜 대장간 주문 <b>${nD}/${ORDER_SLOTS}</b>`+(nR?` · <span class="ord-can">납품 가능 ${nR}</span>`:(nD<ORDER_SLOTS?' · 의뢰 대기':' · 오늘 완료'))+' <span class="ord-go">▶</span>'; }
+function openOrders(){
+  const st=ordersState(); if(!st){ toast('리더가 10부위 모두 레전더리를 입으면 대장간 주문이 열립니다'); return; }
+  const bd=subBody('📜 대장간 주문');
+  const draw=(flash)=>{ bd.innerHTML='';
+    const di=dayIdx(today()), nDone=st.list.filter(o=>o&&o.done).length;
+    bd.appendChild(el('div','hint',`의뢰인이 맡긴 장비를 만들어 납품하세요 · 오늘 ${nDone}/${ORDER_SLOTS} 완료`));
+    st.list.forEach((o,i)=>{ if(!o) return;
+      const have=orderCands(o).length, ready=orderReady(o), G=GRADES[o.g], r=orderRw(o);
+      const left=isFinite(di) ? Math.max(1, ORDER_TTL-(di-(o.born|0))) : ORDER_TTL;
+      const row=el('div','ord-row'+(o.done?' done':'')+(flash===i?' ord-flash':''));
+      row.innerHTML=`<div class="ord-ic grade-${o.g}" style="--gc:${G.color}">${equipImg(o.n,1.7)}</div>
+        <div class="ord-mid"><div class="ord-t" style="color:${G.color}">${G.name} ${o.n} ×${o.qty}</div>
+          <div class="ord-rw">${orderRwTxt(r)}</div>
+          <div class="ord-sub">${o.done?'납품 완료':`보유 <b class="${have>=o.qty?'ok':'bad'}">${Math.min(have,o.qty)}/${o.qty}</b> · 남은 기한 ${left}일`}</div></div>`;
+      if(o.done) row.appendChild(el('div','ord-stamp','납품'));
+      else {
+        const b=el('button','btn sm'+(ready?' gold':''), ready?'납품':'제작');
+        b.onclick=()=>{
+          if(!orderReady(o)){ closeSub(); openModal('forge', o.n); return; }   // 제작: 그 아이템이 선택된 대장간(v5.119 사전 선택)
+          const res=orderDeliver(i);
+          if(res==='ok'){ claimSfx(); toast(`납품 완료 — ${orderRwTxt(r)}`); sysLog(`대장간 주문 납품 — ${G.name} ${o.n} ×${o.qty} · ${orderRwTxt(r)}`); refreshHUD(); refreshClaimBadges(); draw(i);
+            const s=document.querySelector('.ord-strip'); if(s) s.innerHTML=ordStripHTML(st); }   // 뒤에 깔린 대장간 줄도 갱신
+          else { toast(res==='short'?'납품할 장비가 부족합니다(미착용·강화 0 장비만)':'이미 처리되었습니다'); draw(); }
+        };
+        row.appendChild(b);
+      }
+      bd.appendChild(row); });
+    bd.appendChild(el('div','small mut center','매일 0시, 완료했거나 기한(3일)이 지난 칸이 새 주문으로 바뀝니다 · 미착용·강화 0 장비만 납품'));
+  };
+  draw();
+}
 let _forgeCtx=null, _forgeCraftFn=null;
 
 /* ---------- [N1] 장비 옵션 재설정 (주사위 리롤) ----------
@@ -6121,6 +6222,8 @@ const MODALS = {
       : (!S.seenTutorial && TUT[S.tutStep] && TUT[S.tutStep].k==='shield') ? '방패'
       : (S.seenTutorial && guideTarget()) ? guideTarget().slot : null;
     if(want){ const loc=forgeLocate(want); if(loc){ cur=loc.grade; slotIdx=loc.slotIdx; itemIdx=loc.itemIdx; } }
+    /* #3(2차): 대장간 주문 줄 — 해금 뒤에만. ⚠ 등급 탭 줄 안에 넣지 마라(탭 on 토글이 GORDER 인덱스로 children 을 짚는다). */
+    { const st=ordersState(); if(st){ const os=el('div','ord-strip'); os.innerHTML=ordStripHTML(st); os.onclick=()=>openOrders(); b.appendChild(os); } }
     const tabs=el('div','tabrow');
     /* ★ v5.147: '지금 제작 가능' 스캔성 — 이 게임의 재미는 '뭘 만들지 고르는 것'인데,
        종전엔 아이템을 하나씩 눌러 재료 칩을 봐야 알 수 있었다. 순수 계산(craftParams·recipeOk
@@ -9489,6 +9592,12 @@ function resolveCraft(forceSuccess){
     if(it) craftStart(grade, cat, it);
     else openModal('forge', slot); };
   b.appendChild(again);
+  /* #3(2차): 방금 만든 것으로 주문을 채울 수 있으면 바로 납품 창으로 — 제작→납품 고리를 한 탭으로. 못 채우면 진행(1/2)만 알린다. */
+  if(ok){ try{ const st=ordersState(), oi=st ? st.list.findIndex(o=>o && !o.done && o.g===grade && o.n===slot) : -1;
+    if(oi>=0){ const o=st.list[oi], have=orderCands(o).length;
+      if(have>=o.qty){ const ob=el('button','btn gold wide',`📜 주문 납품 (${Math.min(have,o.qty)}/${o.qty}) ▶`); ob.style.marginTop='6px';
+        ob.onclick=()=>{ closeSub(); openModal('forge', fSlot); openOrders(); }; b.appendChild(ob); again.classList.remove('gold'); }
+      else b.appendChild(el('div','small mut center',`📜 대장간 주문 ${GRADES[grade].name} ${slot} — ${have}/${o.qty}`)); } }catch(e){} }
   const btn=el('button','btn'+((gNext && !canEq)?' gold':'')+' wide', gNext ? `다음 길잡이 · ${gNext} ▶` : '확인'); btn.style.marginTop='6px';
   btn.onclick=()=>{ closeSub(); openModal('forge', fSlot); }; b.appendChild(btn);
   $('#modal-root').classList.add('on'); currentModal='craftResult';
@@ -9638,8 +9747,11 @@ function fuseRevealFx(r, prevG, lv, cp0){
   });
   sfx('legendary');
 }
+/* 영웅 상세에서 [등급업 합성]한 경로는 heroDetail 하위 화면(.sub-ovl)이 목록을 덮고 있어 깜빡임이 가려진 채 돈다(리뷰 v5.354~356 실측) —
+   그 경우 상세 화면 자체가 새 영웅을 보여 주므로 생략한다. ⚠ closeSub 로 상세를 강제로 닫지 마라(새 영웅 상세에서 쫓아내는 퇴행). */
 function fuseFocusCard(hid){
-  try{ if(currentModal!=='hero') return; const i=HERO_ROSTER.findIndex(x=>x.hero_id===hid);
+  try{ const mr=$('#modal-root'); if(currentModal!=='hero' || (mr && Array.from(mr.children||[]).some(c=>c.classList && c.classList.contains('sub-ovl')))) return;   // 하위 화면은 subBody/openSub 가 #modal-root 직속으로 붙인다
+    const i=HERO_ROSTER.findIndex(x=>x.hero_id===hid);
     const c=document.querySelectorAll('#modalBody .hero-grid .herocard')[i]; if(!c) return;
     c.scrollIntoView({block:'nearest'}); c.classList.remove('hc-pulse'); void c.offsetWidth; c.classList.add('hc-pulse'); setTimeout(()=>c.classList.remove('hc-pulse'), 900); }catch(e){}
 }

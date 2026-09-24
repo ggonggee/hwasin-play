@@ -49,6 +49,10 @@ const ARENA_WIN = (()=>{ for(const a of process.argv.slice(3)){ if(a==='arenawin
 /* arenawin=real — 승률 상수 대신 **실제 투기장 전투**(arenaFight → 헤드리스 펌프 → arenaResult 정본)를 N판 돌린다.
    연승 보정(적 CP +8%/연승)·편성 4인·데미지 50% 감소가 전부 실물 그대로 들어간다. 느리다(판당 최대 60초 전투). */
 const arenaTally={ weeks:0, rankSum:0, buffSum:0, fights:0, wins:0 };
+/* ★ 2026-09-25(워크플로 2차 #3): orders=1 — 대장간 주문 정책 켜기(기본 꺼짐 = 기준선 불변). 정책은 dailyStep 끝. */
+const ORDERS_ON = process.argv.slice(3).some(a=>a==='orders=1');
+const ORDER_RES = (()=>{ for(const a of process.argv.slice(3)){ const m=/^orderres=(\d+)$/.exec(a||''); if(m) return Number(m[1])*1e6; } return 30e6; })();   // 주문 제작 골드 예약선(백만) — 기본 3천만(결정 가호·망치 1묶음 몫은 남긴다)
+const orderTally={ unlockH:null, days:0, delivered:0, crafts:0, goldSpent:0, hammers:0, dice:0, gold:0 };
 const OFFCAP_ARG = (()=>{ for(const a of process.argv.slice(3)){ const m=/^offcap=(\d+)$/.exec(a||''); if(m) return Number(m[1]); } return null; })();
 
 /* ---- 최소 DOM 스텁 (smoke-test 의 것에서 전투 구동에 필요한 만큼만) ---- */
@@ -439,6 +443,25 @@ function dailyStep(){
         ev('addGold')(ft.gold, true);
         acts+='용광로시련 ';
       }
+    }
+  }
+  /* ★ 2026-09-25(워크플로 2차 #3): 대장간 주문 정책(orders=1 일 때만 — 기본 꺼짐 = 기준선 불변). 게임 정본(ordersState·orderCands·orderDeliver)을 그대로 탄다.
+     정책: 해금 뒤 매일, 미완료 주문마다 재고가 모자라면 craftNow 로 제작 — 재료 충분·골드 예약선(orderres=백만, 기본 30) 위일 때만,
+     칸당 시도 상한 = 기대 시도 수×2. 채워지면 납품. 시뮬 제작은 즉시 판정이라 모루 시간(E 1h·L 2h)은 반영하지 않는다(상한 추정). */
+  if(ORDERS_ON){
+    /* 시뮬은 튜토리얼을 돌지 않아 seenTutorial=false 로 남는다 — 해금 판정 순간만 켜고 되돌린다(다른 경로에 영향 없게). 해금(on=1) 뒤엔 이 플래그를 안 본다. */
+    const _st0=S.seenTutorial; S.seenTutorial=true; let st; try{ st=ev('ordersState')(); } finally { S.seenTutorial=_st0; }
+    if(st){ if(orderTally.unlockH===null) orderTally.unlockH=+(simSec/3600).toFixed(1); orderTally.days++;
+      const FS=ev('FORGE_SLOTS');
+      st.list.forEach((o,i)=>{ if(!o || o.done) return;
+        const s2=FS.find(s=>s.k===o.cat), it=s2 && (s2.items[o.g]||[]).find(x=>x.n===o.n); if(!it) return;
+        const cost=ev('craftParams')(o.g,o.cat,o.n).gold, maxTry=Math.ceil(o.qty/(o.g==='L'?0.4:0.8))*2;
+        for(let t=0; t<maxTry && ev('orderCands')(o).length<o.qty; t++){
+          if(S.craft || !ev('recipeOk')(it.recipe) || S.gold<cost+ORDER_RES) break;
+          const g0=S.gold; if(!craftNow(o.g,o.cat,it)) break; orderTally.crafts++; orderTally.goldSpent+=g0-S.gold; }
+        if(ev('orderReady')(o)){ const h0=S.hammers|0, d0=S.dice|0, gg=S.gold;
+          if(ev('orderDeliver')(i)==='ok'){ orderTally.delivered++; orderTally.hammers+=(S.hammers|0)-h0; orderTally.dice+=(S.dice|0)-d0; orderTally.gold+=S.gold-gg; acts+='주문납품 '; } }
+      });
     }
   }
   return acts.trim();   // ★ v5.245: 일일 콘텐츠 수행 요약(액션 집계용)
@@ -911,6 +934,7 @@ log(`\n총 시뮬: ${(simSec/3600).toFixed(1)}h · 창 ${windows}회 · 최종 C
   log(`[진단] 위험강화: 시도 ${riskTally.tries} · 성공 ${riskTally.success} · 하락 ${riskTally.drop} · 보호 ${riskTally.saved} · 파괴 ${riskTally.destroyed} · +25도달 ${riskTally.max20}부위 · 망치구매 골드 ${(riskTally.hammerGold/1e6).toFixed(0)}M + 강화석 ${riskTally.hammerStone}개`);
   log(`[진단] 보유 영웅별 CP:`, ev('ownedHeroes')().map(h=>`${h.name.slice(0,5)}(${h.grade})=${ev('heroPower')(h)}`).join(' · '));
   if(arenaTally.log) log('[진단] 투기장 주별(실전투): '+arenaTally.log.join(' · '));
+  if(ORDERS_ON) log(`[진단] 대장간 주문(#3): 해금 ${orderTally.unlockH===null?'없음':orderTally.unlockH+'h'} · ${orderTally.days}일 · 납품 ${orderTally.delivered}건 · 주문 제작 ${orderTally.crafts}회(골드 ${(orderTally.goldSpent/1e6).toFixed(0)}M) · 전설 망치 +${orderTally.hammers} · 주사위 +${orderTally.dice} · 골드 +${(orderTally.gold/1e6).toFixed(0)}M`);
   if(ARENA_N>0) log(`[진단] 투기장(#2 측정): 주당 ${ARENA_N}판·승률 ${ARENA_WIN<0?`실전투 ${arenaTally.wins}/${arenaTally.fights}=${arenaTally.fights?(arenaTally.wins/arenaTally.fights*100).toFixed(1):0}%`:ARENA_WIN} · ${arenaTally.weeks}주 평균 순위 ${arenaTally.weeks?Math.round(arenaTally.rankSum/arenaTally.weeks):0}위 · 평균 버프 +${arenaTally.weeks?Math.round(arenaTally.buffSum/arenaTally.weeks):0}%`);
   log(`[진단] 영웅 강화(#12): 총 ${enhTally.ups}단계 ·`, ev('ownedHeroes')().map(h=>`${h.name.slice(0,5)}+${ev('heroEnhLv')(h.hero_id)}`).join(' · '));
   log('[진단] 결정 가호: '+buffTally.n+'회('+(buffTally.gold/1e6).toFixed(0)+'M) · 골드 보유 '+Math.floor(S.gold));

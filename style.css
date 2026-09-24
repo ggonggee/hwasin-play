@@ -289,6 +289,27 @@ body{
 .away-bank .ab-t{ grid-column:1; font-weight:700; color:#f0d59a; }
 .away-bank .ab-d{ grid-column:1; color:var(--txt-dim); line-height:1.45; word-break:keep-all; }
 .away-bank .btn{ grid-column:2; grid-row:1 / span 2; }
+/* ★ 2026-09-25(워크플로 2차 #3): 대장간 주문 — 대장간 위쪽 줄 · 주문 행 · 납품 도장 */
+.ord-strip{ display:flex; align-items:center; gap:6px; margin:0 0 8px; padding:7px 10px; border:1px solid #8a6424; border-radius:8px; cursor:pointer;
+  background:linear-gradient(180deg,rgba(60,40,12,.6),rgba(24,16,8,.6)); font-size:var(--fs-sm); color:#f0d59a; line-height:1.3; word-break:keep-all; min-height:34px; }
+.ord-strip .ord-can{ color:var(--gold); font-weight:800; }
+.ord-strip .ord-go{ margin-left:auto; color:var(--frame-lit); }
+.ord-row{ position:relative; display:flex; align-items:center; gap:9px; padding:8px 9px; margin:0 0 7px; border:1px solid var(--frame-dk,#4a3823); border-radius:9px;
+  background:rgba(20,15,10,.55); }
+.ord-row.done{ opacity:.62; }
+.ord-row .ord-ic{ flex:0 0 auto; width:46px; height:46px; display:flex; align-items:center; justify-content:center; border-radius:8px;
+  border:1px solid var(--gc,#8a6a38); background:radial-gradient(circle at 50% 40%,rgba(255,255,255,.08),rgba(0,0,0,.35)); }
+.ord-row .ord-mid{ flex:1 1 auto; min-width:0; }
+.ord-row .ord-t{ font-weight:800; font-size:var(--fs-sm); line-height:1.3; word-break:keep-all; }
+.ord-row .ord-rw{ font-size:var(--fs-xs); color:#f0d59a; margin-top:2px; line-height:1.35; }
+.ord-row .ord-sub{ font-size:var(--fs-xs); color:var(--txt-dim); margin-top:2px; }
+.ord-row .ord-sub b.ok{ color:var(--ok,#8fd18f); } .ord-row .ord-sub b.bad{ color:var(--bad); }
+.ord-row .btn{ flex:0 0 auto; min-width:58px; }
+.ord-row .ord-stamp{ flex:0 0 auto; padding:3px 8px; border:2px solid #c9463a; border-radius:6px; color:#e0685c; font-weight:900; font-size:var(--fs-sm);
+  transform:rotate(-12deg); letter-spacing:.08em; }
+.ord-row.ord-flash .ord-stamp{ animation:ordStamp .42s cubic-bezier(.2,1.6,.4,1); }
+@keyframes ordStamp{ from{ transform:rotate(-12deg) scale(2.2); opacity:0; } to{ transform:rotate(-12deg) scale(1); opacity:1; } }
+@media (prefers-reduced-motion: reduce){ .ord-row.ord-flash .ord-stamp{ animation:none; } }
 /* ★ 2026-09-25(워크플로 2차 #9): 합성 뒤 새 영웅 카드 깜빡임 */
 .herocard.hc-pulse{ animation:hcPulse .9s ease-out; }
 @keyframes hcPulse{ 0%{ box-shadow:0 0 0 0 var(--gc,#f2b23a); } 40%{ box-shadow:0 0 0 6px var(--gc,#f2b23a); } 100%{ box-shadow:0 0 0 0 transparent; } }

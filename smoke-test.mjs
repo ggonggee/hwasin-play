@@ -2606,6 +2606,57 @@ step('리뷰 반영 — 교환 클릭 시점 품절 · 긴 토스트 · 가져�
   S.mats=keep.mats; S.gray=keep.gray; S.lastSeen=keep.ls; S.offlinePending=keep.op;
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ 2026-09-25(워크플로 2차 #3): 대장간 주문 — 해금(리더 10부위 L)·결정론 생성·E 중심/L 하루 1건·기한·납품 대상 제한·이중 수령·골드 < 제작가 절반·되감기. */
+step('대장간 주문 — 해금·결정론·납품 대상·이중 수령·순환 이익 없음', ()=>{
+  const errs=[], S=ev('S');
+  const keep=JSON.parse(JSON.stringify({ orders:S.orders, equips:S.equips, hammers:S.hammers, dice:S.dice, gold:S.gold, st:S.seenTutorial, so:S.stats.orders }));
+  const gen=ev('orderGen'), RW=ev('ORDER_RW'), CR=ev('CRAFT');
+  // 결정론 · 등급 분포 · 특수 제외 · 보상 상한
+  const D=n=>ev(`new Date(Date.now()+(${n})*864e5).toDateString()`);
+  if(JSON.stringify(gen(D(0),0))!==JSON.stringify(gen(D(0),0))) errs.push('같은 날 같은 칸이 다르게 생성');
+  let L=0; const FS=ev('FORGE_SLOTS'), special=new Set(FS.find(s=>s.k==='특수').items.E.concat(FS.find(s=>s.k==='특수').items.L).map(x=>x.n));
+  for(let d=0; d<60; d++){ const l=[0,1,2].map(i=>gen(D(d),i));
+    if(l[0].g!=='E' || l[1].g!=='E') errs.push('앞 두 칸이 E 가 아님');
+    if(l.filter(o=>o.g==='L').length>1 || l.some(o=>o.g==='L' && o.qty!==1)) errs.push('L 하루 1건·1개 위반');
+    if(l.some(o=>special.has(o.n))) errs.push('특수(보유 효과) 주문');
+    L+=l.filter(o=>o.g==='L').length; }
+  if(L<15 || L>45) errs.push('60일 중 L 주문 '+L+'일(기대 ~30)');
+  if(!(RW.L1.g < CR.L.gold*0.5) || RW.E1.g || RW.E2.g) errs.push('골드 보상이 제작가 절반 이상');
+  // 잠김: 리더가 10부위 L 이 아니면 null · 해금되면 3칸
+  S.seenTutorial=true; S.orders={ on:0, day:'', list:[] };
+  const lead=ev('party')()[0], skey=ev('slotKeyOf');
+  S.equips=S.equips.filter(e=>!(e.equipped && (!e.heroId || e.heroId===lead.hero_id)));
+  if(ev('ordersState')()!==null) errs.push('10부위 L 아닌데 주문 열림');
+  // 리더 10부위를 L 로 — 부위별 L 아이템 하나씩(slotKeyOf 정본)
+  const seen=new Set(); FS.forEach(s=>{ if(!s.items) return; (s.items.L||[]).forEach(it=>{ const p=skey(it.n); if(!seen.has(p) && seen.size<10){ seen.add(p); S.equips.push({ grade:'L', slot:it.n, enh:0, equipped:true, heroId:lead.hero_id }); } }); });
+  if(seen.size<10) errs.push('L 로 채울 부위가 10개 미만 '+seen.size);
+  const st=ev('ordersState')();
+  if(!st || st.on!==1 || st.list.length!==3 || st.day!==ev('today')()) errs.push('해금 뒤 3칸 생성 실패 '+JSON.stringify(st&&st.list.length));
+  if(st && JSON.stringify(st.list.map(o=>o.n))!==JSON.stringify([0,1,2].map(i=>gen(ev('today')(),i).n))) errs.push('상태 목록 ≠ 결정론 생성');
+  // 납품 대상 제한: 착용·귀속·강화 장비는 제외 → short
+  const o=st.list[0]; const h0=S.hammers|0, d0=S.dice|0, g0=S.gold;
+  S.equips.push({ grade:o.g, slot:o.n, enh:0, equipped:true, heroId:'X' }, { grade:o.g, slot:o.n, enh:0, equipped:false, heroId:lead.hero_id }, { grade:o.g, slot:o.n, enh:3, equipped:false });
+  if(ev('orderDeliver')(0)!=='short') errs.push('착용·귀속·강화 장비로 납품됨');
+  for(let k=0;k<o.qty;k++) S.equips.push({ grade:o.g, slot:o.n, enh:0, equipped:false });
+  const n0=S.equips.length;
+  if(!ev('orderReady')(o) || !ev('orderClaimable')()) errs.push('납품 가능 판정 거짓');
+  if(ev('orderDeliver')(0)!=='ok') errs.push('정상 납품 실패');
+  const rw=ev('orderRw')(o);
+  if(S.equips.length!==n0-o.qty || (S.hammers|0)-h0!==rw.h || (S.dice|0)-d0!==rw.d) errs.push('납품 소모/지급 '+JSON.stringify([n0-S.equips.length,(S.hammers|0)-h0,(S.dice|0)-d0]));
+  if(S.equips.filter(e=>e.slot===o.n && e.grade===o.g && (e.equipped||e.heroId||e.enh)).length!==3) errs.push('제외 대상 장비가 소모됨');
+  if(ev('orderDeliver')(0)!=='done' || (S.hammers|0)-h0!==rw.h) errs.push('이중 수령');
+  // 날짜 전환: 완료 칸만 새로, 미완료는 기한(3일) 안이면 유지 · 되감기엔 무변화
+  const keepN=st.list[1].n; S.orders.day=D(-1); ev('ordersState')();
+  if(S.orders.list[1].n!==keepN || S.orders.list[0].done) errs.push('다음 날 갱신 규칙(완료 칸만 교체) 위반');
+  S.orders.list[1].born=ev('dayIdx')(D(-3)); S.orders.day=D(-1); ev('ordersState')();
+  if(S.orders.list[1].born===ev('dayIdx')(D(-3))) errs.push('기한 3일 지난 미완료 주문이 남음');
+  const snap=JSON.stringify(S.orders.list); S.orders.day=D(1); ev('ordersState')();
+  if(JSON.stringify(S.orders.list)!==snap) errs.push('시계 되감기로 주문 재생성');
+  // 구세이브(orders 없음) 로드 안전
+  delete S.orders; if(ev('ordersState')()===null && !S.orders) errs.push('orders 없는 세이브에서 상태 복구 실패');
+  Object.assign(S, { orders:keep.orders, equips:keep.equips, hammers:keep.hammers, dice:keep.dice, gold:keep.gold, seenTutorial:keep.st }); S.stats.orders=keep.so;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ 2026-09-25(워크플로 2차 #16): 기기 시계 되감기 — 일일·출석·주·월·투기장 주차·오프라인 정산이 '나중일 때만' 넘어간다(반복 지급 차단). 앞으로 가는 롤오버는 그대로. */
 step('시계 되감기 무지급 — 일일·출석·주·월·투기장·오프라인 · 앞으로는 정상', ()=>{
   const errs=[], S=ev('S');
