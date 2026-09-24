@@ -1634,7 +1634,7 @@ function computeOffline(){
 }
 // 깊은 병합: 중첩 객체 신규 하위키까지 기본값 채움 (세이브 마이그레이션 NaN 방지)
 function deepFill(t,d){ for(const k in d){ if(t[k]===undefined) t[k]=d[k]; else if(d[k]&&typeof d[k]==='object'&&!Array.isArray(d[k])&&typeof t[k]==='object') deepFill(t[k],d[k]); } }
-function mergeDefaults(){ deepFill(S, freshState());
+function mergeDefaults(){ scrubSaveStrings(S); deepFill(S, freshState());   // ★ 2026-09-24: 세이브 문자열의 < > 제거(safeText 주석 참조)
   // ★ B9/G-119: 구세이브는 title:'' 로 저장되어 deepFill 대상이 아니다 → 기본 칭호 강제 착용
   if(!S.title || !TITLE_BY_ID[S.title]) S.title='newbie';
   migrateHeroes();   // ★ B4/G-50: 직업키 → hero_id 로스터 구조 변환
@@ -1803,6 +1803,23 @@ function refreshClaimBadges(){
 /* ----------------------------- 유틸 ----------------------------- */
 const $ = s => document.querySelector(s);
 const el = (t,c,h)=>{ const e=document.createElement(t); if(c)e.className=c; if(h!==undefined)e.innerHTML=h; return e; };
+/* ★ 2026-09-24: 플레이어가 입력했거나 세이브에서 들어온 문자열을 정리한다.
+   el()·toast()·sysLog() 를 비롯한 이 코드의 출력은 거의 전부 innerHTML 이다. 길드명·약탈 대상에 '<' 가
+   들어가면 태그로 해석돼 화면이 깨지고, [진행도 가져오기] 로 들어온 세이브라면 스크립트까지 실행된다
+   ("붙여넣으면 골드 무한" 류 세이브 코드 공유는 방치형에서 흔한 경로다).
+   출력 지점(수백 곳)을 하나하나 이스케이프하는 대신 문자열이 '들어오는 곳' 에서 막는다:
+     · safeText  — 입력칸 2곳(길드 창설·약탈 대상). 이름에 HTML 특수문자가 필요할 일은 없다.
+     · scrubSaveStrings — 세이브 로드 1곳(mergeDefaults). 정상 세이브에는 < > 가 없다 —
+       채팅·시스템 로그는 저장하지 않고, S 에 HTML 을 넣는 코드도 없다(2026-09-24 전수 grep). */
+function safeText(s, max){ return String(s==null?'':s).replace(/[<>&"'`\u0000-\u001f\u007f]/g,'').trim().slice(0, max||24); }
+function scrubSaveStrings(o, depth){
+  if(!o || typeof o!=='object' || (depth||0)>8) return;
+  for(const k of Object.keys(o)){
+    const v=o[k];
+    if(typeof v==='string'){ if(/[<>]/.test(v)) o[k]=v.replace(/[<>]/g,''); }
+    else if(v && typeof v==='object') scrubSaveStrings(v, (depth||0)+1);
+  }
+}
 function fmt(n){ n=Math.floor(n);
   if(n>=100_000_000) return (n/100_000_000).toFixed(2).replace(/\.00$/,'')+'억';
   if(n>=10_000)      return (n/10_000).toFixed(1).replace(/\.0$/,'')+'만';
@@ -4122,7 +4139,7 @@ function guildApply(name){
 /* G-105: 길드 창설 — 루비 600→100 / 골드 300,000,000→100,000,000 할인가.
    재화 체크를 통과한 뒤 styledConfirm 의 [예] 안에서만 차감한다(전투 중 진입 시 증발 방지). */
 function guildCreate(name, cur, cost){
-  name=(name||'').trim();
+  name=safeText(name, 12);   // ★ 2026-09-24: 종전 trim() 만 — '<h1>x</h1>' 이 창설 토스트·시스템 로그에서 태그로 렌더됐다
   if(guildJoined()){ toast('이미 길드에 가입되어 있습니다.'); return; }
   if(!name){ toast('길드명을 입력하세요.'); return; }
   const have = cur==='ruby' ? S.ruby : S.gold;
@@ -4406,6 +4423,7 @@ function tutFingerTick(){
   if(!S || S.seenTutorial){ if(_fingerTarget||_fingerEl&&_fingerEl.style.display!=='none') clearFinger(); return; }
   const t=tutTarget();
   const box=$('#onboard'); if(box) box.classList.toggle('over', !!($('#modal-root')&&$('#modal-root').classList.contains('on')));
+  tutDockBox(box, t);
   /* 대기 상태 표시 — 손가락이 없는 이유를 STEP 박스에 적는다(없으면 '왜 안 알려주지' 가 된다) */
   const st=TUT[S.tutStep]; const waiting = !t && !!(st && st.wait && st.wait());
   if(waiting!==_fingerWait){ _fingerWait=waiting; renderTutorial(); }
@@ -4424,6 +4442,29 @@ function tutFingerTick(){
   _fingerEl.style.display='';
   _fingerEl.style.left=((r.left-dr.left+r.width/2)/ui-12)+'px';
   _fingerEl.style.top=((r.top-dr.top)/ui-26)+'px';
+}
+/* STEP 안내 박스가 손가락 목표를 덮으면 전장 아래쪽(.ob-low)으로 비킨다 (2026-09-24).
+   실측 결함: 소환 모달이 열린 채 STEP 7(영웅 합성)로 넘어가면 손가락이 좌상단 ✕ 를 짚는데, 모달 위로 올라온
+   박스(.over)가 바로 그 ✕ 를 덮었다. z-index 로는 못 푼다(style.css #onboard.over 주석 참조).
+   ⚠ 겹침 판정은 '지금 박스 위치' 가 아니라 '위에 붙였을 때의 예상 위치' 로 한다 — 지금 위치로
+   재면 비키는 순간 겹침이 풀려 다음 프레임에 도로 올라가고, 매 프레임 위아래로 깜빡인다.
+   아래로 내려도 겹치면(목표가 전장 세로 전체만큼 클 때) 위에 둔다 — 박스는 pointer-events:none 이라
+   덮여도 터치는 통과한다. */
+function tutDockBox(box, t){
+  if(!box) return;
+  let low=false;
+  const sw=$('#stage-wrap');
+  if(t && sw && !box.classList.contains('hidden')){
+    const ui=(typeof UI_SCALE==='number' && UI_SCALE>0)?UI_SCALE:1;
+    const sr=sw.getBoundingClientRect(), br=box.getBoundingClientRect(), tr=t.getBoundingClientRect();
+    const pad=6*ui, h=br.height;
+    const xHit = tr.right>br.left && tr.left<br.right;
+    const yHit = (y0,y1)=> tr.bottom+pad>y0 && tr.top-pad<y1;
+    const topY0 = sr.top + (box.classList.contains('over')?2:44)*ui;   // CSS #onboard / #onboard.over 의 top 과 같아야 한다
+    const lowY1 = sr.bottom - 6*ui;                                     // CSS #onboard.ob-low 의 bottom 과 같아야 한다
+    low = xHit && yHit(topY0, topY0+h) && !yHit(lowY1-h, lowY1);
+  }
+  if(box.classList.contains('ob-low')!==low) box.classList.toggle('ob-low', low);
 }
 /* ★ B1/G-02: 건너뛰기(.ob-skip) 마크업·핸들러 완전 삭제 — 강제 유도형으로 설계한다. */
 function renderTutorial(){
@@ -4632,7 +4673,14 @@ function openModal(key, arg){   // ★ B3/G-45: arg 전달 (예: openModal('equi
     const bd=$('#modal-root .sub-body');
     if(bd){ const st=bd.scrollTop; bd.innerHTML=''; def.render(bd, arg===undefined?_subArg:arg); iconizeEmoji(bd); bd.scrollTop=st; return; }
   }
-  if(_subKey) closeSub();   // 다른 화면으로 이동하면 하위 오버레이는 닫는다
+  /* 다른 화면으로 이동하면 하위 오버레이는 닫는다.
+     ⚠ 2026-09-24: 종전엔 `if(_subKey) closeSub()` 였다 — subBody() 로 띄운 함수형 하위 화면(장비 상세·
+     강화·영웅 상세·제작 결과)은 _subKey 를 안 세우므로 여기서 닫히지 않고 새 모달 위에 남았다.
+     실측 결함(골드 무한 복제): 장비 상세 [분해]→확인 → openModal('inventory') 뒤에도 장비 상세가 그대로
+     떠 있고, 이미 사라진 장비의 [분해] 를 다시 누를 때마다 addGold 가 재지급됐다(L 1개로 3회 +1,980만).
+     v5.123 이 제작 결과 팝업 한 곳만 호출부에서 closeSub() 로 막았고 나머지 4곳은 열려 있었다.
+     호출부마다 막는 대신 여기서 조건 없이 닫는다 — 같은 키 하위 화면 새로고침은 바로 위에서 이미 return 했다. */
+  closeSub();
   const body = $('#modalBody');
   const same = (currentModal === key);
   const keep = same ? body.scrollTop : 0;
@@ -7273,7 +7321,7 @@ const MODALS = {
     ir.appendChild(inp); b.appendChild(ir);
     const btn=el('button','btn gold wide','약탈 도전'); btn.onclick=()=>{ if(busyFight())return;
       if(dailyLeft('raid',1)<=0){toast('오늘 약탈 소진');return;}
-      const target=(inp.value||'').trim()||pick(CHAT_NAMES);
+      const target=safeText(inp.value, 12)||pick(CHAT_NAMES);   // ★ 2026-09-24: 약탈 대상명도 innerHTML 로 그려진다
       styledConfirm('약탈을 시작 하시겠습니까?', ()=>{
         if(dailyLeft('raid',1)<=0){toast('오늘 약탈 소진');return;}
         dailyUse('raid');                                    // ← 차감은 [예] 이후에만
@@ -8114,6 +8162,7 @@ function itemDetail(e, heroId){ _itemDetailHeroId=heroId||null;
   const row=el('div','btnrow'); row.style.marginTop='8px';
   const eq=el('button','btn gold wide', e.equipped?'장착됨':'장착');
   eq.onclick=()=>{ if(e.equipped){ toast('이미 장착됨'); return; }
+    if(!S.equips.includes(e)){ closeSub(); toast('이미 처분된 장비입니다.'); return; }   /* ★ 2026-09-24: 처분된 장비 장착 방지 */
     /* ★ v5.81: 영웅 귀속 없는 착용 방지 — 인벤토리에서 heroId 없이 착용하면
        모든 영웅에게 적용되는 버그. 영웅 선택창(equip 모달)을 먼저 열도록 유도. */
     if(!_itemDetailHeroId){
@@ -8161,6 +8210,9 @@ function itemDetail(e, heroId){ _itemDetailHeroId=heroId||null;
     if(e.equipped){ toast('착용 중인 장비는 분해할 수 없습니다.'); return; }
     const gold=salvageValue(e);
     styledConfirm(`정말 분해하시겠습니까?`, ()=>{
+      /* ★ 2026-09-24: 이미 목록에 없는 장비(분해·파괴됨)면 환급하지 않는다 — 남은 화면에서 다시 눌러
+         골드를 복제하던 결함의 2차 방어선(1차는 openModal 의 closeSub). */
+      if(!S.equips.includes(e)){ closeSub(); toast('이미 처분된 장비입니다.'); return; }
       S.equips=S.equips.filter(x=>x!==e);
       addGold(gold);
       S.stats.salvages=(S.stats.salvages||0)+1;   // ★ v5.219: 업적 집계
@@ -8237,7 +8289,8 @@ function openEnhance(e){
      정작 실행 버튼을 못 찾는 구조. sticky bottom으로 항상 보이게 고정한다. */
   const btn=el('button','btn gold wide','강화'); btn.style.marginTop='8px'; btn.style.position='sticky'; btn.style.bottom='0'; btn.style.zIndex='2';
   if(S.gold<cost||S.stones<stoneCost||e.enh>=25) btn.disabled=true;
-  btn.onclick=()=>{ if(S.gold<cost||S.stones<stoneCost){toast('재화 부족');return;} S.gold-=cost; S.stones-=stoneCost;
+  btn.onclick=()=>{ if(!S.equips.includes(e)){ closeSub(); toast('이미 처분된 장비입니다.'); return; }   /* ★ 2026-09-24: 파괴된 장비에 재화만 빠지는 것 방지 */
+    if(S.gold<cost||S.stones<stoneCost){toast('재화 부족');return;} S.gold-=cost; S.stones-=stoneCost;
     if(Math.random()<p){ e.enh++; sfx('craft'); toast(`강화 성공 +${e.enh}`); sysLog(`장비 강화 <span class="rar">+${e.enh}</span> 성공`); }
     else { sfx('fail');
       if(e.enh>=20){ toast('극한의 벼림 실패 — 단계 유지 (재화만 소모)'); }   // v5.236: +21~25은 파괴·하락 없음

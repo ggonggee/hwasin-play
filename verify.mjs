@@ -342,6 +342,12 @@ console.log('[I] FORGE_SLOTS act 대상:',JSON.stringify([...new Set(acts)]));
       why:'전역 오류 띠. 소환연출(60)·토스트(40)·모달(20) 보다 위여야 한다 — 모달 render 가 터진 '
         + '경우에도 보여야 하므로 무엇에도 가려지면 안 된다.' },
     { sel:'.save-ta', why:'진행도 내보내기/가져오기 텍스트 상자. 규칙이 없으면 높이 0 에 가까워져 붙여넣을 칸이 사라진다.' },
+    { sel:'#onboard', prop:'pointer-events', eq:'none',
+      why:'튜토리얼 STEP 안내 박스. 모달 위(z:25)로 올라오는데 모달 ✕ 가 좌상단이라 박스 밑에 깔린다. '
+        + '✕ 는 #modal-root(z:20) 스태킹 컨텍스트 안이라 z-index 로는 못 넘는다 — 터치를 통과시키지 않으면 '
+        + '손가락이 짚는 ✕ 를 눌러도 박스만 눌려 튜토리얼이 막힌다(2026-09-24 실측, STEP 7/9 영웅 합성).' },
+    { sel:'#onboard.ob-low', prop:'bottom',
+      why:'안내 박스가 손가락 목표를 덮을 때 비키는 자리. game.js tutDockBox() 가 이 클래스를 붙인다.' },
     { sel:'#chat', prop:'height',
       why:'채팅 영역 높이. 값이 비면 채팅이 전장을 밀어내거나 사라진다(대표가 직접 조정하는 값이라 크기는 고정하지 않는다).' },
   ];
@@ -352,6 +358,7 @@ console.log('[I] FORGE_SLOTS act 대상:',JSON.stringify([...new Set(acts)]));
     if(!c.prop) return;
     const v = propOf(c.sel, c.prop);
     if(v===null){ bad.push(`${c.sel} 에 ${c.prop} 선언이 없다 — ${c.why}`); return; }
+    if(c.eq!==undefined && v.replace(/!important/,'').trim()!==c.eq){ bad.push(`${c.sel} 의 ${c.prop} 가 ${v} — ${c.eq} 이어야 한다. ${c.why}`); return; }
     if(c.min!==undefined){
       const n = parseInt(String(v).replace(/[^0-9-]/g,''), 10);
       if(!(n >= c.min)) bad.push(`${c.sel} 의 ${c.prop} 가 ${v} — ${c.min} 이상이어야 한다. ${c.why}`);

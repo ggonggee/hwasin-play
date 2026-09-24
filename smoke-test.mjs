@@ -2194,6 +2194,65 @@ step('도감 전종 완성 보상 — 1회성 지급·재호출 차단', ()=>{
   if(!mid.flag) errs.push('플래그 미설정');
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ 2026-09-24 회귀: 장비 상세 [분해] 골드 무한 복제.
+   subBody() 하위 화면은 _subKey 를 안 세워서 openModal 이 닫아 주지 않았고, 분해 뒤에도 장비 상세가
+   남아 같은 [분해] 를 누를 때마다 addGold 가 재지급됐다(실브라우저: L 1개로 3회 +1,980만).
+   ① 1차 방어선 — openModal 이 하위 오버레이를 '조건 없이' 닫는지(소스 계약: 스텁은 closeSub 가 느슨해 DOM 으로 못 본다)
+   ② 2차 방어선 — 이미 처분된 장비의 [분해]·[강화] 는 재화를 움직이지 않는다(남은 화면을 직접 눌러 확인) */
+step('장비 상세 [분해] 재클릭 — 골드 복제 차단(2중 방어)', ()=>{
+  const errs=[];
+  const om=js.slice(js.indexOf('function openModal('), js.indexOf('function closeModal('))
+    .replace(/[/][*][\s\S]*?[*][/]/g,'').replace(/\/\/[^\n]*/g,'');   // 주석 제거 — 옛 코드를 인용한 주석에 걸리지 않게
+  if(/if\s*\(\s*_subKey\s*\)\s*closeSub\(\)/.test(om)) errs.push('openModal 이 다시 _subKey 조건부로 closeSub 한다 — subBody 화면이 남는다');
+  if(!/\n\s*closeSub\(\);/.test(om)) errs.push('openModal 에 무조건 closeSub() 가 없다');
+  const S=ev('S'), keep={gold:S.gold, stones:S.stones, equips:S.equips.slice()};
+  const e={grade:'L', slot:(S.equips[0]&&S.equips[0].slot)||'방패', enh:0, equipped:false, id:'smoke_dup'};
+  S.equips.push(e);
+  const root=ev("document.getElementById('modal-root')");
+  ev('itemDetail')(e);
+  const detail=root.children[root.children.length-1];        // 방금 띄운 장비 상세(.sub-ovl)
+  const sal=findBtnByText(detail,'분해');
+  if(!sal) errs.push('[분해] 버튼 없음');
+  else{
+    const g0=S.gold;
+    sal.onclick(); const y1=findBtnByText(root,'예'); if(y1) y1.onclick(); else errs.push('확인 [예] 없음');
+    const gain1=Math.round(S.gold-g0);
+    if(!(gain1>0)) errs.push('첫 분해 환급 없음 '+gain1);   // 금액은 addGold 버프(가호 등)가 곱해지므로 >0 만 본다 — 산식은 위 '환급 산식' 검사 담당
+    if(S.equips.includes(e)) errs.push('분해 후에도 목록에 남음');
+    sal.onclick(); const y2=findBtnByText(root,'예'); if(y2) y2.onclick();   // 남은 화면의 같은 버튼을 다시 누른다
+    if(Math.round(S.gold-g0)!==gain1) errs.push('재클릭으로 골드 재지급 +'+Math.round(S.gold-g0-gain1)+' (복제)');
+    /* 강화도 같은 경로 — 파괴된 장비에 재화만 빠지면 안 된다 */
+    ev('openEnhance')(e);
+    const enh=root.children[root.children.length-1], eb=findBtnByText(enh,'강화');
+    const g1=S.gold, s1=S.stones; S.stones=Math.max(S.stones||0,99);
+    const s1b=S.stones;
+    if(eb){ eb.disabled=false; eb.onclick(); }
+    if(S.gold!==g1||S.stones!==s1b) errs.push('처분된 장비 강화에 재화 소모');
+    S.stones=s1;
+  }
+  S.gold=keep.gold; S.stones=keep.stones; S.equips=keep.equips; ev('closeSub')();
+  if(errs.length) throw new Error(errs.join(' | '));
+});
+/* ★ 2026-09-24 회귀: 세이브·입력 문자열의 HTML — el()/toast()/sysLog() 는 innerHTML 이라
+   가져오기 세이브에 심은 태그가 그대로 실행될 수 있었다. 로드(mergeDefaults)에서 < > 를 걷어내는지,
+   입력칸 정리(safeText)가 태그 문자를 없애는지 본다. */
+step('세이브·입력 문자열 HTML 제거 — 가져오기 세이브 태그 무력화', ()=>{
+  const errs=[];
+  const bad={ gold:1, stats:{}, name:'<img src=x onerror=alert(1)>', guildName:'<h1>x</h1>',
+    equips:[{grade:'N', slot:'<b>방패</b>', enh:0, equipped:false}] };
+  const before=store.get('hwasin_save_v1');
+  store.set('hwasin_save_v1', JSON.stringify(bad)); ev('load')();
+  const S=ev('S'), j=JSON.stringify(S);
+  if(/[<>]/.test(j)) errs.push('로드 후에도 < > 잔존: '+(j.match(/.{0,20}[<>].{0,20}/)||[''])[0]);
+  if(!S.equips.some(x=>x.slot==='b방패/b')) errs.push('일반 문자는 보존돼야 한다(태그 기호만 제거): '+JSON.stringify(S.equips.map(x=>x.slot)));
+  const st=ev('safeText');
+  if(st('<h1>x</h1>',12)!=='h1x/h1') errs.push('safeText 결과 '+st('<h1>x</h1>',12));
+  if(st('  대장간  ',12)!=='대장간') errs.push('safeText 가 정상 이름을 훼손');
+  if(st('가'.repeat(30),12).length!==12) errs.push('safeText 길이 상한 미적용');
+  if(before==null) store.delete('hwasin_save_v1'); else store.set('hwasin_save_v1', before);
+  ev('load')();
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 step('save→JSON 직렬화 왕복 무손실', ()=>{
   /* 바로 위 검사가 모달 클릭을 다시 전수 실행하면서 [데이터 초기화]·[가져오기]를 또 눌러
      저장을 재봉인한다(사유는 [7] 끝 주석 참조). 이 검사는 save() 가 실제로 써야 성립하므로
