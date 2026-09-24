@@ -1422,6 +1422,12 @@ const ATTEND_DAYS = [
 ];
 /* ★ B9/G-134: 공지 — 제목 밴드 + 양피지 서술형 본문 (목록 → 상세 2단) */
 const NOTICES = [
+  /* ★ v5.365: 3차 발견 C묶음(K3·K6·K7) — 약속 이행(직업 특성)·토벌 피해 이월·상한 재료 표시. */
+  { cat:'[수정]', ic:'🔮', t:'직업 특성이 실제로 적용됩니다 · 길드 토벌 피해 이월', d:'2026-09-25',
+    body:'군주들에게 알립니다.<br><br>'+
+      '· <b>직업 특성</b> — 튜토리얼 마지막에 고른 특성이 전투력 +2% 외에는 아무 효과가 없었습니다(안내한 회피·회복 효과가 구현되어 있지 않았습니다). 이제 <b>마법형은 사냥·보스전에서 받는 피해 −10%</b>, <b>전투형은 자연 회복·방패 회복량 +10%</b>가 실제로 적용됩니다. 설명도 실제 효과로 고쳤습니다.<br>'+
+      '· <b>길드 토벌</b> — 3일 주기마다 골렘의 체력이 가득 차던 것을 없앴습니다. 입힌 피해는 계속 이어지고, 3일마다 새로 시작되는 것은 참전 보상(1·2·4·6회)뿐입니다.<br>'+
+      '· <b>재료 보유 상한</b> — 사냥에서 상한인 재료는 더 이상 인벤토리로 날아가는 연출이 뜨지 않습니다(받지 못한 것을 받은 것처럼 보이던 것). 재료 소환은 상한이 아닌 재료로 채우고, 그 등급이 모두 상한이면 상자에 \"보유 상한\"으로 표시됩니다.' },
   /* ★ v5.364: 3차 발견 K2 — UI 조작이 전투 상태를 초기화하던 것. 이용자 불리 정정(무한 궁극기 우회 제거) 포함이라 [수정]으로 알린다. */
   { cat:'[수정]', ic:'⚔️', t:'레벨업·장착을 해도 전투가 흔들리지 않습니다', d:'2026-09-25',
     body:'군주들에게 알립니다.<br><br>'+
@@ -1454,7 +1460,7 @@ const NOTICES = [
     body:'군주들에게 알립니다.<br><br>길드 레이드의 재의 골렘을 이제 실제로 쓰러뜨릴 수 있습니다.<br><br>'+
       '· <b>단계</b> — 골렘의 체력이 0 이 되면 처치, 더 강한 다음 단계가 나타납니다. 도달한 단계는 계속 유지됩니다.<br>'+
       '· <b>길드원 몫</b> — 참전하면 내 피해에 길드원들의 몫(내 피해의 1.5배)이 함께 쌓입니다.<br>'+
-      '· <b>3일 주기</b> — 3일마다 골렘의 체력이 다시 가득 찹니다(단계는 그대로).<br>'+
+      '· <b>3일 주기</b> — 3일마다 참전 보상(1·2·4·6회)이 새로 시작됩니다. 입힌 피해와 단계는 그대로 이어집니다(v5.365 부터).<br>'+
       '· <b>보상</b> — 처치마다 길드 코인 50·주사위 20, 5단계마다 기록서 1권. 주기 동안 1·2·4·6회 참전하면 길드 코인 5·10·15·20.<br>'+
       '· 기존 참전 보상(회색코인·길드 코인)과 길드 점수 적립은 그대로입니다.' },
   /* ★ v5.358: 대장간 주문(#3) — 장비를 다 맞춘 뒤에도 매일 '만들 이유'. */
@@ -2524,7 +2530,7 @@ function openCPBreakdown(fromHome){   // fromHome: 홈 전투력 칩에서 열�
   b.appendChild(el('div','',row('세트 효과', '×'+setm.toFixed(2), pct(final-without('setm')))));
   b.appendChild(el('div','',row('고서 보유', '×'+tome.toFixed(2), pct(final-without('tome')))));
   if(enhM>1) b.appendChild(el('div','',row('영웅 강화 +'+heroEnhLv(h.hero_id), '×'+enhM.toFixed(2), pct(final-without('enh')))));
-  if(trait>1) b.appendChild(el('div','',row('직업 특성', '×'+trait.toFixed(2), pct(final-without('trait')))));
+  if(trait>1){ const ct=CLASS_TRAITS.find(x=>x.id===S.classTrait); b.appendChild(el('div','',row(`직업 특성${ct?` (${ct.nm} · ${ct.bullets[0]})`:''}`, '×'+trait.toFixed(2), pct(final-without('trait'))))); }   // K6(3차): 전투 효과도 함께 적는다
   if(costume>1) b.appendChild(el('div','',row('코스튬', '×'+costume.toFixed(2), pct(final-without('costume')))));
   const bk=el('button','btn wide','닫기'); bk.style.marginTop='8px';
   bk.onclick=()=>{ closeModal(); if(!fromHome) openModal('equip'); };
@@ -3314,7 +3320,7 @@ const Battle = (()=>{
       }
       /* 자연 회복 + 물약 보유 가산(v5.212) — 플레이버 '자동으로 소모되어 회복'의 구현.
          potionRegenAdd 는 순수 계산(보유 종류 수×0.05)이라 RNG·시뮬 상태 무영향. */
-      h.hp = Math.min(1, h.hp + (0.05 + potionRegenAdd())*dt);
+      h.hp = Math.min(1, h.hp + (0.05 + potionRegenAdd())*dt*classFx('heal'));   // K6(3차): 전투형 회복량 +10%(특성 없으면 ×1 정확)
       /* ★ v5.213: 방패 주기 회복 — 플레이버 '17초마다 최대 체력의 20% 회복'이 구현 없는
          허구였다(정합 11호 — 고서/곡괭이/물약 감사에 이어 발견).
          착용 중인 방패(이 영웅 귀속)에 한해 17초마다 20%p 회복. 타이머는 시뮬 프레임에서
@@ -3322,8 +3328,8 @@ const Battle = (()=>{
          보장하므로 회복 시점도 시간의 함수로만 결정된다. */
       if(h.shieldT!==undefined){
         h.shieldT -= dt;
-        if(h.shieldT<=0){ h.shieldT += 17; h.hp = Math.min(1, h.hp + 0.2);
-          fx.push({type:'dmg', x:h.x, y:h.y-30, t:0, val:'+20%', crit:false, color:'#7fe08a'}); }
+        if(h.shieldT<=0){ const hv=0.2*classFx('heal'); h.shieldT += 17; h.hp = Math.min(1, h.hp + hv);
+          fx.push({type:'dmg', x:h.x, y:h.y-30, t:0, val:'+'+Math.round(hv*100)+'%', crit:false, color:'#7fe08a'}); }
       }
       h.atkT -= dt;
       /* 스킬 쿨타임 감소 + 스킬 애니메이션 타이머 */
@@ -3472,7 +3478,7 @@ const Battle = (()=>{
         if(inRange){ m.atkT-=dt;
           if(m.atkT<=0){ m.atkT=bRnd(1.1,1.7); const h=bPick(alive);   /* ★ M1: 시드 RNG — 반격 주기·대상 */
             const r=(cpRef+300)/(partyCP+300);
-            const hitF=clamp(0.035*Math.pow(r,1.7)*(m.boss?2.2:1), 0.004, 0.6)*foeMul;
+            const hitF=clamp(0.035*Math.pow(r,1.7)*(m.boss?2.2:1), 0.004, 0.6)*foeMul*classFx('dmgTaken');   // K6(3차): 마법형 받는 피해 −10%(PvE 몹·보스 반격만)
             h.hp-=hitF; spark(h.x+8,h.y,'#e2504a'); dmgText(h.x+10,h.y-14,'-'+Math.max(1,Math.round(hitF*100)),false,'#ff7a6a');
             if(h.hp<=0){ h.hp=0; h.dead=true; h.respT=3; sfx('fail'); }  /* ★ v5.32: 부활 8→3초 */
           } }
@@ -3779,10 +3785,12 @@ const Battle = (()=>{
       const p = (boss?1:0.35) * dropBuff * festivalMul('mat');
       /* ★ v4.3: 등급 공용풀 폐지 → 사냥터마다 '여기서만 나오는 대표 재료'(t.mat)를 떨군다.
          다음 티어로 올라갈 이유가 골드 배율뿐이 아니라 "그 재료가 여기서만 나온다"가 되도록. */
-      if(Math.random()<p){ matGain(t.mat, boss?ri(2,4):1); drop(mx-8,my,'mat'); }
+      /* K7(3차): 실제로 늘었을 때만 드랍 연출 — 상한이면 인벤토리로 날아가는 재료 아이콘이 거짓이었다(실측: 30초 flyLoot 13회 · 실제 증가 0).
+         ri 는 matGain 호출 전에 평가되고 drop 은 난수를 안 쓴다 → Math.random 호출 수·순서 불변(D1~D5 무관). */
+      if(Math.random()<p){ if(matGain(t.mat, boss?ri(2,4):1)>0) drop(mx-8,my,'mat'); }
       /* ★ v5.111: 보조 고정 드랍 — 등급당 6번째 재료의 유일한 '지정 파밍' 경로(HUNT_TIERS 주석 참조).
          대표 재료의 절반 확률로 둔다. 아래 10% 랜덤 드랍은 그대로 유지(다른 재료 보완용). */
-      if(t.mat2 && Math.random()<p*0.5){ matGain(t.mat2, boss?ri(1,2):1); drop(mx-8,my,'mat'); }
+      if(t.mat2 && Math.random()<p*0.5){ if(matGain(t.mat2, boss?ri(1,2):1)>0) drop(mx-8,my,'mat'); }
       if(t.sub && Math.random()<0.25*festivalMul('mat')){ matGainGrade(t.sub, 1); }   // 하위 등급은 아무 재료나 소량
       /* ★ v5.29: 같은 등급 랜덤 추가 드랍 (10%) — 몬스터가 5종이라 고정 드랍이 5개 재료만
          커버한다. 6번째 재료(잿가루/서리결정/천공수정/금강석)는 전투로 얻을 수 없었는데,
@@ -4895,7 +4903,9 @@ function guildTotalScore(){ return guildJoined() ? guildBaseScore() + (S.guildSc
    HP 바는 누적 점수로 그린 연출 값이라 15% 에서 영구 정지했다(실측: 누적 40만점부터 '보스 HP 15%'). 매일 2회 하는 콘텐츠인데 진척 축이 0 이었다.
    이제 단계 k 의 HP 는 **고정 표**(H0×R^(k−1), 내 전투력 비례 아님) — 전투력 성장이 '몇 단계까지 잡았나'로 보인다.
    참전 1회 = 내 데미지(st.dmg — 전투 불변) + 길드원 몫(내 데미지×1.5, 난수 없음 — 참전해야 쌓인다). HP 가 0 이 되면 처치: 다음 단계 등장.
-   3일 주기(dayIdx 기준)마다 HP 만 다시 차고 도달 단계는 유지 — 되감기(주기 감소)는 무시(#16 원칙).
+   3일 주기(dayIdx 기준)마다 참전 수·참전 보상만 초기화 — **입힌 피해(HP)는 이월**, 되감기(주기 감소)는 무시(#16 원칙).
+   ★ 3차 발견 K3: 첫 판(v5.359)은 주기마다 HP 도 리셋했는데, R 1.18 대 후반 3일 CP 성장 약 3% 라 60일 이후 주기 13개 중 10개가 88~99% 깎고 전량 회복했다
+     (시뮬 재구성). 벤치 원형은 혼자 못 잡는 보스라 리셋이 무해했지만 처치형 단계제에선 참전이 증발한다 — HP 리셋을 없앴다(이용자 유리 — U1 무관).
    ⚠ 지킬 것(검증 반영): Battle·foeCP 공식·결정론 무접촉(보상 콜백·표시만) · 기존 참전 보상과 guildRaidScore/guildScore 적립은 한 글자도 안 바꾼다
      (guildScore 는 칭호 조건 — 새 풀로 옮기면 판정이 바뀐다) · 기록서는 5단계마다 1권만(✦ 병목 — 매 처치 1권이면 월 +28%) · 지난 단계 HP 는 올리지 않는다(U7).
    · 전투 중 보스 HP 바는 판마다 가득 찬 보스를 보여 준다(전투 쪽 불변) — 공유 풀 변화는 결과 카드와 레이드 화면에서만 보여 준다. */
@@ -4906,7 +4916,7 @@ function gbossState(){
   const g=S.gboss; if(!(g.stage>=1)) g.stage=1;
   const di=dayIdx(today()); if(!isFinite(di)) return g;
   const c=Math.floor(di/GBOSS.CYC);
-  if(!(g.cyc>=0) || c>g.cyc){ g.cyc=c; g.dealt=0; g.runs=0; g.ms=0; }   // 새 주기: HP 만 다시 참(단계·최고 유지)
+  if(!(g.cyc>=0) || c>g.cyc){ g.cyc=c; g.runs=0; g.ms=0; }   // 새 주기: 참전 수·참전 보상만(K3 — 입힌 피해·단계·최고 유지). ⚠ dealt=0 을 되살리지 마라(위 주석)
   return g;
 }
 function gbossCycLeft(){ const di=dayIdx(today()); if(!isFinite(di)) return GBOSS.CYC; return (Math.floor(di/GBOSS.CYC)+1)*GBOSS.CYC-di; }
@@ -5367,10 +5377,15 @@ const MISSION_REWARDS = [
   { ic:'🪨', n:'강화석',     q:50,  act:()=>{ S.stones+=50; } },
 ];
 /* ★ B1/G-05: 2열 카드 + 3줄 불릿 → [선택] → 전신 일러 비교 화면 → [확정] */
+/* ★ 2026-09-25(3차 발견 K6): 튜토리얼 마지막 '변경 불가' 선택이 가짜였다 — 두 특성 모두 전투력 ×1.02 로 같고, 약속한 '회피 +10%'·'회복 +10%'·'빠른 사냥 속도'는
+   어디에도 구현돼 있지 않았다(표시 = 적용 원칙 위반, v5.205~215·v5.330 정합 시리즈 누락분). 약속을 지우지 않고 지킨다(U1 — 라이브 이용자엔 버프만).
+   fx 필드가 정본이고 문구(bullets·sum)는 그 값을 적는다. 회피는 '받는 피해 −10%'(기대값 같은 결정론 구현 — 회피 판정은 난수를 새로 뽑아 전투 재현성을 흔든다).
+   classTrait '' (신규·시뮬·D1~D6) 이면 classFx 는 정확히 1 이라 부동소수 결과·해시가 그대로다. 투기장(PvP)에는 적용하지 않는다(승률 이미 92~94% — v5.356). */
 const CLASS_TRAITS = [
-  { id:'mage',    ic:'🔮', art:'🧙', nm:'마법형', bullets:['회피 스킬 보유','광역 마법 특화','빠른 사냥 속도'], sum:'회피 +10% · 광역 마법으로 몰이 사냥에 강합니다.' },
-  { id:'warrior', ic:'⚔️', art:'🛡️', nm:'전투형', bullets:['회복 스킬 보유','광역 공격 보유','안정적 사냥 유지'], sum:'회복 +10% · 전멸 위험이 낮아 방치에 강합니다.' },
+  { id:'mage',    ic:'🔮', art:'🧙', nm:'마법형', fx:{ dmgTaken:0.90 }, bullets:['받는 피해 −10%','몹·보스 반격에 강함','전투력 +2%'], sum:'받는 피해 −10% · 전투력 +2% — 몹·보스의 반격을 덜 받습니다.' },
+  { id:'warrior', ic:'⚔️', art:'🛡️', nm:'전투형', fx:{ heal:1.10 }, bullets:['회복량 +10%','자연·방패 회복 강화','전투력 +2%'], sum:'회복량 +10% · 전투력 +2% — 자연 회복·방패 회복이 빨라 방치에 강합니다.' },
 ];
+function classFx(k){ const c=CLASS_TRAITS.find(x=>x.id===(S && S.classTrait)); return (c && c.fx && c.fx[k]) || 1; }   // K6(3차): 전투 적용 관문(없으면 정확히 1)
 function chooseClassTrait(){
   setModalTitle('클래스 특성 선택'); const b=$('#modalBody'); b.innerHTML='';
   b.appendChild(el('div','hint','미션 완료 보상 · 1회 선택하며 계정 전체에 적용됩니다.'));
@@ -8495,7 +8510,7 @@ const MODALS = {
     const ms=el('div','gb-ms');
     GBOSS.MS.forEach((n,i)=>{ const got=(gb.ms|0)>i; ms.appendChild(el('div','gb-m'+(got?' got':''),`<b>${n}회</b><span>🛡️${GBOSS.MS_RW[i]}</span>`)); });
     b.appendChild(ms);
-    b.appendChild(el('div','small mut center',`처치하면 다음 단계 · 처치마다 길드 코인 ${GBOSS.KILL_COIN}·주사위 ${GBOSS.KILL_DICE} · ${GBOSS.REC_EVERY}단계마다 기록서 1 · 참전하면 길드원 몫(내 피해×${GBOSS.NPC})이 함께 쌓입니다 · ${GBOSS.CYC}일마다 HP 가 다시 찹니다(단계 유지)`));
+    b.appendChild(el('div','small mut center',`처치하면 다음 단계 · 처치마다 길드 코인 ${GBOSS.KILL_COIN}·주사위 ${GBOSS.KILL_DICE} · ${GBOSS.REC_EVERY}단계마다 기록서 1 · 참전하면 길드원 몫(내 피해×${GBOSS.NPC})이 함께 쌓입니다 · ${GBOSS.CYC}일마다 참전 보상 초기화 · 입힌 피해는 유지`));
     const arow=el('div','gd-autorow');
     const ab=el('button','gd-auto'+(S.guildRaidAuto?' on':''),`⟳<span>자동<br>입장</span>`);
     ab.onclick=()=>{ S.guildRaidAuto=!S.guildRaidAuto; toast(`자동 입장 ${S.guildRaidAuto?'ON':'OFF'}`); openModal('guildRaid'); };
@@ -9830,8 +9845,11 @@ function summonBatch(n){
    튜토리얼 STEP6 이 직접 가르치는 '재료 소환'이 정작 쓸 수 있는 결과를 안 만들던 셈이다.
    (사냥 드랍·요일던전·시련의 탑에 이어 같은 계열 다섯 번째 잔재) */
 function matSummon(n){ n=n||20; const got={}, list=[];
-  for(let i=0;i<n;i++){ const g=pick(['N','N','R','R','E']); const m=matGainGrade(g,1);
-    const k=m?m.k:g; got[k]=(got[k]||0)+1; list.push({ k, g }); }   // 상자를 열면 실제 재료가 나오도록 키까지 전달
+  /* K7(3차): 재료 열쇠는 루비·골드·길드코인으로 사는 유상 재화다 — 상한 재료를 뽑아 무지급인데 상자엔 받은 것처럼 보이던 것(v5.352 '대가를 치른 교환은 상한 아닌 재료로' 원칙 누락분).
+     avoidCap 으로 같은 등급의 상한 아닌 재료를 고르고, 그 등급이 전부 상한이면 상자를 '보유 상한'으로 연다(cap). 등급 추첨(pick)은 그대로. */
+  for(let i=0;i<n;i++){ const g=pick(['N','N','R','R','E']); const m=matGainGrade(g,1,{avoidCap:true});
+    if(!m){ list.push({ k:g, g, cap:true }); continue; }
+    const k=m.k; got[k]=(got[k]||0)+1; list.push({ k, g }); }   // 상자를 열면 실제 재료가 나오도록 키까지 전달
   tutEvent('msum'); save(); return { mats:got, list }; }   /* ★ v5.309: 소환 지급 확정 즉시 저장 */
 function playSummon(res){
   const fx=$('#summon-fx'), rc=$('#runeCircle'); rc.textContent = res.legend?'🌟':'✨'; fx.classList.toggle('legend', !!res.legend); fx.classList.add('on'); sfx(res.legend?'legendary':'summon');
@@ -9847,12 +9865,13 @@ function playSummon(res){
       const openOne=(c,i)=>{ if(c.dataset.open) return; c.dataset.open='1'; const gr=c.dataset.g, mk=c.dataset.k, big=(gr==='E'||gr==='L');
         const reveal=()=>{ if(!c.isConnected) return;   // 공개 대기 중 결과 창을 닫았으면 효과음·갱신 생략(코드리뷰 2026-09-25)
           c.className='cell gframe grade-'+gr+' flip-in'; c.style.aspectRatio='1';
+          if(c.dataset.cap){ c.style.opacity='.5'; c.innerHTML=`<div class="ei" style="font-size:20px">📦</div><div class="cn" style="font-size:7.5px">${GRADES[gr]?GRADES[gr].name:''} 보유 상한</div>`; sfx('tap'); return; }   // K7(3차): 그 등급이 전부 상한 — 받은 척하지 않는다
           c.innerHTML=`<div class="ei" style="font-size:20px">${matIcon(mk)}</div><div class="cn" style="font-size:7.5px">${mk}</div>`;
           sfx(gr==='L'?'legendary':gr==='E'?'craft':'tap'); };
         setTimeout(()=>{ if(big){ c.classList.add('pre-'+gr); setTimeout(reveal, 280); } else reveal(); }, i*70); };
       const cells=(res.list||[]).map(it=>{ const gr=(it&&it.g)||it, mk=(it&&it.k)||it;
         const c=el('div','cell gframe'); c.style.aspectRatio='1'; c.innerHTML='<div class="ei" style="font-size:22px">'+eImg('📦',1.8)+'</div>';
-        c.dataset.g=gr; c.dataset.k=mk; c.onclick=()=>openOne(c,0); g.appendChild(c); return c; });
+        c.dataset.g=gr; c.dataset.k=mk; if(it && it.cap) c.dataset.cap='1'; c.onclick=()=>openOne(c,0); g.appendChild(c); return c; });
       b.appendChild(g);
       const allBtn=el('button','btn gold wide','모두 열기'); allBtn.style.marginTop='10px'; allBtn.onclick=()=>{ cells.forEach(openOne); allBtn.disabled=true; }; b.appendChild(allBtn);
     }

@@ -2606,6 +2606,26 @@ step('리뷰 반영 — 교환 클릭 시점 품절 · 긴 토스트 · 가져�
   S.mats=keep.mats; S.gray=keep.gray; S.lastSeen=keep.ls; S.offlinePending=keep.op;
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ 2026-09-25(3차 발견 K6·K7): 직업 특성 전투 적용(표시 = 적용) · 상한 재료 드랍 연출 · 재료 소환 상한 처리. (K3 토벌 피해 이월은 '길드 토벌' 단계에서 검사) */
+step('3차 C묶음 — 직업 특성 효과 · 상한 드랍 연출 · 재료 소환 상한', ()=>{
+  const errs=[], S=ev('S'), cf=ev('classFx');
+  const keep=JSON.parse(JSON.stringify({ ct:S.classTrait, mats:S.mats }));
+  S.classTrait=''; if(cf('dmgTaken')!==1 || cf('heal')!==1) errs.push('특성 없음인데 효과 ≠ 1');
+  S.classTrait='mage'; if(cf('dmgTaken')!==0.9 || cf('heal')!==1) errs.push('마법형 효과 '+[cf('dmgTaken'),cf('heal')]);
+  S.classTrait='warrior'; if(cf('heal')!==1.1 || cf('dmgTaken')!==1) errs.push('전투형 효과 '+[cf('dmgTaken'),cf('heal')]);
+  const CT=ev('CLASS_TRAITS'); if(!/받는 피해 −10%/.test(CT[0].bullets.join()) || !/회복량 \+10%/.test(CT[1].bullets.join()) || /회피 스킬|빠른 사냥 속도/.test(JSON.stringify(CT))) errs.push('특성 문구가 적용과 다름');
+  if(!/\*foeMul\*classFx\('dmgTaken'\)/.test(js) || !/\*dt\*classFx\('heal'\)/.test(js) || !/const hv=0\.2\*classFx\('heal'\)/.test(js)) errs.push('전투 적용 지점 3곳 누락');
+  // 상한 드랍 연출: 두 드랍이 matGain(...)>0 일 때만
+  if((js.match(/if\(matGain\(t\.mat2?, boss\?ri\(\d,\d\):1\)>0\) drop\(mx-8,my,'mat'\)/g)||[]).length!==2) errs.push('상한 재료 드랍 연출 가드 없음');
+  // 재료 소환: E 전부 상한이면 E 상자는 cap · E 재료 불변
+  const E=ev('MAT_BY_GRADE').E, capE=ev('MAT_CAP').E; E.forEach(m=>S.mats[m.k]=capE);
+  const r=ev('matSummon')(60), capBoxes=r.list.filter(x=>x.cap), eBoxes=r.list.filter(x=>x.g==='E');
+  if(E.some(m=>S.mats[m.k]!==capE)) errs.push('상한 E 재료가 변함');
+  if(!eBoxes.length || capBoxes.length!==eBoxes.length || eBoxes.some(x=>!x.cap)) errs.push(`E 상자 ${eBoxes.length} · cap ${capBoxes.length}`);
+  if(Object.keys(r.mats).some(k=>E.some(m=>m.k===k))) errs.push('상한 E 재료를 받은 것으로 집계');
+  Object.assign(S, { classTrait:keep.ct, mats:keep.mats });
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ 2026-09-25(3차 발견 K1·K5): 길잡이 목표 제작 중 — 결제한 제작에 '골드 부족' 없음 · 배너 '제작 중' · [즉시 완성] 경로 하나 · 길잡이 보상 칩. */
 step('길잡이 제작 중 — 부족 0·배너·즉시 완성 단일 경로 · 보상 칩', ()=>{
   const errs=[], S=ev('S'), G=ev('GUIDE_CHAIN'), root=ev("$('#modal-root')");
@@ -2686,9 +2706,11 @@ step('길드 토벌 — 단계 HP 표·주기·처치 보상·기록서·참전 
   const keep=JSON.parse(JSON.stringify({ gb:S.gboss, gc:S.guildCoin, dice:S.dice, rec:S.records }));
   if(hp(1)!==G.H0 || hp(2)!==Math.round(G.H0*G.R) || !(hp(30)>hp(29))) errs.push('단계 HP 표 '+[hp(1),hp(2)].join('/'));
   const cyc=Math.floor(ev('dayIdx')(ev('today')())/G.CYC);
-  // 새 주기: dealt/runs/ms 리셋 · 단계·최고 유지 / 되감기(저장 주기가 미래) 무시
+  // 새 주기: runs/ms 만 리셋 · 입힌 피해(dealt)·단계·최고 유지(3차 K3 — HP 이월) / 되감기(저장 주기가 미래) 무시
   S.gboss={ cyc:cyc-1, stage:7, best:6, dealt:500, runs:5, ms:3 }; ev('gbossState')();
-  if(S.gboss.cyc!==cyc || S.gboss.dealt!==0 || S.gboss.runs!==0 || S.gboss.ms!==0 || S.gboss.stage!==7 || S.gboss.best!==6) errs.push('새 주기 리셋 규칙 '+JSON.stringify(S.gboss));
+  if(S.gboss.cyc!==cyc || S.gboss.dealt!==500 || S.gboss.runs!==0 || S.gboss.ms!==0 || S.gboss.stage!==7 || S.gboss.best!==6) errs.push('새 주기 규칙(피해 이월) '+JSON.stringify(S.gboss));
+  { const need=hp(7)-500; S.gboss={ cyc:cyc-1, stage:7, best:6, dealt:500, runs:0, ms:0 }; const r=ev('gbossApply')(Math.ceil(need/(1+G.NPC))+1);   // 이월된 피해가 처치에 쓰인다
+    if(JSON.stringify(r.kills)!=='[7]') errs.push('이월 피해로 처치 안 됨 '+JSON.stringify(r.kills)); }
   S.gboss={ cyc:cyc+1, stage:7, best:6, dealt:500, runs:5, ms:3 }; ev('gbossState')();
   if(S.gboss.dealt!==500 || S.gboss.cyc!==cyc+1) errs.push('되감기로 주기 리셋');
   // 처치: 4단계 풀을 넘기는 피해 → 4·5단계 처치(5단계 = 기록서) · 보상 · 길드원 몫 ×1.5
@@ -3392,6 +3414,17 @@ step('D7 · 전투 중 refreshParty(UI 갱신) → 쿨·기여도 보존 · 결�
   if(withRefresh.hash!==base.hash) errs.push('결과 해시 변화 '+JSON.stringify(base.detail)+' → '+JSON.stringify(withRefresh.detail));
   if(errs.length) throw new Error(errs.join(' | '));
   console.log(`     전투 중 갱신 3회 = 끝까지 관람 = ${base.hash}`);
+});
+/* ★ 2026-09-25(3차 K6): 직업 특성(받는 피해·회복 배율)이 켜진 전투도 같은 시드면 같은 결과 — 특성이 난수를 새로 뽑지 않는다. */
+step('D8 · 직업 특성 전투 재현성(마법형·전투형 각각 동일 시드 2회 = 같은 해시)', ()=>{
+  const errs=[];
+  for(const tr of ['mage','warrior']){
+    const drv=(B)=>{ ev('S').classTrait=tr; const r=B.runUntilDone(D_MAX_TICKS); if(!r.finished) throw new Error('완주 못 함'); };
+    const a=runSeeded(0xC0FFEE, drv), b=runSeeded(0xC0FFEE, drv);
+    if(a.hash!==b.hash) errs.push(`${tr} 재현성 깨짐 ${a.hash} ≠ ${b.hash}`);
+    if(a.detail.rngDrawCount<=0) errs.push(tr+' 난수 소비 0');
+  }
+  if(errs.length) throw new Error(errs.join(' | '));
 });
 step('D2 · 서로 다른 시드 20개 → 서로 다른 해시(중복 0)', ()=>{
   const seeds = Array.from({length:20}, (_,i)=> (0x1000 + i*0x9E3779B1) >>> 0);
