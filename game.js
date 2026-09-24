@@ -1122,15 +1122,17 @@ const WB_RANK = [
   ['새벽별','새벽단',301200],['하늬','서리맹',289600],
 ];
 /* ★ B5/G-73: 시련의 탑 랭킹 — 정렬 기준이 누적 데미지가 아니라 '도달 웨이브'다. */
+/* ★ 2026-09-25(워크플로 #24): 기록을 실제 도달 범위로 재스케일 — 종전 73~312 Wave 는 시뮬 최고(풀 12800h 32 Wave)의 두 배 이상이라
+   모든 이용자가 영구 30위(꼴찌)였다(실측: 0~73 Wave 전부 30위). 이름·길드는 그대로, 숫자만. 22 Wave≈16위 · 25≈14위 · 28≈12위 · 32≈9위 · 1위 45 는 장기 목표. */
 const TW_RANK = [
-  ['불철','결정단',312],['무쇠손','철혈',298],['청염','결정단',285],['잿불','잿더미',271],
-  ['대장장이K','철혈',264],['로엔','새벽단',252],['서리검','서리맹',241],['재의노래','잿더미',233],
-  ['강철심','철혈',225],['불꽃술사','결정단',216],['흑야','그림자',208],['백랑','새벽단',199],
-  ['적묘','잿더미',191],['현무','서리맹',183],['월광','그림자',176],['풍백','새벽단',168],
-  ['운해','결정단',160],['묵검','철혈',153],['설야','서리맹',146],['홍련','잿더미',138],
-  ['천추','그림자',131],['벽라','새벽단',124],['금강','철혈',117],['자하','결정단',110],
-  ['소야','서리맹',102],['백호','그림자',95],['남풍','새벽단',88],['철벽','철혈',80],
-  ['여명','잿더미',73],
+  ['불철','결정단',45],['무쇠손','철혈',43],['청염','결정단',42],['잿불','잿더미',40],
+  ['대장장이K','철혈',38],['로엔','새벽단',37],['서리검','서리맹',35],['재의노래','잿더미',33],
+  ['강철심','철혈',32],['불꽃술사','결정단',30],['흑야','그림자',29],['백랑','새벽단',28],
+  ['적묘','잿더미',26],['현무','서리맹',25],['월광','그림자',24],['풍백','새벽단',22],
+  ['운해','결정단',21],['묵검','철혈',20],['설야','서리맹',19],['홍련','잿더미',18],
+  ['천추','그림자',17],['벽라','새벽단',16],['금강','철혈',15],['자하','결정단',14],
+  ['소야','서리맹',14],['백호','그림자',13],['남풍','새벽단',13],['철벽','철혈',12],
+  ['여명','잿더미',12],
 ];
 /* ★ v4.8: 월드보스 랭킹 보상 9행 (매월 1일 초기화).
    근거: 06_스테이지_던전/월드보스/캡처_2026_07_30_13_52_05_233.png — 대표가 [i] 를 눌러 촬영해 주셨다.
@@ -1141,11 +1143,21 @@ const WB_REWARD = [
   ['1위','X 30'],['2위','X 25'],['3위','X 20'],['4~6위','X 15'],['7~10위','X 10'],
   ['11~20위','X 8'],['21~30위','X 6'],['31~40위','X 4'],['참가 보상','X 2'],
 ];
-/* ★ B5/G-78: 시련의 탑 랭킹 보상 9행 (매월 15일 초기화) */
+/* ★ B5/G-78: 시련의 탑 랭킹 보상 9행 — ★ 2026-09-25(#24): 실제 지급(표 = 지급 — 표기만 있고 지급 코드가 없던 약속).
+   정산 = 매월 1일(monthlyState 경계 — 월간 의뢰와 같다) 지난달 1회 이상 도전했으면 그 시점 순위로. 기록(S._tower)은 초기화하지 않는다
+   (소탕 보상이 최고 기록에 걸려 있어 초기화는 이용자 손해 — 종전 '매월 15일 초기화' 문구는 구현된 적 없는 약속이었다). */
 const TOWER_REWARD = [
   ['1위','X2000'],['2위','X1600'],['3위','X1400'],['4~6위','X1200'],['7~10위','X1000'],
   ['11~20위','X800'],['21~30위','X600'],['31~40위','X400'],['참가보상','X50'],
 ];
+/* 탑 순위 = 1 + (내 기록 이상인 NPC 수) — dgRankList 는 안정 정렬이라 동점 NPC 가 '나'보다 위다(표시와 정산이 같은 값). */
+function towerRank(w){ return 1 + TW_RANK.filter(r=>r[2]>=(w|0)).length; }
+function towerRankDice(rk){
+  let part=0;
+  for(const [lab,v] of TOWER_REWARD){ const n=parseInt(String(v).replace(/[^0-9]/g,''),10)||0; const m=/^(\d+)(?:~(\d+))?위$/.exec(lab);
+    if(m){ if(rk>=+m[1] && rk<=+(m[2]||m[1])) return n; } else if(/참가/.test(lab)) part=n; }
+  return part;
+}
 /* ★ B9/G-117 · F2 재판독 반영: 칭호 29종 (N5 / R9 / E6 / L8 / GM1) — 착용 시 버프.
    grade 는 장비 등급(GRADES)과 별개 팔레트(TITLE_GRADES)를 쓴다.
    have() = 획득 판정. 상점·패키지 지급분은 S.titleOwn[id] 로도 소유된다(B7 연계).
@@ -1373,6 +1385,12 @@ const ATTEND_DAYS = [
 ];
 /* ★ B9/G-134: 공지 — 제목 밴드 + 양피지 서술형 본문 (목록 → 상세 2단) */
 const NOTICES = [
+  /* ★ v5.348: 시련의 탑 순위 보상 실제 지급·순위 재조정 — 표에만 있던 약속 이행과 '매월 15일 초기화' 문구 정정을 숨기지 않고 알린다. */
+  { cat:'[업데이트]', ic:'🗼', t:'시련의 탑 순위 보상이 매월 지급됩니다 — 순위표 재조정', d:'2026-09-25',
+    body:'군주들에게 알립니다.<br><br>시련의 탑 [랭킹 보상] 표에 안내만 되고 지급되지 않던 보상을 이제 실제로 드립니다.<br><br>'+
+      '· <b>🎲 월간 정산</b> — 매월 1일, 지난달 탑에 한 번 이상 도전했다면 그때 순위에 따라 주사위를 지급합니다(1위 2,000개 ~ 21~30위 600개).<br>'+
+      '· <b>📊 순위표 재조정</b> — 상위 기록이 도달할 수 없을 만큼 높아 모두 최하위에 머물던 문제를 바로잡았습니다. 탑 화면을 열면 내 순위가 가운데 보입니다.<br>'+
+      '· <b>📌 기록 유지</b> — 종전 안내의 「매월 15일 초기화」는 실제로 적용된 적이 없었고, 앞으로도 최고 기록은 초기화하지 않습니다(소탕 보상이 최고 기록을 기준으로 하기 때문입니다).' },
   /* ★ v5.347: 영웅 강화 전 등급 개방 — 사장돼 있던 조각·소환권의 새 쓰임새. 칭호 조건 변경(달성 불가 → 강화 기반)도 숨기지 않고 알린다. */
   { cat:'[업데이트]', ic:'⚒️', t:'영웅 강화가 열렸습니다 — 모든 영웅, 조각으로 전투력 +1%씩', d:'2026-09-25',
     body:'군주들에게 알립니다.<br><br>그동안 레전더리 영웅만 가능해 사실상 쓸 수 없던 <b>영웅 강화</b>를 모든 등급에 열었습니다.<br><br>'+
@@ -5450,7 +5468,16 @@ function getMonthKey(){ const d=new Date(); return d.getFullYear()+'-'+(d.getMon
 function monthlyState(){
   if(!S.monthly || typeof S.monthly!=='object') S.monthly={ key:'', base:null, claimed:{} };
   const k=getMonthKey();
-  if(S.monthly.key!==k){ S.monthly.key=k; S.monthly.base={ kills:S.stats.kills||0, crafts:S.stats.crafts||0, summons:S.stats.summons||0, towerTries:S.stats.towerTries||0 }; S.monthly.claimed={}; save(); }
+  if(S.monthly.key!==k){
+    const prevKey=S.monthly.key, prevBase=S.monthly.base;
+    S.monthly.key=k; S.monthly.base={ kills:S.stats.kills||0, crafts:S.stats.crafts||0, summons:S.stats.summons||0, towerTries:S.stats.towerTries||0 }; S.monthly.claimed={};
+    /* ★ 2026-09-25(#24): 시련의 탑 월간 순위 정산 — 지난 달(마지막으로 기록된 달) 1회 이상 도전했으면 현재 순위로 주사위. 여러 달 비웠어도 1회만(그 달 기준). */
+    if(prevKey && prevBase && ((S.stats.towerTries||0)-(prevBase.towerTries||0))>0){
+      const rk=towerRank(S._tower||0), d=towerRankDice(rk);
+      if(d>0){ S.dice=(S.dice||0)+d; (S._pendingLoginToast=S._pendingLoginToast||[]).push(`시련의 탑 월간 정산 ${rk}위 · 주사위 ${fmt(d)}`); try{ sysLog(`시련의 탑 월간 정산 — ${rk}위 · 주사위 +${fmt(d)}`); }catch(e){} }
+    }
+    save();
+  }
   return S.monthly;
 }
 /* 모험 타일 배지(워크플로 #13) — 읽기 전용: dailyLeft 는 rollDaily 만, monthlyState 는 월 경계
@@ -7306,7 +7333,10 @@ const MODALS = {
     rh.appendChild(el('div','small mut','서버 랭킹 (도달 웨이브)'));
     const rw=el('button','btn xs','랭킹 보상'); rw.onclick=()=>openModal('towerReward'); rh.appendChild(rw);
     b.appendChild(rh);
-    b.appendChild(dgRankList(TW_RANK.concat([[S.name, S.guildName||'무소속', w]]), { label:'wave', fmt:v=>String(v) }));
+    const _rl=dgRankList(TW_RANK.concat([[S.name, S.guildName||'무소속', w]]), { label:'wave', fmt:v=>String(v) });
+    b.appendChild(_rl);
+    /* ★ 2026-09-25(#24): 순위 목록은 176px 스크롤 상자(약 3.5줄)라 기본 화면에서 내 순위가 안 보였다 — 내 줄을 가운데로. */
+    setTimeout(()=>{ try{ const me=_rl.querySelector && _rl.querySelector('.me'); if(me && _rl.clientHeight) _rl.scrollTop=Math.max(0, me.offsetTop-_rl.offsetTop-_rl.clientHeight/2+me.offsetHeight/2); }catch(e){} }, 0);
     const foot=el('div','dg-foot');
     foot.appendChild(el('div','dg-portrait gframe',`<div class="dp-ic">🗼</div><div class="dp-n">불꽃의 탑</div>`));
     const right=el('div','dg-right');
@@ -7388,7 +7418,9 @@ const MODALS = {
       row.innerHTML=`<div class="rk${i<3?(' rk'+(i+1)):''}">${rk}</div><div class="nm2"></div><div class="sc">${eImg("🎲",2)} ${rwd}</div>`;
       b.appendChild(row);
     });
-    b.appendChild(el('div','dg-limit','매월 15일 초기화'));
+    { const rk=towerRank(S._tower||0), ms=monthlyState(), tried=((S.stats.towerTries||0)-((ms.base&&ms.base.towerTries)||0))>0;
+      b.appendChild(el('div','center small', `내 순위 <b>${rk}위</b> (${S._tower||0} Wave) · 이번 달 정산 예상 ${eImg('🎲',1.3)} <b>${fmt(towerRankDice(rk))}</b>${tried?'':' <span class="mut">— 이번 달 1회 이상 도전해야 지급</span>'}`)); }
+    b.appendChild(el('div','dg-limit','매월 1일 지난달 순위로 정산 · 기록은 유지됩니다'));
     const back=el('button','btn wide','◀ 시련의 탑'); back.style.marginTop='8px'; back.onclick=()=>openModal('tower'); b.appendChild(back);
   }},
 

@@ -2403,6 +2403,28 @@ step('퀘스트 기본 탭(주간 우선) · 길드 레이드 결과 뒤 복귀'
   S.guideStep=keep.gs;
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ 2026-09-25(워크플로 #24): 시련의 탑 순위 — 재스케일(영구 꼴찌 해소) · 표 = 지급 · 월 경계 정산(지난달 도전한 경우 1회) · 기록 유지. */
+step('시련의 탑 순위·월간 정산 — 표 = 지급 · 도전한 달만 · 1회', ()=>{
+  const errs=[], S=ev('S'), rk=ev('towerRank'), dz=ev('towerRankDice');
+  // 동점이면 NPC 가 위(dgRankList 안정 정렬 — '나'는 마지막에 붙는다): 22 Wave = NPC 22 와 동점 → 17위
+  if(rk(0)!==30 || rk(22)!==17 || rk(23)!==16 || rk(46)!==1 || rk(45)!==2) errs.push('순위 '+[rk(0),rk(22),rk(23),rk(46),rk(45)].join('/'));
+  { const box=ev('dgRankList')(ev('TW_RANK').concat([[S.name,'-',22]]),{}); const rows=box.children||[];
+    const i=rows.findIndex(r=>String(r.className||'').split(' ').includes('me'));
+    if(i<0) errs.push('me 행 없음 — rows '+rows.length+' 첫 행 class '+String((rows[0]||{}).className));
+    else if(i+1!==rk(22)) errs.push('표시 순위 '+(i+1)+' ≠ 정산 순위 '+rk(22)); }
+  if(dz(1)!==2000 || dz(5)!==1200 || dz(16)!==800 || dz(30)!==600) errs.push('보상 파싱 '+[dz(1),dz(5),dz(16),dz(30)].join('/'));
+  const keep={ m:JSON.parse(JSON.stringify(S.monthly||{})), tt:S.stats.towerTries, tw:S._tower, dice:S.dice, pl:S._pendingLoginToast };
+  S._tower=22; S.stats.towerTries=5;
+  S.monthly={ key:'2000-01', base:{ kills:0, crafts:0, summons:0, towerTries:2 }, claimed:{} };
+  const d0=S.dice||0; ev('monthlyState')();
+  if((S.dice||0)-d0!==800) errs.push('도전한 달 정산 '+((S.dice||0)-d0)+' (기대 800)');
+  const d1=S.dice; ev('monthlyState')(); if(S.dice!==d1) errs.push('같은 달 재정산');
+  if(S._tower!==22) errs.push('정산이 기록을 초기화함');
+  S.monthly={ key:'2000-01', base:{ kills:0, crafts:0, summons:0, towerTries:5 }, claimed:{} };
+  const d2=S.dice; ev('monthlyState')(); if(S.dice!==d2) errs.push('도전 없는 달인데 지급');
+  S.monthly=keep.m; S.stats.towerTries=keep.tt; S._tower=keep.tw; S.dice=keep.dice; S._pendingLoginToast=keep.pl;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ 2026-09-25(워크플로 #12): 영웅 강화 — 전 등급 · 조각 300/단계 · 전투력 +1%/단계 · 최대 +20 · 즉시 저장 · 칭호 재매핑. */
 step('영웅 강화 — 전 등급 개방 · +1%/단계 · 상한 20 · 칭호', ()=>{
   const errs=[], S=ev('S'), root=ev("$('#modal-root')");
