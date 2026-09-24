@@ -914,7 +914,7 @@ const RUBYPKG = [
   { grp:'소량', t:'영웅 소환서 X80',      ic:'📜', cost:300,  d:'영웅 소환권 80장',    give:()=>{ S.tickHero+=80; } },
   { grp:'소량', t:'망치 X20',             ic:'🔨', cost:300,  d:'일반 망치 20개',      give:()=>{ S.hammerN=(S.hammerN||0)+20; } },
   { grp:'소량', t:'전설 망치 X20',        ic:'🔨', cost:900,  d:'전설 망치 20개',      give:()=>{ S.hammers=(S.hammers||0)+20; } },
-  { grp:'소량', t:'즉시 완성권 X20',      ic:'📃', cost:300,  d:'제작 즉시완성 20회분', give:()=>{ S.craftScroll+=20; } },
+  { grp:'소량', t:'제작서 X20',      ic:'📃', cost:300,  d:'대장간 즉시 완성·확정 제작에 사용(즉시 완성 1회 = 30장)', give:()=>{ S.craftScroll+=20; } },   // K1(3차): 인벤토리·지갑의 '제작서'와 이름 통일(종전 '즉시 완성권') — 가격·수량 불변
   { grp:'소량', t:'골드던전 입장권 X10',  ic:'🎟️', cost:300,  d:'골드던전 10회',       give:()=>{ S.goldTicket=(S.goldTicket||0)+10; } },
   { grp:'소량', t:'주사위 X10',           ic:'🎲', cost:300,  d:'주사위 10개',         give:()=>{ S.dice+=10; } },
   { grp:'소량', t:'대장장이의 눈물 X40',  ic:'💠', cost:2800, d:'영웅 등급 재료 40개', give:()=>{ matGain('대장장이의 눈물',40); }, soldOut:()=>matFull('대장장이의 눈물',40) },
@@ -923,7 +923,7 @@ const RUBYPKG = [
   { grp:'대량', t:'영웅 소환서 X800',     ic:'📜', cost:2800,  d:'영웅 소환권 800장',   give:()=>{ S.tickHero+=800; } },
   { grp:'대량', t:'망치 X200',            ic:'🔨', cost:2800,  d:'일반 망치 200개',     give:()=>{ S.hammerN=(S.hammerN||0)+200; } },
   { grp:'대량', t:'전설 망치 X200',       ic:'🔨', cost:7000,  d:'전설 망치 200개',     give:()=>{ S.hammers=(S.hammers||0)+200; } },
-  { grp:'대량', t:'즉시 완성권 X200',     ic:'📃', cost:2800,  d:'제작 즉시완성 200회분', give:()=>{ S.craftScroll+=200; } },
+  { grp:'대량', t:'제작서 X200',     ic:'📃', cost:2800,  d:'대장간 즉시 완성·확정 제작에 사용(즉시 완성 1회 = 30장)', give:()=>{ S.craftScroll+=200; } },
   { grp:'대량', t:'골드던전 입장권 X30',  ic:'🎟️', cost:900,   d:'골드던전 30회',       give:()=>{ S.goldTicket=(S.goldTicket||0)+30; } },
   { grp:'대량', t:'곡식 X8000',           ic:'🌾', cost:7500,  d:'마을 성장 자원',      give:()=>{ S.grain=(S.grain||0)+8000; } },
   { grp:'대량', t:'나무 묶음 X8000',      ic:'🪵', cost:7500,  d:'마을 성장 자원',      give:()=>{ S.wood=(S.wood||0)+8000; } },
@@ -1422,6 +1422,14 @@ const ATTEND_DAYS = [
 ];
 /* ★ B9/G-134: 공지 — 제목 밴드 + 양피지 서술형 본문 (목록 → 상세 2단) */
 const NOTICES = [
+  /* ★ v5.363: 3차 발견 A묶음(K1·K4·K5) — 첫 세션 흐름. 루비 상점 제작서 설명 정정 포함(숨기지 않고 알린다). */
+  { cat:'[개선]', ic:'📜', t:'긴 제작은 제작서로 즉시 완성 · 소환 알림 · 길잡이 보상 표시', d:'2026-09-25',
+    body:'군주들에게 알립니다.<br><br>'+
+      '· <b>긴 제작</b> — 10분 넘는 제작을 시작하면 창을 닫아도 진행된다는 안내와 함께, 📜제작서 30장으로 즉시 완성할 수 있다고 알려 드립니다. 길잡이 목표를 제작 중이면 배너에 남은 시간과 [즉시 완성] 버튼이 뜹니다. 이미 결제한 길잡이 제작을 \"골드 부족\"으로 표시하던 오류도 고쳤습니다.<br>'+
+      '· <b>대장간</b> — 제작 중에는 [제작] 대신 \"제작 중\"으로 표시되고, 처음 열 때 [즉시 완성]·[확정 제작]이 보이는 곳까지 내려 줍니다.<br>'+
+      '· <b>소환</b> — 영웅소환권이 10장 이상 있고 아직 모으지 않은 영웅이 있으면 [소환] 버튼에 점이 켜집니다. 영웅 소환 결과에서 4번째 카드가 화면 밖으로 잘리던 것을 고쳤습니다.<br>'+
+      '· <b>길잡이 보상</b> — 단계를 넘긴 제작 결과 창에 받은 보상과 쓰는 곳(소환권 → [소환하기])이 표시됩니다.<br>'+
+      '· <b>상점 표기 정정</b> — 루비 상점의 \"즉시 완성권 X20\"은 \"제작서 X20\"입니다. 종전 설명의 \"20회분\"은 틀린 표기였습니다(즉시 완성 1회 = 제작서 30장). 가격·수량은 그대로입니다.' },
   /* ★ v5.362: 리뷰(v5.359~360) — 재료·골드 상한에서 대가만 빠지던 나머지 상품(과금 재화 포함). */
   { cat:'[수정]', ic:'🧾', t:'재료 보유 상한에서 루비·코인만 빠지던 구매를 막았습니다', d:'2026-09-25',
     body:'군주들에게 알립니다.<br><br>'+
@@ -2183,6 +2191,9 @@ function refreshClaimBadges(){
   _setDot(document.querySelector('[data-modal="hero"]'), heroFuseAvail());
   _setDot(document.querySelector('[data-modal="adventure"]'), advDotOn());   // #5(2차) 오늘 남은 모험이 있고 아직 안 열어 봤으면
   _setDot(document.querySelector('[data-modal="forge"]'), orderClaimable());   // #3(2차) 지금 납품할 수 있는 대장간 주문
+  /* K5(3차): 소환 점 — 영웅소환권 10장 이상 + 로스터(N·R 소환 가능 영웅) 미완성일 때. 종전엔 소환 쪽 점·안내가 전무해 첫 세션 끝까지 37장이 남았다(실측).
+     시뮬은 창마다 소환권을 다 쓴다 — 점은 실제 이용자를 기준선 쪽으로 맞춘다(v5.360 레벨업 점 보류와 반대 경우). 로스터가 차면 저절로 꺼진다. 튜토리얼 중 꺼짐. */
+  _setDot(document.querySelector('[data-modal="summon"]'), !!(S && S.seenTutorial) && (S.tickHero|0)>=10 && ownedHeroes().length < HERO_ROSTER.filter(r=>r.grade==='N'||r.grade==='R').length);
   _setDot(document.getElementById('btnMenuToggle'), q||a||n||od||m);
   /* ★ v5.271: 칭호 개선 가능 — [data-modal="titles"] 항목(드로어 내 칭호). ☰ 합산. */
   titleSyncOwn(true);   // ★ 2026-09-25: 달성한 칭호를 보유로 기록(5초 주기) — #11(2차): 새로 달성하면 알림
@@ -5461,15 +5472,15 @@ function startGuidedTutorial(){
 /* ★ v5.126: 길잡이 9단계 보상 수량을 재설계했다. 9단계 순서·아이템(구조)은 그대로 두고
    수량만 바꿨다 — 구조 개편은 컨셉 결정 후 별도 작업. ⚠임의수치 — 추후 밸런스 재조정 대상. */
 const GUIDE_CHAIN=[
-  { cat:'무기',   slot:'비전 지팡이', goalIcon:'🪄', rewardIcon:'🎟️', rewardQty:24,       rw:()=>{ S.tickHero+=24; } },
-  { cat:'방어구', slot:'방패',        goalIcon:'🛡️', rewardIcon:'📦', rewardQty:90,       rw:()=>{ S.tickMat+=90; } },
-  { cat:'방어구', slot:'투구',        goalIcon:'⛑️', rewardIcon:'🪨', rewardQty:300,      rw:()=>{ S.stones+=300; } },
-  { cat:'방어구', slot:'상의',        goalIcon:'🥼', rewardIcon:'🪨', rewardQty:320,      rw:()=>{ S.stones+=320; } },
-  { cat:'방어구', slot:'하의',        goalIcon:'👖', rewardIcon:'🪨', rewardQty:850,      rw:()=>{ S.stones+=850; } },
-  { cat:'방어구', slot:'신발',        goalIcon:'🥾', rewardIcon:'📜', rewardQty:800,      rw:()=>{ S.craftScroll+=800; } },
-  { cat:'장신구', slot:'반지',        goalIcon:'💍', rewardIcon:'🪙', rewardQty:18000000, rw:()=>{ addGold(18000000); } },
-  { cat:'장신구', slot:'목걸이',      goalIcon:'📿', rewardIcon:'🔨', rewardQty:15,       rw:()=>{ S.hammers+=15; } },
-  { cat:'특수',   slot:'고서',        goalIcon:'📖', rewardIcon:'🎲', rewardQty:160,      rw:()=>{ S.dice+=160; } },
+  { cat:'무기',   slot:'비전 지팡이', goalIcon:'🪄', rewardIcon:'🎟️', rn:'영웅소환권', rewardQty:24,       rw:()=>{ S.tickHero+=24; } },
+  { cat:'방어구', slot:'방패',        goalIcon:'🛡️', rewardIcon:'📦', rn:'재료소환권', rewardQty:90,       rw:()=>{ S.tickMat+=90; } },
+  { cat:'방어구', slot:'투구',        goalIcon:'⛑️', rewardIcon:'🪨', rn:'강화석', rewardQty:300,      rw:()=>{ S.stones+=300; } },
+  { cat:'방어구', slot:'상의',        goalIcon:'🥼', rewardIcon:'🪨', rn:'강화석', rewardQty:320,      rw:()=>{ S.stones+=320; } },
+  { cat:'방어구', slot:'하의',        goalIcon:'👖', rewardIcon:'🪨', rn:'강화석', rewardQty:850,      rw:()=>{ S.stones+=850; } },
+  { cat:'방어구', slot:'신발',        goalIcon:'🥾', rewardIcon:'📜', rn:'제작서', rewardQty:800,      rw:()=>{ S.craftScroll+=800; } },
+  { cat:'장신구', slot:'반지',        goalIcon:'💍', rewardIcon:'🪙', rn:'골드', rewardQty:18000000, rw:()=>{ addGold(18000000); } },
+  { cat:'장신구', slot:'목걸이',      goalIcon:'📿', rewardIcon:'🔨', rn:'전설 망치', rewardQty:15,       rw:()=>{ S.hammers+=15; } },
+  { cat:'특수',   slot:'고서',        goalIcon:'📖', rewardIcon:'🎲', rn:'주사위', rewardQty:160,      rw:()=>{ S.dice+=160; } },
 ];
 /* 표기는 언제나 실제 제작 아이템명 하나에서 나온다 */
 function guideName(g){ return g ? g.slot : ''; }
@@ -5484,8 +5495,11 @@ function guideOverride(cat, itemName){
 /* ★ 2026-09-25: 현재 길잡이 단계 제작에 모자란 골드(0 = 충분). 1~8단계는 150만·마지막 500만(GUIDE_RECIPE).
    근거(검증 워크플로 #1 실측): 튜토리얼 직후 933만으로 1~6단계를 만들면 7단계(반지)에서 골드가 모자라 **약 50분 정체**하는데,
    게임은 '골드가 부족합니다' 토스트만 띄웠다. 골드던전 1·2단계(+56만·+166만)면 바로 풀리지만 어디서도 안내하지 않았다. */
+/* ★ 2026-09-25(3차 발견 K1): 지금 모루에서 길잡이 목표를 만들고 있는지 — 이미 결제한 제작이다. */
+function guideCrafting(){ const g=guideTarget(); return !!(g && S && S.craft && S.craft.slot===g.slot && (!g.cat || S.craft.cat===g.cat)); }
 function guideGoldShort(){
   if(!S || !S.seenTutorial || S.guideStep>=GUIDE_CHAIN.length) return 0;
+  if(guideCrafting()) return 0;   // K1: 결제가 끝난 제작을 두고 '골드 부족 · [골드던전]'으로 보내던 것(실측: 9단계 시작 뒤 골드 1,000만 미만이면 6초 안에 배너가 바뀜)
   const need=(S.guideStep===GUIDE_CHAIN.length-1 ? GUIDE_RECIPE.final : GUIDE_RECIPE.step).gold;
   return Math.max(0, Math.ceil(need - S.gold));
 }
@@ -5531,12 +5545,17 @@ function updateGuideBanner(){
      목표는 언제나 '제작할 장비'라 부위 아이콘(equipImg)이 goalIcon 이모지보다 정확하다. */
   const ic=$('#gbGoal'); if(ic) ic.innerHTML = g.slot ? equipImg(g.slot, 1.15) : eImg(g.goalIcon, 1.15);
   const short=guideGoldShort();
-  const txt = short>0
+  /* K1(3차): 길잡이 목표를 제작 중이면 '제작 중 · 남은 시간'과 [즉시 완성](제작서 30장 이상) — 9단계 고서는 1시간이라 첫 세션 60분 중 53분이
+     '[바로가기]'만 뜬 배너로 멈춰 있었고, 제작서 920장으로 즉시 완성할 수 있다는 안내가 어디에도 없었다(실측). 분 단위라 5초 갱신으로 충분. */
+  const crafting=guideCrafting(), leftS=crafting ? Math.max(0, Math.ceil((S.craft.endAt-Date.now())/1000)) : 0;
+  const txt = crafting
+    ? `길잡이 ${S.guideStep+1}/${GUIDE_CHAIN.length} · ${guideName(g)} 제작 중 · ${leftS>=60?Math.ceil(leftS/60)+'분 남음':leftS>0?leftS+'초 남음':'곧 완성'}`
+    : short>0
     ? `길잡이 ${S.guideStep+1}/${GUIDE_CHAIN.length} · ${guideName(g)} · 골드 ${fmt(short)} 부족`
     : `길잡이 ${S.guideStep+1}/${GUIDE_CHAIN.length} · ${guideName(g)} 제작${need>1?` (${prog}/${need})`:''}`;
   const gt=$('#gbTxt'); if(gt && gt.textContent!==txt) gt.textContent=txt;
   bn.classList.toggle('short', short>0);
-  const go=$('#gbGo'); if(go){ const lab = short>0 && dailyLeft('gold',3)>0 ? '골드던전' : '바로가기'; if(go.textContent!==lab) go.textContent=lab; }
+  const go=$('#gbGo'); if(go){ const lab = crafting ? ((S.craftScroll|0)>=30 && leftS>0 ? '즉시 완성' : '대장간') : short>0 && dailyLeft('gold',3)>0 ? '골드던전' : '바로가기'; if(go.textContent!==lab) go.textContent=lab; }
   const ri=$('#gbRwIc'); if(ri) ri.innerHTML=eImg(g.rewardIcon, 1.15);   // ★ v5.109
   const rq=$('#gbRwQty'); if(rq) rq.textContent='X'+fmt(g.rewardQty);
   syncGuideOffset();
@@ -5552,7 +5571,7 @@ function guideCheck(ev, data){
   if(S.guideProg<need){ updateGuideBanner(); toast(`길잡이 진행 ${S.guideProg}/${need}`); return; }
   S.guideProg=0; S.guideStep++; sfx('win');
   try{ if(g.rw) g.rw(); }catch(e){}
-  toast(`길잡이 ${s+1}단계 완료! ${g.rewardIcon} X${fmt(g.rewardQty)}`);
+  toast(`길잡이 ${s+1}단계 완료! ${g.rewardIcon} ${g.rn||''} X${fmt(g.rewardQty)}`);   // K5(3차): 이름 없는 아이콘 토스트였다(📦·🎟️ 는 다른 재화와 아이콘이 겹친다)
   // ★ v5.126: 시스템 공지 문구를 재작성했다. 게이팅 조건(9단계 완료→약탈 해금)은 유지, 문구만 바꿨다.
   if(S.guideStep>=GUIDE_CHAIN.length){ sysLog('길잡이 아홉 걸음을 마쳤습니다 — 약탈의 문이 열렸습니다([모험] → 약탈).'); toast('길잡이 완주 · 약탈 해금');
     S.guideFinBanner=1; try{ updateGuideBanner(); }catch(e){} }   // #5(2차): 완주 1회 배너
@@ -6024,9 +6043,23 @@ function craftStart(grade, catKey, item){
   S.stats.poorClick=0;                                                      // 제작이 실제로 시작되면 스트릭 초기화
   item.recipe.forEach(r=>matSpend(r.k,r.need)); S.gold-=cp.gold;
   const _dur=cp.sec*craftTimeMul();   // ★ #18: 실제 소요 시간 — 진행률 분모(craftDur)
+  /* K1(3차): 10분 넘는 제작(길잡이 9단계 고서 1시간·E 1시간·L 2시간)은 시작 순간 한 번 — 창을 닫아도 진행되고, 급하면 제작서로 즉시 완성할 수 있다는 것을 알린다
+     (종전엔 어디에도 안내가 없었다. 제작서는 시작 120 + 길잡이 800 = 920장을 받는다). */
+  if(_dur>=600 && S.seenTutorial) setTimeout(()=>toast(`${item.n} 제작 ${_dur>=3600?Math.round(_dur/360)/10+'시간':Math.round(_dur/60)+'분'} — 창을 닫아도 진행됩니다${(S.craftScroll|0)>=30?` · 급하면 📜제작서 30장으로 즉시 완성(보유 ${fmt(S.craftScroll)})`:''}`, 5000), 400);
   S.craft={ grade, slot:item.n, cat:catKey, ic:item.ic, endAt:Date.now()+_dur*1000, // ★ B7/G-100 제작시간 버프
             p0:cp.p0, sec:cp.sec, dur:_dur, gold:cp.gold, recipe:item.recipe.map(r=>({k:r.k,need:r.need})) };
   sfx('tap'); toast(`${GRADES[grade].name} ${item.n} 제작 시작`); openModal('forge', item.n); refreshHUD(); save();   /* ★ v5.309: 제작비·재료 차감 확정 즉시 저장 */
+}
+/* ★ 2026-09-25(3차 발견 K1): 즉시 완성 확인창 — 대장간 진행 패널과 길잡이 배너 [즉시 완성]이 **이 함수 하나**를 쓴다(경로가 둘이면 제작서 이중 차감 위험).
+   시간만 건너뛴다 — 실패 확률은 그대로(확정 제작과 다름). */
+function craftInstantConfirm(){
+  if(!S.craft) return;
+  b2Confirm('즉시 완성',
+    `<div class="big">제작을 즉시 완료 하시겠습니까?</div>
+     <div class="b2-warnline">*시간만 건너뛸 뿐, 실패할 확률은 그대로입니다*</div>
+     <div style="margin-top:6px"><span style="font-size:26px">📜</span> <b style="color:var(--g-legend)">30</b> <span class="small mut">(보유 ${fmt(S.craftScroll)})</span></div>`,
+    ()=>{ if(!S.craft) return; if(S.craftScroll<30){ toast('제작서가 부족합니다.'); return; }
+          S.craftScroll-=30; S.craft.endAt=Date.now(); resolveCraft(); });
 }
 // 제작 취소 — 재료·골드 100% 환급
 function cancelCraft(){
@@ -6371,13 +6404,18 @@ const MODALS = {
            완성되던 표시↔판정 불일치였다. 할인 중이면 금색+버프 표시로 체감도 준다. */
         const effSec=Math.ceil(cp.sec*craftTimeMul());
         /* ★ 2026-09-25: 골드가 모자라면 빨강 + '(N 부족)' — 재료는 부족하면 빨강인데 골드만 표시가 없었다(검증 워크플로 #1). */
-        const gShort=Math.max(0, Math.ceil(cp.gold-S.gold));
+        /* K1(3차): 이 아이템을 지금 만드는 중이면 이미 결제한 것 — '(N 부족)'·[골드던전]을 띄우지 않는다(종전: 결제 뒤 잔액으로 다시 계산해 빨갛게 표시). */
+        const crafting=!!(S.craft && S.craft.slot===item.n && S.craft.grade===cur);
+        const gShort=crafting ? 0 : Math.max(0, Math.ceil(cp.gold-S.gold));
         info.innerHTML=`제작시간 : <b${effSec<cp.sec?' style="color:var(--g-legend)"':''}>${mmss(effSec)}</b>${effSec<cp.sec?' <span style="color:var(--g-legend)">버프 적용</span>':''}<br>필요 골드 : <b style="color:${gShort?'var(--bad)':G.color}">${fmt(cp.gold)}</b>${gShort?` <span style="color:var(--bad)">(${fmt(gShort)} 부족)</span>`:''}<br>제작 확률 : <b style="color:${G.color}">${Math.round(cp.p0*100)}%</b>`
           + (cp.guide?'<br><b style="color:var(--g-legend)">길잡이 단계</b>':'');
         side.appendChild(info);
         /* ★ v5.58: 제작 버튼 클릭 시 제작 팝업(확률/비용 표시) → 확인 후 startCraft.
            ⚠ 골드가 모자라도 [제작]은 그대로 둔다 — 칭호 '빈털터리'(부족한 채 제작 연속 시도)의 획득 경로다. */
-        const btn=el('button','btn gold sm','제작'); btn.id='forgeCraftBtn'; btn.onclick=()=>openForgeItemPopup(item); side.appendChild(btn);
+        /* K1(3차): 모루가 차 있으면 [제작]은 금색 주 버튼이 아니다 — 종전엔 제작 중인 아이템에도 금색 [제작]을 내밀고, 누르면 [제작 시작] → '이미 제작중입니다.'로 끝났다.
+           금색은 아래 진행 패널의 [즉시 완성]으로 넘긴다(금색 1개 규칙). */
+        const btn=el('button','btn sm'+(S.craft?'':' gold'), S.craft ? (crafting?'제작 중':'모루 사용 중') : '제작'); btn.id='forgeCraftBtn';
+        if(S.craft) btn.disabled=true; btn.onclick=()=>openForgeItemPopup(item); side.appendChild(btn);
         if(gShort && cp.guide){   // 길잡이 단계에서 골드가 막히면 바로 벌 곳을 알려 준다
           const left=dailyLeft('gold',3);
           if(left>0){ const gd=el('button','btn sm',`골드던전 (${left}/3)`); gd.style.marginTop='4px'; gd.onclick=()=>{ if(busyFight()) return; openModal('golddungeon'); }; side.appendChild(gd); }
@@ -6409,12 +6447,7 @@ const MODALS = {
       /* ★ 2차 UI 정리: 버튼 라벨은 "즉시 완성"(띄어쓰기 있음)으로 통일한다.
          종전 "즉시완성"(붙여쓰기) 표기를 라벨 표기 규칙에 맞춰 정정했다. */
       const inst=el('button','btn gold','즉시 완성');
-      inst.onclick=()=>{ b2Confirm('즉시 완성',
-        `<div class="big">제작을 즉시 완료 하시겠습니까?</div>
-         <div class="b2-warnline">*시간만 건너뛸 뿐, 실패할 확률은 그대로입니다*</div>
-         <div style="margin-top:6px"><span style="font-size:26px">📜</span> <b style="color:var(--g-legend)">30</b> <span class="small mut">(보유 ${fmt(S.craftScroll)})</span></div>`,
-        ()=>{ if(!S.craft) return; if(S.craftScroll<30){ toast('제작서가 부족합니다.'); return; }
-              S.craftScroll-=30; S.craft.endAt=Date.now(); resolveCraft(); }); };
+      inst.onclick=()=>craftInstantConfirm();   // K1(3차): 길잡이 배너와 같은 함수(경로가 둘이면 이중 차감 위험)
       // G-29: 확정 제작 = 성공 100% 보장 + 시간 스킵 (대기 중에도 클릭 가능)
       // ★ v5.124: 공짜였던 것을 제작서 소모(CRAFT_FIN_COST, 등급별)로 — 즉시 완성과 동일한 확인 팝업 경유
       const fin=el('button','btn gold','확정 제작'); fin.id='forgeFin';
@@ -6431,6 +6464,9 @@ const MODALS = {
       body.appendChild(el('div','hint','즉시 완성 = 📜30, 시간만 스킵(실패 확률 유지) · 확정 제작 = 📜60~240(등급별), 성공 보장 + 시간 스킵 · 제작 취소 = 재료·골드 100% 환급'));
     }
     render2();
+    /* K1(3차): 제작 중이면 처음 열 때 진행 패널([즉시 완성]·[확정 제작])이 보이게 — 375 폭에서 본문 스크롤 아래(버튼 top 761 > 본문 746)에 묻혀 있었다.
+       첫 렌더 때만(아이템을 고를 때마다 끌어내리면 성가시다). 블록 순서는 그대로(튜토리얼 2단계 레이아웃 불변). */
+    if(S.craft) setTimeout(()=>{ try{ const f=document.getElementById('forgeFin')||document.getElementById('forgeLeft'); if(f && f.scrollIntoView) f.scrollIntoView({block:'nearest'}); }catch(e){} }, 0);   // 버튼 줄까지(남은 시간 줄만 보이면 버튼은 여전히 아래 — 실측)
   }},
 
   // G-24: 대장간 아이템 상세 오버레이 팝업
@@ -9658,6 +9694,13 @@ function resolveCraft(forceSuccess){
   const rays = grade==='L' ? '<div class="rc-rays"></div>' : grade==='E' ? '<div class="rc-rays rr-e"></div>' : '';
   if(ok) b.appendChild(el('div','result-card rc-anim rc-win',`<div class="rc-icon grade-${grade}" style="color:${G.color}">${rays}${equipImg(slot,3)}</div><div class="rc-title win" style="color:${G.color};font-size:20px">${G.name} ${slot}</div><div class="small mut">${itemFlavor(slot)}</div><div class="small mut">인벤토리에 추가되었습니다.</div>`));
   else b.appendChild(el('div','result-card rc-anim rc-lose',`<div class="rc-icon">💥</div><div class="rc-title lose">제작 실패</div><div class="small mut">재료 90% 환급 · 다시 도전하세요</div>`));
+  /* K5(3차): 이번 제작으로 길잡이 단계를 넘겼으면 받은 보상을 결과 카드에 칩으로 — 종전엔 1.9초 토스트뿐이라(결과 팝업 버튼 위에 겹쳐 뜸) 첫 세션 끝까지
+     영웅소환권 37장이 그대로 남았다(실측). 소환권이면 [소환하기](비금색 — 금색은 '다음 길잡이'), 제작서면 쓰는 곳을 한 줄로. */
+  if(ok && S.seenTutorial && S.guideStep>gStep0){ try{ const gr=GUIDE_CHAIN[gStep0];   // 튜토리얼 중엔 손가락 흐름을 흐리지 않게 생략
+    const row=el('div','gd-rw'); row.appendChild(el('div','dg-chip dg-pop',`${eImg(gr.rewardIcon,1.4)} ${gr.rn||''} <b>+${fmt(gr.rewardQty)}</b>`));
+    if(gr.rn==='영웅소환권'){ const sb=el('button','btn sm','소환하기'); sb.onclick=()=>{ closeSub(); openModal('summon'); }; row.appendChild(sb); }
+    else if(gr.rn==='제작서') row.appendChild(el('div','small mut','긴 제작을 즉시 완성(30장)·확정 제작에 사용'));
+    b.appendChild(row); }catch(e){} }
   /* ★ v5.123: 종전 onclick 이 openModal('forge') 만 불러서 — 이 팝업은 _subKey 미등록
      오버레이라 openModal 이 닫아 주지 않는다 — 대장간이 팝업 '뒤'에서 다시 그려질 뿐,
      팝업은 ✕로만 닫혔다(대표 제보). closeSub() 로 팝업을 닫고 대장간으로 복귀한다. */
@@ -9771,7 +9814,7 @@ function playSummon(res){
     if(res.mats){
       b.appendChild(el('div','center small mut','상자를 열어 재료를 확인하세요 (탭 또는 모두 열기)'));
       // ★ v4.7: 재료 소환 결과는 4열×5행=20으로 설계. 영웅 조각 결과(G-60)만 4열로 고치고 여기엔 미적용이었다.
-      const g=el('div','grid'); g.style.gridTemplateColumns='repeat(4,1fr)'; g.style.gap='5px'; g.style.marginTop='8px';
+      const g=el('div','grid c4'); g.style.gap='5px'; g.style.marginTop='8px';   // K4(3차): 인라인 repeat(4,1fr) 은 셀 글자 최소폭이 트랙을 넓혀 4번째 칸이 모달 밖으로 잘렸다(HANDOFF 3-5 함정) — 정본 .grid.c4(minmax(0,1fr))
       // ★ v5.4: 상자를 열면 등급 색 사각형이 아니라 **실제로 받은 재료**가 나온다(아이템 아이콘으로 표시).
       /* ★ 2026-09-25: 상자 열기 = 카드 뒤집기(flip-in). 영웅·레전더리 등급 상자는 열리기 직전 등급색으로 먼저 빛난다(예고 0.28초) —
          '뭔가 좋은 게 나온다' 는 기대의 순간을 만든다(연출 문법만 차용). 모두 열기는 70ms 간격(종전 35ms — 너무 빨라 읽을 수 없었다). */
@@ -9792,7 +9835,7 @@ function playSummon(res){
       /* ★ 2026-09-25: '레전더리' 판정의 실체는 해당 직업 조각 +3 이다 — 소환 화면 용어('고급 조각 확률 보정')와 맞춘다. */
       if(res.legend) b.appendChild(el('div','center legend-burst',`<div class="ei" style="font-size:56px">🌟</div><div class="big lgd">고급 조각!</div>`));
       // ★ B4/G-60: 결과 그리드 5열 → 4열 (X20 = 4열 × 5행)
-      const g=el('div','grid'); g.style.gridTemplateColumns='repeat(4,1fr)'; g.style.marginTop='8px';
+      const g=el('div','grid c4'); g.style.marginTop='8px';   // K4(3차): 같은 이유
       let _di=0;   // ★ 2026-09-25: 결과 카드가 한 장씩 뒤집히며 깔린다(90ms 간격 flip-in)
       for(const id in res.gained){ const j=JOBS.find(x=>x.id===id)||JOBS[0];
         const best=classBest(id); const gr=best?best.grade:'N';
@@ -10571,6 +10614,8 @@ function wire(){
      현재 목표가 선택된 대장간 직행으로 — [바로가기] → [제작] 두 번이면 끝난다. */
   /* ★ 2026-09-25: 골드가 모자란 단계면 [골드던전]으로(오늘 남은 횟수가 있을 때) — 대장간에 가 봐야 '골드가 부족합니다' 뿐이다. */
   const gbGo=$('#gbGo'); if(gbGo) gbGo.addEventListener('click',()=>{ const g=guideTarget();
+    /* K1(3차): 대장간과 같은 확인창·차감(craftInstantConfirm 하나). ⚠ 대장간을 먼저 연다 — b2Overlay 는 #modal-root 안에 붙어서 모달이 닫힌 홈에선 보이지 않는다(실측). */
+    if(g && guideCrafting() && (S.craftScroll|0)>=30 && S.craft.endAt>Date.now() && !busyFight()){ openModal('forge', g.slot); craftInstantConfirm(); return; }
     if(g && guideGoldShort()>0 && dailyLeft('gold',3)>0 && !busyFight()){ openModal('golddungeon'); return; }
     if(g) openModal('forge', g.slot);
     else if(S.guideFinBanner===1 && !(Battle.inDungeon && Battle.inDungeon())) openModal('adventure');   // #5(2차) 완주 배너 → 모험

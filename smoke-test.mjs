@@ -2606,6 +2606,36 @@ step('리뷰 반영 — 교환 클릭 시점 품절 · 긴 토스트 · 가져�
   S.mats=keep.mats; S.gray=keep.gray; S.lastSeen=keep.ls; S.offlinePending=keep.op;
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ 2026-09-25(3차 발견 K1·K5): 길잡이 목표 제작 중 — 결제한 제작에 '골드 부족' 없음 · 배너 '제작 중' · [즉시 완성] 경로 하나 · 길잡이 보상 칩. */
+step('길잡이 제작 중 — 부족 0·배너·즉시 완성 단일 경로 · 보상 칩', ()=>{
+  const errs=[], S=ev('S'), G=ev('GUIDE_CHAIN'), root=ev("$('#modal-root')");
+  const keep=JSON.parse(JSON.stringify({ gs:S.guideStep, gp:S.guideProg, st:S.seenTutorial, gold:S.gold, cs:S.craftScroll, craft:S.craft, th:S.tickHero }));
+  S.seenTutorial=true; S.guideStep=G.length-1; S.guideProg=0; S.gold=0; S.craftScroll=100;
+  const g=G[S.guideStep];
+  if(!(ev('guideGoldShort')()>0)) errs.push('전제: 골드 0 인데 부족 0');
+  S.craft={ grade:'N', slot:g.slot, cat:g.cat, ic:'📖', endAt:ev('Date.now()')+3500e3, p0:1, sec:3600, dur:3600, gold:5000000, recipe:[] };
+  if(ev('guideGoldShort')()!==0) errs.push('결제한 길잡이 제작인데 골드 부족 '+ev('guideGoldShort')());
+  ev('updateGuideBanner')(); const gt=ev("$('#gbTxt')"), go=ev("$('#gbGo')");
+  if(!/제작 중 · \d+분 남음/.test(String(gt.textContent))) errs.push('배너 문구 '+gt.textContent);
+  if(go.textContent!=='즉시 완성') errs.push('배너 버튼 '+go.textContent);
+  // 즉시 완성 경로 하나: 차감 코드가 craftInstantConfirm 에만
+  const n30=(js.match(/S\.craftScroll-=30;/g)||[]).length, uses=(js.match(/craftInstantConfirm\(\)/g)||[]).length;
+  if(n30!==1 || uses<3) errs.push(`즉시 완성 차감 ${n30}곳 · 호출 ${uses}`);
+  // 대장간: 모루가 차 있으면 [제작] 비활성
+  if(!/btn\.id='forgeCraftBtn';\s*\n?\s*if\(S\.craft\) btn\.disabled=true;/.test(js)) errs.push('대장간 [제작] 이 제작 중에도 활성');
+  // 보상 칩: 길잡이 1단계 제작 → 결과 카드에 gd-rw · [소환하기]
+  S.craft=null; S.guideStep=0; S.guideProg=0; S.gold=1e9; const g0=G[0]; const loc=ev('forgeLocate')(g0.slot);
+  const s2=ev('FORGE_SLOTS')[loc.slotIdx]; S.craft={ grade:loc.grade, slot:g0.slot, cat:s2.k, ic:'🪄', endAt:0, p0:1, sec:1, gold:0, recipe:[] };
+  ev('craftAutoCheck')();
+  let rw=null; const rec=n=>{ if(!n||typeof n!=='object'||rw) return; if(String(n.className||'').split(' ').includes('gd-rw')) rw=n; (n.children||[]).forEach(rec); }; rec(root);
+  if(S.guideStep!==1) errs.push('전제: 1단계 통과 안 됨 '+S.guideStep);
+  else if(!rw) errs.push('길잡이 보상 칩 없음');
+  else if(!findBtnByText(rw,'소환하기')) errs.push('영웅소환권 보상에 [소환하기] 없음');
+  if(!/K5\(3차\): 소환 점/.test(js) || !/data-modal="summon"\]'\), !!\(S && S\.seenTutorial\) && \(S\.tickHero\|0\)>=10/.test(js)) errs.push('소환 점 조건 없음');
+  ev('closeSub')(); ev('closeModal')();
+  Object.assign(S, { guideStep:keep.gs, guideProg:keep.gp, seenTutorial:keep.st, gold:keep.gold, craftScroll:keep.cs, craft:keep.craft, tickHero:keep.th });
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ 2026-09-25(2차 미검증 U5·U3·U1 · #4 ③): 상한 재화 구매·수령이 값만 빼지 않는다 · 대장간은 마지막 아이템으로 · 레벨업 버튼 금색 · 리더 장착 전후 클릭 시점. */
 step('상한 재화 보호 · 대장간 마지막 선택 · 레벨업 버튼 · 장착 전후 재해석', ()=>{
   const errs=[], S=ev('S');

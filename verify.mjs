@@ -303,6 +303,16 @@ console.log('[I] FORGE_SLOTS act 대상:',JSON.stringify([...new Set(acts)]));
   bad.forEach(m=>fail('[L] ' + m));
 }
 
+// ---- M) 인라인 격자 트랙 '1fr' 금지 — HANDOFF 3-5 함정(셀 글자 최소폭이 1fr=minmax(auto,1fr) 트랙을 넓혀 마지막 칸이 모달 밖으로 잘린다).
+/* 2026-09-25(3차 발견 K4): 영웅·재료 소환 결과 격자가 인라인 repeat(4,1fr) 이라 360~414 폭 전부에서 4번째 카드가 잘렸다. 정본은 style.css .grid.cN(minmax(0,1fr)).
+   인라인으로 격자 열을 줄 때는 minmax(0,1fr) 를 써라. */
+{
+  const js = fs.readFileSync(D + 'game.js', 'utf8');
+  const hits = [...js.matchAll(/gridTemplateColumns\s*=\s*['"`]repeat\(\d+,\s*1fr\)/g)].map(m => 'game.js:' + (js.slice(0, m.index).split('\n').length));
+  console.log('\n' + '[M] 인라인 격자 1fr 트랙: ' + (hits.length ? hits.length + '곳 ❌' : '0곳 ✅'));
+  hits.forEach(h => fail('[M] 인라인 repeat(n,1fr) — minmax(0,1fr) 또는 .grid.cN 을 써라: ' + h));
+}
+
 // ---- K) CSS 계약 — "없어지면 기능이 조용히 깨지는" 규칙만 못박는다
 /* 왜 있는가
    2026-09-07 에 옛 style.css 사본이 배포돼 v5.115~v5.127 의 CSS 수정 6건이 라이브에서 통째로

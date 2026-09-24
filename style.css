@@ -310,6 +310,9 @@ body{
 .ord-row.ord-flash .ord-stamp{ animation:ordStamp .42s cubic-bezier(.2,1.6,.4,1); }
 @keyframes ordStamp{ from{ transform:rotate(-12deg) scale(2.2); opacity:0; } to{ transform:rotate(-12deg) scale(1); opacity:1; } }
 @media (prefers-reduced-motion: reduce){ .ord-row.ord-flash .ord-stamp{ animation:none; } }
+/* ★ 2026-09-25(3차 K5): 제작 결과 카드의 길잡이 보상 칩 줄 */
+.gd-rw{ display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:6px; margin:6px 0 2px; }
+.gd-rw .small{ flex:1 1 100%; text-align:center; }
 /* ★ 2026-09-25(2차 미검증 U4): 영웅 상세·장비창 가운데 초상 — 128px 원화를 축소(pixelated 아님 — 칠한 원화라 계단이 진다) */
 .hd-por{ width:92px; height:92px; margin:0 auto 6px; border-radius:12px; border:2px solid var(--gc,#8a6a38); overflow:hidden;
   background:radial-gradient(circle at 50% 40%,#2a2016,#0e0a07); display:flex; align-items:center; justify-content:center; font-size:52px;
