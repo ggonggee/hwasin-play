@@ -310,6 +310,18 @@ body{
 .ord-row.ord-flash .ord-stamp{ animation:ordStamp .42s cubic-bezier(.2,1.6,.4,1); }
 @keyframes ordStamp{ from{ transform:rotate(-12deg) scale(2.2); opacity:0; } to{ transform:rotate(-12deg) scale(1); opacity:1; } }
 @media (prefers-reduced-motion: reduce){ .ord-row.ord-flash .ord-stamp{ animation:none; } }
+/* ★ 2026-09-25(워크플로 2차 #14): 길드 토벌 — HP 수치 · 참전 보상 4단 · 결과 카드 한 줄 */
+.gb-hp{ color:#f0d59a; margin-top:2px; }
+.gb-ms{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:5px; margin:8px 0 4px; }
+.gb-ms .gb-m{ display:flex; flex-direction:column; align-items:center; gap:1px; padding:5px 2px; border:1px solid var(--frame-dk,#4a3823); border-radius:7px;
+  background:rgba(20,15,10,.5); font-size:var(--fs-xs); color:var(--txt-dim); }
+.gb-ms .gb-m b{ color:var(--txt); font-size:var(--fs-sm); }
+.gb-ms .gb-m.got{ border-color:#8a6424; background:linear-gradient(180deg,rgba(90,62,20,.6),rgba(30,20,8,.6)); color:#f0d59a; }
+.gb-ms .gb-m.got b::after{ content:" ✓"; color:var(--ok,#8fd18f); }
+.gb-res{ margin:6px 0 2px; text-align:center; font-size:var(--fs-sm); color:var(--txt); line-height:1.45; word-break:keep-all; }
+.gb-res.kill{ color:#f0d59a; animation:gbKill .5s ease-out; }
+@keyframes gbKill{ from{ transform:scale(1.25); opacity:0; } to{ transform:scale(1); opacity:1; } }
+@media (prefers-reduced-motion: reduce){ .gb-res.kill{ animation:none; } }
 /* ★ 2026-09-25(워크플로 2차 #9): 합성 뒤 새 영웅 카드 깜빡임 */
 .herocard.hc-pulse{ animation:hcPulse .9s ease-out; }
 @keyframes hcPulse{ 0%{ box-shadow:0 0 0 0 var(--gc,#f2b23a); } 40%{ box-shadow:0 0 0 6px var(--gc,#f2b23a); } 100%{ box-shadow:0 0 0 0 transparent; } }

@@ -2606,6 +2606,42 @@ step('리뷰 반영 — 교환 클릭 시점 품절 · 긴 토스트 · 가져�
   S.mats=keep.mats; S.gray=keep.gray; S.lastSeen=keep.ls; S.offlinePending=keep.op;
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ 2026-09-25(워크플로 2차 #14): 길드 토벌 — 고정 HP 표·주기 경계(HP 만 리필, 단계 유지)·되감기 무시·처치 보상·기록서 5단계마다·참전 보상 4단·기존 적립 불변. */
+step('길드 토벌 — 단계 HP 표·주기·처치 보상·기록서·참전 보상·기존 적립 불변', ()=>{
+  const errs=[], S=ev('S'), G=ev('GBOSS'), hp=ev('gbossHP');
+  const keep=JSON.parse(JSON.stringify({ gb:S.gboss, gc:S.guildCoin, dice:S.dice, rec:S.records }));
+  if(hp(1)!==G.H0 || hp(2)!==Math.round(G.H0*G.R) || !(hp(30)>hp(29))) errs.push('단계 HP 표 '+[hp(1),hp(2)].join('/'));
+  const cyc=Math.floor(ev('dayIdx')(ev('today')())/G.CYC);
+  // 새 주기: dealt/runs/ms 리셋 · 단계·최고 유지 / 되감기(저장 주기가 미래) 무시
+  S.gboss={ cyc:cyc-1, stage:7, best:6, dealt:500, runs:5, ms:3 }; ev('gbossState')();
+  if(S.gboss.cyc!==cyc || S.gboss.dealt!==0 || S.gboss.runs!==0 || S.gboss.ms!==0 || S.gboss.stage!==7 || S.gboss.best!==6) errs.push('새 주기 리셋 규칙 '+JSON.stringify(S.gboss));
+  S.gboss={ cyc:cyc+1, stage:7, best:6, dealt:500, runs:5, ms:3 }; ev('gbossState')();
+  if(S.gboss.dealt!==500 || S.gboss.cyc!==cyc+1) errs.push('되감기로 주기 리셋');
+  // 처치: 4단계 풀을 넘기는 피해 → 4·5단계 처치(5단계 = 기록서) · 보상 · 길드원 몫 ×1.5
+  S.gboss={ cyc, stage:4, best:3, dealt:0, runs:0, ms:0 }; const c0=S.guildCoin||0, d0=S.dice||0, r0=S.records||0;
+  const need=hp(4)+hp(5); const d=Math.ceil(need/(1+G.NPC))+1;
+  const r=ev('gbossApply')(d);
+  if(JSON.stringify(r.kills)!=='[4,5]' || S.gboss.stage!==6 || S.gboss.best!==5) errs.push('처치 연쇄 '+JSON.stringify([r.kills,S.gboss.stage,S.gboss.best]));
+  if((S.records||0)-r0!==1 || r.rec!==1) errs.push('5단계 기록서 '+((S.records||0)-r0));
+  if((S.dice||0)-d0!==G.KILL_DICE*2) errs.push('처치 주사위 '+((S.dice||0)-d0));
+  if((S.guildCoin||0)-c0!==G.KILL_COIN*2+G.MS_RW[0]) errs.push('처치+참전1회 길드코인 '+((S.guildCoin||0)-c0));
+  if(r.npc!==Math.round(d*G.NPC)) errs.push('길드원 몫');
+  // 참전 보상 4단: 1·2·4·6회
+  S.gboss={ cyc, stage:30, best:29, dealt:0, runs:0, ms:0 }; const c1=S.guildCoin||0;
+  for(let k=0;k<6;k++) ev('gbossApply')(1);
+  if(S.gboss.ms!==4 || (S.guildCoin||0)-c1!==G.MS_RW.reduce((a,b)=>a+b,0)) errs.push('참전 보상 4단 '+JSON.stringify([S.gboss.ms,(S.guildCoin||0)-c1]));
+  ev('gbossApply')(1); if(S.gboss.ms!==4) errs.push('참전 보상 초과');
+  // 기존 참전 보상·점수 적립 4줄 불변(칭호 조건 guildScore) + 토벌은 그 뒤에 덧붙임
+  const src=js.slice(js.indexOf('function enterGuildRaid('), js.indexOf('function enterGuildRaid(')+3000);
+  if(!/S\.guildRaidScore=\(S\.guildRaidScore\|\|0\)\+d; S\.guildScore=\(S\.guildScore\|\|0\)\+d;/.test(src) || src.indexOf('gbossApply(d)')<src.indexOf('S.guildScore=(S.guildScore||0)+d')) errs.push('기존 레이드 적립 변경 또는 토벌이 앞에 옴');
+  if(/foeCP:Math\.round\(totalCP\(\)\*2\.2\/dmgMul\)/.test(src)===false) errs.push('레이드 foeCP 공식 변경');
+  // 구세이브(gboss 없음) · 레이드 화면 렌더
+  delete S.gboss; ev('gbossState')(); if(!S.gboss || S.gboss.stage!==1) errs.push('gboss 없는 세이브 복구');
+  const box=new Node2('div'); ev('MODALS').guildRaid.render(box); const txt=(function t(n){ return String(n._html||n._text||'')+(n.children||[]).map(t).join(''); })(box);
+  if(!/재의 골렘 <b>1단계<\/b>/.test(txt) || !/주기 D-\d/.test(txt)) errs.push('레이드 화면 단계·주기 표기 없음');
+  Object.assign(S, { gboss:keep.gb, guildCoin:keep.gc, dice:keep.dice, records:keep.rec });
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ 2026-09-25(워크플로 2차 #3): 대장간 주문 — 해금(리더 10부위 L)·결정론 생성·E 중심/L 하루 1건·기한·납품 대상 제한·이중 수령·골드 < 제작가 절반·되감기. */
 step('대장간 주문 — 해금·결정론·납품 대상·이중 수령·순환 이익 없음', ()=>{
   const errs=[], S=ev('S');

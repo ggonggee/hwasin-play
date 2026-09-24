@@ -53,6 +53,11 @@ const arenaTally={ weeks:0, rankSum:0, buffSum:0, fights:0, wins:0 };
 const ORDERS_ON = process.argv.slice(3).some(a=>a==='orders=1');
 const ORDER_RES = (()=>{ for(const a of process.argv.slice(3)){ const m=/^orderres=(\d+)$/.exec(a||''); if(m) return Number(m[1])*1e6; } return 30e6; })();   // 주문 제작 골드 예약선(백만) — 기본 3천만(결정 가호·망치 1묶음 몫은 남긴다)
 const orderTally={ unlockH:null, days:0, delivered:0, crafts:0, goldSpent:0, hammers:0, dice:0, gold:0 };
+/* ★ 2026-09-25(워크플로 2차 #14): guild=1 — 길드 토벌(재의 골렘 단계제) 모델(기본 꺼짐 = 기준선 불변). 하루 2회 참전, 1회 피해 = GUILD_CAL×총전투력.
+   GUILD_CAL 기본 0.17 = 실전투 스윕 중앙값(판당 0.14~0.29 흔들림 · 약탈 활성화 끔 기준 — 켜면 약 0.23~0.31). 풀·보상은 게임 정본 gbossApply 그대로. */
+const GUILD_ON = process.argv.slice(3).some(a=>a==='guild=1');
+const GUILD_CAL = (()=>{ for(const a of process.argv.slice(3)){ const m=/^guildcal=([\d.]+)$/.exec(a||''); if(m) return Number(m[1]); } return 0.17; })();
+const guildTally={ curve:[], kills:0, rec:0, coin:0, dice:0, cycKills:{} };
 const OFFCAP_ARG = (()=>{ for(const a of process.argv.slice(3)){ const m=/^offcap=(\d+)$/.exec(a||''); if(m) return Number(m[1]); } return null; })();
 
 /* ---- 최소 DOM 스텁 (smoke-test 의 것에서 전투 구동에 필요한 만큼만) ---- */
@@ -463,6 +468,13 @@ function dailyStep(){
           if(ev('orderDeliver')(i)==='ok'){ orderTally.delivered++; orderTally.hammers+=(S.hammers|0)-h0; orderTally.dice+=(S.dice|0)-d0; orderTally.gold+=S.gold-gg; acts+='주문납품 '; } }
       });
     }
+  }
+  if(GUILD_ON){
+    for(let k=0;k<2;k++){ const gc0=S.guildCoin||0, dc0=S.dice||0;
+      const r=ev('gbossApply')(Math.round(GUILD_CAL*myCP()));
+      guildTally.kills+=r.kills.length; guildTally.rec+=r.rec; guildTally.coin+=(S.guildCoin||0)-gc0; guildTally.dice+=(S.dice||0)-dc0;
+      const cy=S.gboss.cyc; guildTally.cycKills[cy]=(guildTally.cycKills[cy]||0)+r.kills.length; if(r.kills.length) acts+=('토벌'+r.kills.length+' '); }
+    guildTally.curve.push([day, S.gboss.stage, myCP()]);
   }
   return acts.trim();   // ★ v5.245: 일일 콘텐츠 수행 요약(액션 집계용)
 }
@@ -934,6 +946,9 @@ log(`\n총 시뮬: ${(simSec/3600).toFixed(1)}h · 창 ${windows}회 · 최종 C
   log(`[진단] 위험강화: 시도 ${riskTally.tries} · 성공 ${riskTally.success} · 하락 ${riskTally.drop} · 보호 ${riskTally.saved} · 파괴 ${riskTally.destroyed} · +25도달 ${riskTally.max20}부위 · 망치구매 골드 ${(riskTally.hammerGold/1e6).toFixed(0)}M + 강화석 ${riskTally.hammerStone}개`);
   log(`[진단] 보유 영웅별 CP:`, ev('ownedHeroes')().map(h=>`${h.name.slice(0,5)}(${h.grade})=${ev('heroPower')(h)}`).join(' · '));
   if(arenaTally.log) log('[진단] 투기장 주별(실전투): '+arenaTally.log.join(' · '));
+  if(GUILD_ON){ const cv=guildTally.curve, pick=d=>{ const x=cv.filter(c=>c[0]<=d).pop(); return x?`${d}일 ${x[1]}단계(CP ${Math.round(x[2]/1000)}k)`:''; };
+    const ck=Object.values(guildTally.cycKills), z=ck.filter(n=>n===0).length, one=ck.filter(n=>n===1).length, many=ck.filter(n=>n>1).length;
+    log(`[진단] 길드 토벌(#14, cal ${GUILD_CAL}): ${[3,7,14,30,60,100].map(pick).filter(Boolean).join(' · ')} · 처치 ${guildTally.kills} · 주기 ${ck.length}개(0처치 ${z}·1처치 ${one}·2+처치 ${many}) · 기록서 +${guildTally.rec} · 길드코인 +${guildTally.coin} · 주사위 +${guildTally.dice}`); }
   if(ORDERS_ON) log(`[진단] 대장간 주문(#3): 해금 ${orderTally.unlockH===null?'없음':orderTally.unlockH+'h'} · ${orderTally.days}일 · 납품 ${orderTally.delivered}건 · 주문 제작 ${orderTally.crafts}회(골드 ${(orderTally.goldSpent/1e6).toFixed(0)}M) · 전설 망치 +${orderTally.hammers} · 주사위 +${orderTally.dice} · 골드 +${(orderTally.gold/1e6).toFixed(0)}M`);
   if(ARENA_N>0) log(`[진단] 투기장(#2 측정): 주당 ${ARENA_N}판·승률 ${ARENA_WIN<0?`실전투 ${arenaTally.wins}/${arenaTally.fights}=${arenaTally.fights?(arenaTally.wins/arenaTally.fights*100).toFixed(1):0}%`:ARENA_WIN} · ${arenaTally.weeks}주 평균 순위 ${arenaTally.weeks?Math.round(arenaTally.rankSum/arenaTally.weeks):0}위 · 평균 버프 +${arenaTally.weeks?Math.round(arenaTally.buffSum/arenaTally.weeks):0}%`);
   log(`[진단] 영웅 강화(#12): 총 ${enhTally.ups}단계 ·`, ev('ownedHeroes')().map(h=>`${h.name.slice(0,5)}+${ev('heroEnhLv')(h.hero_id)}`).join(' · '));

@@ -1417,6 +1417,14 @@ const ATTEND_DAYS = [
 ];
 /* ★ B9/G-134: 공지 — 제목 밴드 + 양피지 서술형 본문 (목록 → 상세 2단) */
 const NOTICES = [
+  /* ★ v5.359: 길드 토벌(#14) — 길드 레이드에 단계 진척. 기존 참전 보상·길드 점수는 그대로. */
+  { cat:'[업데이트]', ic:'🗿', t:'길드 토벌 — 재의 골렘이 단계마다 강해집니다', d:'2026-09-25',
+    body:'군주들에게 알립니다.<br><br>길드 레이드의 재의 골렘을 이제 실제로 쓰러뜨릴 수 있습니다.<br><br>'+
+      '· <b>단계</b> — 골렘의 체력이 0 이 되면 처치, 더 강한 다음 단계가 나타납니다. 도달한 단계는 계속 유지됩니다.<br>'+
+      '· <b>길드원 몫</b> — 참전하면 내 피해에 길드원들의 몫(내 피해의 1.5배)이 함께 쌓입니다.<br>'+
+      '· <b>3일 주기</b> — 3일마다 골렘의 체력이 다시 가득 찹니다(단계는 그대로).<br>'+
+      '· <b>보상</b> — 처치마다 길드 코인 50·주사위 20, 5단계마다 기록서 1권. 주기 동안 1·2·4·6회 참전하면 길드 코인 5·10·15·20.<br>'+
+      '· 기존 참전 보상(회색코인·길드 코인)과 길드 점수 적립은 그대로입니다.' },
   /* ★ v5.358: 대장간 주문(#3) — 장비를 다 맞춘 뒤에도 매일 '만들 이유'. */
   { cat:'[업데이트]', ic:'📜', t:'대장간 주문이 열립니다 — 매일 3건의 납품 의뢰', d:'2026-09-25',
     body:'군주들에게 알립니다.<br><br>장비를 모두 레전더리로 맞춘 뒤에도 대장간의 불이 꺼지지 않도록, 의뢰인들이 매일 장비를 주문합니다.<br><br>'+
@@ -1585,6 +1593,7 @@ function freshState(){
     guildNotice:'',          // G-112 길드 공지 본문 (빈 값이면 기본 문구를 보여준다)
     guildScore:0,            // G-106 길드 누적 점수(레이드·점령전 기여 합) — 석판에 표시
     guildRaidScore:0,        // G-108 길드 레이드 내 누적 점수
+    gboss:{ cyc:-1, stage:1, best:0, dealt:0, runs:0, ms:0 },   // ★ #14(2차) 길드 토벌 — 주기·현재 단계·최고 처치·이번 주기 누적 피해·참전·참전 보상 단계(이관 플래그 아님)
     guildRaidAuto:false,     // G-108 길드 레이드 '자동 입장' 토글
     raidVictim:false,        // G-115 약탈 활성화 시 '피약탈 대상' 플래그 (자기 페널티 없음)
     // ★ B7: 상점·패키지 신규 재화 (G-93/96/97/98/104)
@@ -4827,6 +4836,41 @@ function conquestMyScore(){ return CONQUEST.reduce((a,c)=>a+holdRec(c.id).mine, 
 /* G-106: 누적 점수 석판 — 랭킹표의 기준 점수 + 내가 쌓은 기여 */
 function guildBaseScore(){ const r=GUILD_RANK.find(g=>g[0]===S.guildName); return r ? r[1] : 0; }
 function guildTotalScore(){ return guildJoined() ? guildBaseScore() + (S.guildScore||0) : 0; }
+/* ★ 2026-09-25(워크플로 2차 #14): 길드 토벌 — 재의 골렘 단계제. 종전 레이드는 적 전투력이 항상 내 전투력×2.2(성장해도 상대 난이도 불변)이고,
+   HP 바는 누적 점수로 그린 연출 값이라 15% 에서 영구 정지했다(실측: 누적 40만점부터 '보스 HP 15%'). 매일 2회 하는 콘텐츠인데 진척 축이 0 이었다.
+   이제 단계 k 의 HP 는 **고정 표**(H0×R^(k−1), 내 전투력 비례 아님) — 전투력 성장이 '몇 단계까지 잡았나'로 보인다.
+   참전 1회 = 내 데미지(st.dmg — 전투 불변) + 길드원 몫(내 데미지×1.5, 난수 없음 — 참전해야 쌓인다). HP 가 0 이 되면 처치: 다음 단계 등장.
+   3일 주기(dayIdx 기준)마다 HP 만 다시 차고 도달 단계는 유지 — 되감기(주기 감소)는 무시(#16 원칙).
+   ⚠ 지킬 것(검증 반영): Battle·foeCP 공식·결정론 무접촉(보상 콜백·표시만) · 기존 참전 보상과 guildRaidScore/guildScore 적립은 한 글자도 안 바꾼다
+     (guildScore 는 칭호 조건 — 새 풀로 옮기면 판정이 바뀐다) · 기록서는 5단계마다 1권만(✦ 병목 — 매 처치 1권이면 월 +28%) · 지난 단계 HP 는 올리지 않는다(U7).
+   · 전투 중 보스 HP 바는 판마다 가득 찬 보스를 보여 준다(전투 쪽 불변) — 공유 풀 변화는 결과 카드와 레이드 화면에서만 보여 준다. */
+const GBOSS={ H0:8000, R:1.18, CYC:3, NPC:1.5, MS:[1,2,4,6], MS_RW:[5,10,15,20], KILL_COIN:50, KILL_DICE:20, REC_EVERY:5 };
+function gbossHP(k){ return Math.round(GBOSS.H0*Math.pow(GBOSS.R, Math.max(1,k|0)-1)); }
+function gbossState(){
+  if(!S.gboss || typeof S.gboss!=='object') S.gboss={ cyc:-1, stage:1, best:0, dealt:0, runs:0, ms:0 };
+  const g=S.gboss; if(!(g.stage>=1)) g.stage=1;
+  const di=dayIdx(today()); if(!isFinite(di)) return g;
+  const c=Math.floor(di/GBOSS.CYC);
+  if(!(g.cyc>=0) || c>g.cyc){ g.cyc=c; g.dealt=0; g.runs=0; g.ms=0; }   // 새 주기: HP 만 다시 참(단계·최고 유지)
+  return g;
+}
+function gbossCycLeft(){ const di=dayIdx(today()); if(!isFinite(di)) return GBOSS.CYC; return (Math.floor(di/GBOSS.CYC)+1)*GBOSS.CYC-di; }
+let _gbLast=null;   // 직전 참전 결과(결과 카드 resultExtra 표시용 — 표시 전용)
+function gbossApply(d){
+  const g=gbossState(); d=Math.max(0, Math.round(Number(d)||0));
+  const npc=Math.round(d*GBOSS.NPC), stage0=g.stage, from=Math.max(0, 1-g.dealt/gbossHP(g.stage));
+  g.dealt+=d+npc; g.runs=(g.runs|0)+1;
+  const kills=[]; let rec=0, guard=0;
+  while(g.dealt>=gbossHP(g.stage) && guard++<500){ g.dealt-=gbossHP(g.stage); kills.push(g.stage); g.best=Math.max(g.best|0, g.stage);
+    S.guildCoin=(S.guildCoin||0)+GBOSS.KILL_COIN; S.dice=(S.dice||0)+GBOSS.KILL_DICE;
+    if(g.stage%GBOSS.REC_EVERY===0){ S.records=(S.records||0)+1; rec++; }
+    g.stage++; }
+  let msGot=0; while((g.ms|0)<GBOSS.MS.length && g.runs>=GBOSS.MS[g.ms|0]){ msGot+=GBOSS.MS_RW[g.ms|0]; S.guildCoin=(S.guildCoin||0)+GBOSS.MS_RW[g.ms|0]; g.ms=(g.ms|0)+1; }
+  const to=Math.max(0, 1-g.dealt/gbossHP(g.stage));
+  _gbLast={ d, npc, stage0, kills, rec, from, to, stage:g.stage, msGot };
+  save();   // 지급 확정 즉시 저장(v5.308 원칙)
+  return _gbLast;
+}
 function guildMyGrade(){ return GUILD_GRADES[S.guildRank] ? S.guildRank : (S.guildMaster?'master':'member'); }
 function guildCanEditNotice(){ const g=guildMyGrade(); return guildJoined() && (g==='master'||g==='officer'); }
 const GUILD_NOTICE_DEFAULT = '길드 레이드는 매일 열려 있습니다. 주 3회 이상 참여를 부탁드립니다.';   // ★ 2026-09-25: 시간 제한 문구 삭제(판정 코드 없음)
@@ -4911,7 +4955,16 @@ function enterGuildRaid(auto){
       reward:(st)=>{ const d=(st&&st.dmg)||0;
         S.guildRaidScore=(S.guildRaidScore||0)+d; S.guildScore=(S.guildScore||0)+d;
         S.gray+=ri(10,30); S.guildCoin=(S.guildCoin||0)+ri(20,50);
-        sysLog(`길드 레이드 결과 — <b>${fmt(d)}점</b> · 길드 코인 획득`); },
+        sysLog(`길드 레이드 결과 — <b>${fmt(d)}점</b> · 길드 코인 획득`);
+        /* #14(2차): 위 4줄(기존 보상·점수)은 그대로 두고 토벌 풀에만 덧붙인다 */
+        _gbLast=null; try{ const gb=gbossApply(d);
+          if(gb.kills.length) sysLog(`<b>재의 골렘 ${gb.kills.join('·')}단계 처치!</b> — ${gb.stage}단계 등장 · 길드 코인 +${GBOSS.KILL_COIN*gb.kills.length} · 주사위 +${GBOSS.KILL_DICE*gb.kills.length}${gb.rec?` · 기록서 +${gb.rec}`:''}`); }catch(e){} },
+      resultExtra:(bx)=>{ const gb=_gbLast; if(!gb) return;
+        const line=el('div','gb-res'+(gb.kills.length?' kill':''));
+        line.innerHTML = gb.kills.length
+          ? `🗿 <b>재의 골렘 ${gb.kills.length>1?gb.kills[0]+'~'+gb.kills[gb.kills.length-1]:gb.kills[0]}단계 처치!</b> → <b>${gb.stage}단계</b> 등장 · HP ${Math.round(gb.to*100)}%${gb.rec?` · 📕 기록서 +${gb.rec}`:''}`
+          : `🗿 재의 골렘 ${gb.stage}단계 HP <b>${Math.round(gb.from*100)}% → ${Math.round(gb.to*100)}%</b> <span class="mut">(길드원 몫 +${fmt(gb.npc)})</span>`;
+        bx.appendChild(line); },
       autoNext:()=>S.guildRaidAuto ? enterGuildRaid(true) : false });
   };
   if(auto) go();
@@ -8334,17 +8387,21 @@ const MODALS = {
     const MAX=2, left=dailyLeft('raidBoss',MAX);
     b.appendChild(el('div','gr-count',`${left}/${MAX}`));
     const foot=el('div','dg-foot');
-    foot.appendChild(el('div','dg-portrait gframe','<div class="dp-ic">🗿</div><div class="dp-n">재의 골렘</div>'));
+    const gb=gbossState(), gHP=gbossHP(gb.stage), hpPct=Math.max(0, Math.round((1-gb.dealt/gHP)*1000)/10);
+    foot.appendChild(el('div','dg-portrait gframe',`<div class="dp-ic">🗿</div><div class="dp-n">재의 골렘 <b>${gb.stage}단계</b></div>`));
     const right=el('div','dg-right');
     right.appendChild(el('div','gr-my',`내 누적점수 <b>${fmt(S.guildRaidScore||0)}</b>점`));
-    /* ★ v5.179: 보스 HP 바 — 종전엔 하드코딩 '62%' 장식이라 아무리 때려도 변하지 않았다.
-       내 누적 점수(=입힌 데미지 누적)로 파생해 참전할 때마다 눈에 보이게 꺼지게 한다.
-       순수 연출 파생값 — 판정·보상과 무관. 보스 처치·리셋 콘텐츠가 아니므로 15%에서
-       멈춘다(0%가 되면 '처치됐는데 아무 일도 없는' 어색함이 생긴다). 5,000점=1%p. */
-    const hpPct=Math.max(15, 95 - Math.floor((S.guildRaidScore||0)/5000));
-    const pb=el('div','pbar'); pb.appendChild(el('i')); pb.firstChild.style.width=hpPct+'%'; right.appendChild(pb);
-    right.appendChild(el('div','center small mut',`보스 HP ${hpPct}% · 누적 데미지가 길드 점수가 됩니다`));
+    /* ★ #14(2차): 보스 HP 바 = 토벌 풀 실제 값(단계 HP 고정 표). 종전(v5.179)은 누적 점수로 그린 연출 값이라 15% 에서 멈췄다
+       ('처치됐는데 아무 일도 없는' 어색함 때문) → 이제 처치하면 다음 단계가 나오므로 0 까지 내려간다. */
+    const pb=el('div','pbar gb-bar'); pb.appendChild(el('i')); pb.firstChild.style.width=hpPct+'%'; right.appendChild(pb);
+    right.appendChild(el('div','center small gb-hp',`HP <b>${fmt(Math.max(0,gHP-gb.dealt))}</b> / ${fmt(gHP)} (${hpPct}%)`));
+    right.appendChild(el('div','center small mut',`주기 D-${gbossCycLeft()} · 최고 ${gb.best|0}단계 · 참전 ${gb.runs|0}회`));
     foot.appendChild(right); b.appendChild(foot);
+    /* 이번 주기 참전 보상 4단(1·2·4·6회) — 전투력과 무관한 참여 축(3일 × 하루 2회 = 6) */
+    const ms=el('div','gb-ms');
+    GBOSS.MS.forEach((n,i)=>{ const got=(gb.ms|0)>i; ms.appendChild(el('div','gb-m'+(got?' got':''),`<b>${n}회</b><span>🛡️${GBOSS.MS_RW[i]}</span>`)); });
+    b.appendChild(ms);
+    b.appendChild(el('div','small mut center',`처치하면 다음 단계 · 처치마다 길드 코인 ${GBOSS.KILL_COIN}·주사위 ${GBOSS.KILL_DICE} · ${GBOSS.REC_EVERY}단계마다 기록서 1 · 참전하면 길드원 몫(내 피해×${GBOSS.NPC})이 함께 쌓입니다 · ${GBOSS.CYC}일마다 HP 가 다시 찹니다(단계 유지)`));
     const arow=el('div','gd-autorow');
     const ab=el('button','gd-auto'+(S.guildRaidAuto?' on':''),`⟳<span>자동<br>입장</span>`);
     ab.onclick=()=>{ S.guildRaidAuto=!S.guildRaidAuto; toast(`자동 입장 ${S.guildRaidAuto?'ON':'OFF'}`); openModal('guildRaid'); };
