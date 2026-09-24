@@ -1316,8 +1316,29 @@ function titleGradeColor(g){ return (TITLE_GRADES[g]||TITLE_GRADES.N).c; }
 // 소유 판정 — 조건 달성 또는 상점/패키지 지급(S.titleOwn)
 /* ★ 2026-09-25: 달성한 칭호를 보유로 기록한다(조건형 칭호가 달성 순간에만 보유로 보이다 조건을 잃으면 목록에서 사라지고, 착용 효과만
    남던 불일치 — 검증 워크플로 #19). 한 번 달성하면 계속 보유. t.own(용암 — 보유 시 스폰 동작)은 제외(현행 유지). */
-function titleSyncOwn(){ if(!S || typeof TITLES==='undefined') return; S.titleOwn=S.titleOwn||{};
-  TITLES.forEach(t=>{ if(t.own || S.titleOwn[t.id]) return; let ok=false; try{ ok=!!(t.have&&t.have()); }catch(e){} if(ok) S.titleOwn[t.id]=true; }); }
+/* ★ 2026-09-25(워크플로 2차 #11): notify=true(5초 주기 경로)면 새로 기록한 칭호를 알린다 — 종전엔 달성해도 토스트·효과음·로그가 0 이었다
+   (배지는 '현재보다 골드 효과가 큰' 칭호만이라 경험치·제작 칭호 달성은 어디에도 드러나지 않았다). 로드·칭호 화면은 조용히 기록만(인자 없음).
+   튜토리얼·인트로 중 달성분은 조용히 기록된다(첫 세션 알림 과잉 방지). */
+function titleSyncOwn(notify){ if(!S || typeof TITLES==='undefined') return []; S.titleOwn=S.titleOwn||{};
+  const add=[];
+  TITLES.forEach(t=>{ if(t.own || S.titleOwn[t.id]) return; let ok=false; try{ ok=!!(t.have&&t.have()); }catch(e){} if(ok){ S.titleOwn[t.id]=true; add.push(t); } });
+  if(notify && add.length && S.seenTutorial && !_introRunning){
+    const a=add.filter(t=>t.id!==S.title);
+    if(a.length){
+      toast(a.length===1 ? `🎖️ 칭호 획득 — <b style="color:${titleGradeColor(a[0].g)}">${a[0].n}</b> · ${a[0].fx} <span class="mut">(칭호에서 착용)</span>` : `🎖️ 칭호 ${a.length}종 획득 — ${a.map(t=>t.n).join('·')} <span class="mut">(칭호에서 착용)</span>`);
+      sfx('win'); a.forEach(t=>sysLog(`칭호 획득 — ${t.n} (${t.fx})`));
+    }
+  }
+  return add; }
+/* ★ 2026-09-25(워크플로 2차 #11): 세트 발동 알림 공용 — 종전엔 장착 경로 2곳에 같은 람다가 복제돼 있었고, 발동 순간이 토스트 한 줄(전투력 +97% 미표시)이었다.
+   강화·각성처럼 전후 전투력 카드(growthBurst)로. 연출 실패가 저장·갱신을 막지 않게 try(실패 시 종전 토스트). */
+function setTierOf(st){ const c=setPieceCount(st.n); let b=0; st.tiers.forEach(t=>{ if(c>=t.k) b=Math.max(b,t.k); }); return b; }
+function notifySetGain(pre, cp0){
+  pre.forEach(x=>{ const now=setTierOf(x.s); if(now>x.k){
+    const t=x.s.tiers.find(tt=>tt.k===now); sfx('legendary'); sysLog(`${x.s.n} ${now}세트 효과 발동`);
+    try{ growthBurst(`${x.s.n} ${now}세트 발동`, [cpDeltaLine(cp0, totalCP()), ((t&&t.fx)||[]).slice(0,2).join(' · ')], now>=6?'mile':'up'); }
+    catch(_){ toast(`🎉 <b style="color:var(--g-legend)">${x.s.n} ${now}세트</b> 효과 발동!`); } } });
+}
 function titleOwned(t){
   if(S && S.titleOwn && S.titleOwn[t.id]) return true;
   try{ return !!(t.have && t.have()); }catch(e){ return false; }
@@ -2081,7 +2102,7 @@ function refreshClaimBadges(){
   _setDot(document.querySelector('[data-modal="hero"]'), heroFuseAvail());
   _setDot(document.getElementById('btnMenuToggle'), q||a||n||od||m);
   /* ★ v5.271: 칭호 개선 가능 — [data-modal="titles"] 항목(드로어 내 칭호). ☰ 합산. */
-  titleSyncOwn();   // ★ 2026-09-25: 달성한 칭호를 보유로 기록(5초 주기)
+  titleSyncOwn(true);   // ★ 2026-09-25: 달성한 칭호를 보유로 기록(5초 주기) — #11(2차): 새로 달성하면 알림
   const tu=titleUpgradeable();
   _setDot(document.querySelector('[data-modal="titles"]'), tu);
   if(tu) _setDot(document.getElementById('btnMenuToggle'), true);
@@ -2152,6 +2173,20 @@ function flyLoot(cv, cx, cy, kind){
    가장자리 붉은 비네트 + 전장 중앙을 가로지르며 펼쳐지는 띠(이름) + 낮은 이중 타격음. 1.4초 뒤 스스로 사라진다.
    순수 DOM 연출 — 전투 상태·시드 난수를 건드리지 않는다(던전 결정론 경로에서도 불리지만 해시와 무관).
    연출 문법(경고 띠·비네트·타이밍)만 참고했고 문구·모양은 자체 조어다. */
+/* ★ 2026-09-25(워크플로 2차 #15): 시련의 탑 웨이브 돌파 알림 — 종전엔 'Wave 1'→'Wave 2' 글자만 바뀌고 남은 시간이 조용히 60초로 되돌아갔다.
+   금색 작은 띠 + 한 번의 승리음, 이번 도전에서 최고 기록을 처음 넘는 웨이브면 '신기록' 줄. 순수 DOM·벽시계 — dg·시드 RNG·흔들림을 건드리지 않는다
+   (bossBanner 와 같은 방식, 결정론 무관). 즉시 결과(_instantRun) 중엔 띄우지 않는다. 신기록 판정은 상태 없이 n===max(2,이전최고+1) — 한 판에 정확히 한 번. */
+let _waveFlashAt=-1e9;
+function waveBanner(n){
+  if(_instantRun>0) return;
+  const host=$('#stage-wrap'); if(!host || !host.querySelectorAll) return;
+  host.querySelectorAll('.wave-banner').forEach(x=>x.remove());
+  const p=S && S._towerPrevForBanner, rec=(typeof p==='number') && n===Math.max(2, p+1);
+  const b=el('div','wave-banner', `<div class="wb-band"><b>WAVE ${n}</b> 돌파${rec?'<span class="wb-rec">🏅 신기록</span>':''}</div>`);
+  host.appendChild(b); setTimeout(()=>{ try{ b.remove(); }catch(e){} }, 1000);
+  _waveFlashAt=(typeof performance!=='undefined'&&performance.now)?performance.now():Date.now();
+  sfx(rec?'legendary':'win');
+}
 function bossBanner(name, col){
   if(_instantRun>0) return;   // 즉시 결과 중 — 이미 끝난 싸움의 경고 배너(+지연 효과음)를 띄우지 않는다
   const host=$('#stage-wrap'); if(!host) return;
@@ -2202,9 +2237,10 @@ function sfx(type){
     /* bossdown: 홈·던전 우두머리 처치 — 종전엔 legendary 음을 써서 레전더리 제작·+5 강화·세트 발동의 희소성이 흐려졌다(45초 사냥에 3회). */
     const P={ hit:[220,0.06,'square',0.05], crit:[440,0.09,'square',0.08], craft:[520,0.16,'triangle',0.12], fail:[150,0.2,'sawtooth',0.1],
       summon:[330,0.26,'sine',0.09], legendary:[660,0.45,'triangle',0.14], coin:[880,0.05,'square',0.04], tap:[300,0.03,'square',0.035],
-      awaken:[520,0.3,'sine',0.12], win:[440,0.2,'triangle',0.11], boss:[92,0.16,'sine',0.22], bossdown:[196,0.3,'triangle',0.13] };
+      awaken:[520,0.3,'sine',0.12], win:[440,0.2,'triangle',0.11], boss:[92,0.16,'sine',0.22], bossdown:[196,0.3,'triangle',0.13],
+      claim:[587,0.2,'triangle',0.12] };   // claim: 보상 수령(#10 2차) — coin(880 사각 단음)·craft 와 구분되는 상승음
     const p=P[type]||P.tap; o.type=p[2]; o.frequency.setValueAtTime(p[0],t);
-    if(type==='craft'||type==='legendary'||type==='awaken'||type==='win') o.frequency.exponentialRampToValueAtTime(p[0]*2,t+p[1]);
+    if(type==='craft'||type==='legendary'||type==='awaken'||type==='win'||type==='claim') o.frequency.exponentialRampToValueAtTime(p[0]*2,t+p[1]);
     if(type==='fail'||type==='boss'||type==='bossdown') o.frequency.exponentialRampToValueAtTime(p[0]*0.5,t+p[1]);
     g.gain.setValueAtTime(p[3]*vol,t); g.gain.exponentialRampToValueAtTime(0.0001,t+p[1]);
     if(type==='coin') _coinG=g;
@@ -2212,6 +2248,8 @@ function sfx(type){
   }catch(e){}
 }
 
+/* ★ 2026-09-25(워크플로 2차 #10): 보상 수령 순간의 소리 — 오프라인·부재 적립·의뢰·출석·우편 수령이 전부 무음(토스트만)이었다. 2음 차임. */
+function claimSfx(){ sfx('claim'); try{ setTimeout(()=>sfx('claim'), 90); }catch(e){} }
 /* ----------------------------- 파워/전투력 ----------------------------- */
 /* ---------- ★ B4/G-50: 영웅 로스터 접근자 ---------- */
 function heroSlot(hid){ if(!S.heroes) S.heroes={}; if(!S.heroes[hid]) S.heroes[hid]={ level:1, own:false }; return S.heroes[hid]; }
@@ -3473,7 +3511,7 @@ const Battle = (()=>{
             dg.groupLeft--; dg.spawned++; spawnT=bRnd(0.35,0.8);   /* ★ M1: 시드 RNG */
           }
         } else if(mobs.length===0){
-          dg.waveNo++; dg.waveTimeLeft=dg.waveDur;
+          dg.waveNo++; dg.waveTimeLeft=dg.waveDur; waveBanner(dg.waveNo);   // #15(2차) DOM 알림 — 시뮬 상태 무관
           dg.groupLeft=3+Math.min(9,dg.waveNo);
           dg.foeCP=Math.round(dg.baseCP*Math.pow(1.18, dg.waveNo-1));
         }
@@ -3907,10 +3945,15 @@ const Battle = (()=>{
       ctx.fillText('⚔ '+dg.name, W/2, 18);
       if(dg.kind==='wave'){
         // ★ B5/G-77: 대형 적색 Wave 표기 + 웨이브 카운트다운
-        ctx.fillStyle='#e2504a'; ctx.font="bold 24px 'Malgun Gothic'"; ctx.textAlign='center';
-        ctx.fillText('Wave '+dg.waveNo, W/2, H*0.30);
-        ctx.fillStyle='#f0a24a'; ctx.font="bold 15px 'Malgun Gothic'";
-        ctx.fillText(Math.max(0,dg.waveTimeLeft).toFixed(0)+'s', W/2, H*0.30+20);
+        /* ★ 2026-09-25(#15 2차): 남은 시간을 Wave 와 같은 줄 오른쪽으로 — 종전 두 번째 줄(H*0.30+20)은 영웅 레벨 배지 바로 위라 '60s'와 배지 '60'이
+           한 덩어리로 읽혔다(실측). 웨이브를 돌파한 직후 0.6초는 초록으로 번쩍(시간이 다시 찼다는 표시, 연출 줄이기면 끔). */
+        const wl='Wave '+dg.waveNo, tl='  '+Math.max(0,dg.waveTimeLeft).toFixed(0)+'s';
+        ctx.font="bold 24px 'Malgun Gothic'"; const ww=ctx.measureText(wl).width; ctx.font="bold 15px 'Malgun Gothic'"; const tw=ctx.measureText(tl).width;
+        const x0=W/2-(ww+tw)/2; ctx.textAlign='left';
+        ctx.fillStyle='#e2504a'; ctx.font="bold 24px 'Malgun Gothic'"; ctx.fillText(wl, x0, H*0.30);
+        const _fl=((typeof performance!=='undefined'&&performance.now)?performance.now():Date.now())-_waveFlashAt<600 && fxOn('fxFlash');
+        ctx.fillStyle=_fl?'#7fe08a':'#f0a24a'; ctx.font="bold 15px 'Malgun Gothic'"; ctx.fillText(tl, x0+ww, H*0.30);
+        ctx.textAlign='center';
         ctx.fillStyle='#c9bb9c'; ctx.font="10px 'Malgun Gothic'";
         ctx.fillText(`잔여 ${dg.groupLeft+mobs.length}체 · 클리어 시 ${dg.waveDur}초 리셋`, W/2, 34);
       } else {
@@ -4468,17 +4511,18 @@ function idleTick(dt){
 let hudT=0;
 /* ★ v4.6: 재화가 늘어난 순간을 눈에 띄게 — 숫자가 툭 바뀌기만 하던 것을 짧게 튀어오르게 한다.
    값이 실제로 커졌을 때만 발화한다(감소·무변화는 조용히). */
-function setCur(sel, val){
+function setCur(sel, val, minDelta){
   const e=$(sel); if(!e) return;
   const next=fmtFull(val), prev=e.textContent;
   if(prev===next) return;
   e.textContent=next;
-  const up = (Number(String(next).replace(/[^\d.-]/g,'')) > Number(String(prev).replace(/[^\d.-]/g,'')));
-  if(!up) return;
+  /* ★ 2026-09-25(#10 2차): minDelta — 0.5초 틱의 방치 수입(+수백 G)에도 맥동해 3초 중 61% 가 부풀어 있었고, 4,800만 수령 때도 똑같은 맥동이라 의미가 없었다. */
+  const d = Number(String(next).replace(/[^\d.-]/g,'')) - Number(String(prev).replace(/[^\d.-]/g,''));
+  if(!(d > (minDelta||0))) return;
   e.classList.remove('cur-bump'); void e.offsetWidth; e.classList.add('cur-bump');
 }
 function refreshHUD(){
-  setCur('#curGold', S.gold);   // ★ B1/G-12 전체 자릿수
+  setCur('#curGold', S.gold, idleGoldPerMin()/40);   // ★ B1/G-12 전체 자릿수 · #10(2차): 0.5초 틱 방치분(분당/120)의 약 3배 미만 증가는 맥동 없음
   setCur('#curRuby', S.ruby);
   $('#pName').textContent = S.name;
   S.titleIdx = clamp(Math.floor(S.awaken/3), 0, HERO_TITLES.length-1);
@@ -6273,9 +6317,11 @@ const MODALS = {
         if(e.own){ toast('이미 보유한 영웅입니다.'); return; }
         if(!heroFusePrereq(r.hero_id)){ toast(`${e.job.name} 하위 등급 영웅을 먼저 보유해야 합니다.`); return; }
         if(sh<need){ toast(`조각이 부족합니다. (${fmt(sh)}/${fmt(need)})`); return; }
-        if(heroFuse(r.hero_id)){ sfx('legendary'); toast(`⚔️ <b style="color:var(--g-legend)">${r.name} 합성 성공!</b> Lv${((S.heroes[r.hero_id]||{}).level)||1} 승계`);
-          sysLog(`${gradeBadge(r.grade)} ${r.name} 합성 성공 — Lv${((S.heroes[r.hero_id]||{}).level)||1} 승계(v5.184)`);
-          guideCheck('fuse'); openModal('hero'); refreshHUD(); } };
+        const cp0=totalCP(), g0=GORDER[GORDER.indexOf(r.grade)-1];   // #9(2차) 합성 연출용 전값
+        if(heroFuse(r.hero_id)){ const lv=((S.heroes[r.hero_id]||{}).level)||1;
+          sysLog(`${gradeBadge(r.grade)} ${r.name} 합성 성공 — Lv${lv} 승계(v5.184)`);
+          guideCheck('fuse'); openModal('hero'); refreshHUD();
+          try{ fuseRevealFx(r, g0, lv, cp0); }catch(_){ sfx('legendary'); toast(`⚔️ <b style="color:var(--g-legend)">${r.name} 합성 성공!</b> Lv${lv} 승계`); } } };   // openModal 뒤 — closeSub 는 .sub-ovl 만 지워 b2-ovl 은 남는다
       card.appendChild(fu);
       // 하단 액션 — 원형 [장비] + [소환]/[소환중]
       const act=el('div','hc-act');
@@ -7595,7 +7641,7 @@ const MODALS = {
         if(S.attendLastDate===today()){ toast('출석 체크는 1일 1회만 가능합니다'); return; }
         if(i!==next){ toast(`${next+1}일차부터 순서대로 수령됩니다`); return; }
         give(); S.claimed.attend[i]=true; S.attendLastDate=today(); save();   /* ★ v5.308: 출석 확정 즉시 저장 — 롤백 재수령 차단 */
-        toast(`${t} 수령`); sysLog(`7일 출석 ${i+1}일차 — ${t}`); openModal('attend'); refreshHUD(); };
+        claimSfx(); toast(`${t} 수령`); sysLog(`7일 출석 ${i+1}일차 — ${t}`); openModal('attend'); refreshHUD(); };
       g.appendChild(c); });
     b.appendChild(g);
     /* ★ v5.284: 완주 문구가 '다시 방문하세요' 였을 때 받을 게 없었다 — 새 주기(rollDaily
@@ -7821,7 +7867,7 @@ const MODALS = {
       const abt=el('button','btn gold sm','수령');
       abt.onclick=()=>{ const a=S.awayBank; if(!a || !((a.days|0)>0)) return;
         addGold(a.gold||0, true); S.stones=(S.stones||0)+(a.stones|0); S.towerBox=(S.towerBox||0)+(a.box|0);
-        toast(`부재 적립 ${a.days}일 수령 — 골드 +${fmt(a.gold||0)} · 강화석 +${fmt(a.stones|0)} · 상자 +${fmt(a.box|0)}`);
+        claimSfx(); toast(`부재 적립 ${a.days}일 수령 — 골드 +${fmt(a.gold||0)} · 강화석 +${fmt(a.stones|0)} · 상자 +${fmt(a.box|0)}`);
         sysLog(`부재 적립 ${a.days}일 수령 — 골드 +${fmt(a.gold||0)} · 강화석 +${fmt(a.stones|0)} · 웨이브 상자 +${fmt(a.box|0)}`);
         S.awayBank={ days:0, gold:0, stones:0, box:0, hi:a.hi|0 };
         openModal('settle'); refreshHUD(); refreshClaimBadges(); save(); };
@@ -7846,7 +7892,7 @@ const MODALS = {
          누르고 곧장 창을 닫으면 세이브에 offlinePending 이 그대로 남아 재접속에서 같은 금액을
          또 수령할 수 있었다(중복 지급. v5.306 투기장 롤오버와 같은 유형 — 상태만 바꾸고
          저장을 안 한 사례). 지급이 일어난 자리에서 즉시 저장한다. */
-      btn.onclick=()=>{ addGold(S.offlinePending); toast(`오프라인 골드 +${fmt(S.offlinePending)}`); sysLog(`오프라인 방치 보상 +${fmt(S.offlinePending)}G`); S.offlinePending=0; closeModal(); refreshHUD(); refreshClaimBadges(); save(); };
+      btn.onclick=()=>{ addGold(S.offlinePending); claimSfx(); toast(`오프라인 골드 +${fmt(S.offlinePending)}`); sysLog(`오프라인 방치 보상 +${fmt(S.offlinePending)}G`); S.offlinePending=0; closeModal(); refreshHUD(); refreshClaimBadges(); save(); };
       b.appendChild(btn);
     } else b.appendChild(el('div','center mut small','현재 온라인 실시간 수급 중 · 접속 종료 시 자동 누적됩니다.'));
   }},
@@ -7891,7 +7937,7 @@ const MODALS = {
           if(q.noBtn){ row.appendChild(el('div','dq-prog',`${Math.min(c,goal)}/${goal}`)); }
           else {
             const btn=el('button','btn sm'+(met&&!done?' gold':''),done?'완료':'받기'); btn.disabled=!met||done;
-            btn.onclick=()=>{ if(!met||dailyLeft('dqc'+i,1)<=0)return; S.dice+=q.rw; dailyUse('dqc'+i); toast(`주사위 X${q.rw} 수령`); render(); refreshHUD(); };   /* ★ 2026-09-25: 제자리 갱신 — 종전 openModal('quest') 는 기본 탭(임무목록)으로 튕겨 5건 수령에 10탭(워크플로 #13) */
+            btn.onclick=()=>{ if(!met||dailyLeft('dqc'+i,1)<=0)return; S.dice+=q.rw; dailyUse('dqc'+i); claimSfx(); toast(`주사위 X${q.rw} 수령`); render(); refreshHUD(); };   /* ★ 2026-09-25: 제자리 갱신 — 종전 openModal('quest') 는 기본 탭(임무목록)으로 튕겨 5건 수령에 10탭(워크플로 #13) */
             row.appendChild(btn);
           }
           body.appendChild(row); });
@@ -7914,7 +7960,7 @@ const MODALS = {
           const btn=el('button','btn sm'+(done&&!claimed?' gold':''), claimed?'완료':'받기');
           if(!done||claimed) btn.disabled=true;
           btn.onclick=()=>{ if(claimed||prog<q.goal) return;
-            w.claimed[q.id]=true; const what=q.give();
+            w.claimed[q.id]=true; const what=q.give(); claimSfx();
             toast(`주간 의뢰 완료 보상 — ${what}`); sysLog(`주간 의뢰 완료(${q.txt}) — ${what}`);
             save(); render(); refreshHUD(); };
           row.appendChild(btn); body.appendChild(row);
@@ -7934,7 +7980,7 @@ const MODALS = {
           const btn=el('button','btn sm'+(done&&!claimed?' gold':''), claimed?'완료':'받기');
           if(!done||claimed) btn.disabled=true;
           btn.onclick=()=>{ if(claimed||prog<q.goal) return;
-            m.claimed[q.id]=true; const what=q.give();
+            m.claimed[q.id]=true; const what=q.give(); claimSfx();
             toast(`월간 의뢰 완료 보상 — ${what}`); sysLog(`월간 의뢰 완료(${q.txt}) — ${what}`);
             save(); render(); refreshHUD(); };
           row.appendChild(btn); body.appendChild(row);
@@ -8870,11 +8916,11 @@ function giftBox(b, items){
   if(pending.length){
     const all=el('button','btn gold wide',`모두 받기 (${pending.length})`); all.style.marginBottom='8px';
     all.onclick=()=>{ let n=0; pending.forEach(([id,t,ic,give])=>{ if(S.claimed.mail[id]) return; give(); S.claimed.mail[id]=true; n++; });
-      toast(`우편 ${n}건 일괄 수령`); sysLog(`우편 ${n}건을 모두 수령했습니다.`); openModal('mail'); refreshHUD(); save(); };   /* ★ v5.308: 확정 즉시 저장 */
+      claimSfx(); toast(`우편 ${n}건 일괄 수령`); sysLog(`우편 ${n}건을 모두 수령했습니다.`); openModal('mail'); refreshHUD(); save(); };   /* ★ v5.308: 확정 즉시 저장 */
     b.appendChild(all);
   }
   items.forEach(([id,t,ic,give])=>{ const done=S.claimed.mail[id]; const row=el('div','pack'); row.innerHTML=`<div class="pic">${ic}</div><div class="info"><div class="t">${t}${done?' ✓':''}</div></div>`;
-    const btn=el('button','btn sm'+(done?'':' gold'),done?'수령완료':'받기'); btn.disabled=!!done; btn.onclick=()=>{ if(S.claimed.mail[id])return; give(); S.claimed.mail[id]=true; toast(`${t}`); openModal('mail'); refreshHUD(); save(); }; row.appendChild(btn); b.appendChild(row); });   /* ★ v5.308: 확정 즉시 저장 */
+    const btn=el('button','btn sm'+(done?'':' gold'),done?'수령완료':'받기'); btn.disabled=!!done; btn.onclick=()=>{ if(S.claimed.mail[id])return; give(); S.claimed.mail[id]=true; claimSfx(); toast(`${t}`); openModal('mail'); refreshHUD(); save(); }; row.appendChild(btn); b.appendChild(row); });   /* ★ v5.308: 확정 즉시 저장 */
   if(!pending.length) b.appendChild(el('div','center small mut','새 우편이 없습니다.'));
 }
 /* ★ v5.114 제거: questList() — 호출부가 없는 죽은 함수인데, 본문에 참고 자료의
@@ -8945,8 +8991,12 @@ function heroDetail(hidOrJob){
     rows.forEach(([k,v])=>body.appendChild(el('div','kv',`<span>${k}</span><b>${v}</b>`)));
     const lvCost = lv*80000; const lb=el('button','btn wide',`레벨업 (골드 ${fmt(lvCost)})`); lb.style.marginTop='8px';
     if(S.gold<lvCost) lb.disabled=true;
-    lb.onclick=()=>{ if(S.gold<lvCost){ toast('골드 부족'); return; } S.gold-=lvCost; st.level=(st.level||1)+1;
-      Battle.refreshParty(); toast(`Lv${st.level}`); heroDetail(hid); refreshHUD(); save(); };   /* ★ v5.309: 레벨업 확정 즉시 저장 */
+    /* ★ 2026-09-25(워크플로 2차 #4): 클릭 시점 재조회(화면이 오래 떠 있던 경우 옛 가격 결제 방지) + 전투력 전후 카드. 종전 결과는 'Lv5' 토스트 한 줄이라
+       초반 가장 효율 좋은 성장 수단(골드 120만 → 리더 +41% 실측)이 장착·강화·각성(전후 카드)보다 약하게 보였다. 노출 확대(버튼 금색·점)는 시뮬 확정 뒤. */
+    lb.onclick=()=>{ const lvNow=st.level||1, c=lvNow*80000; if(S.gold<c){ toast('골드 부족'); return; }
+      const p0=heroPower(heroResolve(hid)); S.gold-=c; st.level=lvNow+1; const p1=heroPower(heroResolve(hid));
+      Battle.refreshParty(); heroDetail(hid); refreshHUD(); save();   /* ★ v5.309: 레벨업 확정 즉시 저장 */
+      try{ growthBurst(`${e.name} Lv${st.level}`, [cpDeltaLine(p0,p1)], st.level%10===0?'mile':'up'); }catch(_){ toast(`${e.name} Lv${st.level} · ${cpDeltaLine(p0,p1)}`); } };
     body.appendChild(lb);
   }
   else if(_heroTab==='스킬'){
@@ -9008,8 +9058,10 @@ function heroDetail(hidOrJob){
       const row=el('div','kv'); row.innerHTML=`<span>${GRADES[nextG].name} 합성 (${nx.name})</span><b>${fmt(sh)} / ${fmt(need)}</b>`; b.appendChild(row);
       const btn=el('button','btn gold wide',`${nx.name} 합성`); btn.style.margin='6px 0';
       if(!heroFuseReady(nx.hero_id)) btn.disabled=true;
-      btn.onclick=()=>{ if(heroFuse(nx.hero_id)){ sfx('craft'); toast(`${nx.name} 합성 성공!`);
-        sysLog(`${gradeBadge(nextG)} ${nx.name} 합성 성공`); guideCheck('fuse'); heroDetail(nx.hero_id); refreshHUD(); } };
+      btn.onclick=()=>{ const cp0=totalCP(), g0=e.grade;
+        if(heroFuse(nx.hero_id)){ const lv=((S.heroes[nx.hero_id]||{}).level)||1;
+        sysLog(`${gradeBadge(nextG)} ${nx.name} 합성 성공`); guideCheck('fuse'); heroDetail(nx.hero_id); refreshHUD();
+        try{ fuseRevealFx(nx, g0, lv, cp0); }catch(_){ sfx('craft'); toast(`${nx.name} 합성 성공!`); } } };   // #9(2차): 두 합성 경로의 연출을 통일
       b.appendChild(btn);
     } else {
       /* ★ 2026-09-25(#12): 그 직업에 윗 등급 영웅이 아예 없으면 '모두 보유 중' 은 거짓이다(R 영웅 → '영웅 영웅을 모두 보유', wind N → 윗 등급 부재).
@@ -9089,17 +9141,14 @@ function itemDetail(e, heroId){ _itemDetailHeroId=heroId||null;
            반대로 더 강한 한 조각에 낀 것때문에 6세트가 소리 없이 깨지면 화면 전투력과
            실제 체감이 어긋난다. 장착 경로는 이 onYes 한 곳뿐이라 여기서만 감시한다. */
         if(!S.equips.includes(e)){ closeSub(); toast('이미 처분된 장비입니다.'); return; }   // 확인창이 떠 있는 사이 처분된 경우 — [분해] onYes 와 대칭
-        const setTier = st=>{ const c=setPieceCount(st.n); let best=0; st.tiers.forEach(t=>{ if(c>=t.k) best=Math.max(best,t.k); }); return best; };
-        const pre = SETS.map(s=>({ s, k:setTier(s) }));
+        const pre = SETS.map(s=>({ s, k:setTierOf(s) })), cp0=totalCP();
         const destroyed = equipItem(e, _itemDetailHeroId);
-        const broke = pre.filter(x=>setTier(x.s)<x.k).map(x=>x.s.n);
+        const broke = pre.filter(x=>setTierOf(x.s)<x.k).map(x=>x.s.n);
         toast(`${G.name} ${e.slot} 장착` + (destroyed>0 ? ' · 기존 장비 파괴' : '')
           + (broke.length?` · <b style="color:var(--bad)">${broke.join('·')} 세트 해제</b>`:''));
         sfx('tap');
-        pre.forEach(x=>{ const now=setTier(x.s);
-          if(now>x.k){ toast(`🎉 <b style="color:var(--g-legend)">${x.s.n} ${now}세트</b> 효과 발동!`); sfx('legendary');
-            sysLog(`${x.s.n} ${now}세트 효과 발동`); } });
-        Battle.refreshParty(); openModal('equip', _itemDetailHeroId); refreshHUD(); } }); };
+        Battle.refreshParty(); openModal('equip', _itemDetailHeroId); refreshHUD();
+        notifySetGain(pre, cp0); } }); };   // #11(2차): openModal 뒤 — #modalBody 만 교체되므로 #modal-root 에 붙은 카드는 산다
   const enh=el('button','btn wide','강화'); enh.onclick=()=>openEnhance(e);
   /* ★ v5.187: 분해 — 미장착 장비 처분. 종전엔 처분 수단이 없어 같은 이름 99개(v5.171 상한)까지
      쌓이기만 했다. 환급 = 제작 골드의 50% + 강화 단계당 5%p — 제작(100%)+강화 비용보다 항상
@@ -9345,11 +9394,10 @@ function resolveCraft(forceSuccess){
     const eqb=el('button','btn gold wide',`리더 ${lead.name}에게 장착`); eqb.style.marginTop='10px';
     eqb.onclick=()=>{
       if(!S.equips.includes(ne) || ne.equipped || !slotFree(lead)){ toast('이미 처리된 장비입니다'); eqb.remove(); return; }   // 팝업이 떠 있는 사이 분해·장착된 경우
-      const setTier = st=>{ const c=setPieceCount(st.n); let best=0; st.tiers.forEach(t=>{ if(c>=t.k) best=Math.max(best,t.k); }); return best; };
-      const pre=SETS.map(s=>({ s, k:setTier(s) })), p0=heroPower(lead);
+      const pre=SETS.map(s=>({ s, k:setTierOf(s) })), p0=heroPower(lead), cp0=totalCP();
       equipItem(ne, lead.hero_id);
       const p1=heroPower(lead); sfx('tap');
-      pre.forEach(x=>{ const now=setTier(x.s); if(now>x.k){ toast(`🎉 <b style="color:var(--g-legend)">${x.s.n} ${now}세트</b> 효과 발동!`); sfx('legendary'); sysLog(`${x.s.n} ${now}세트 효과 발동`); } });
+      notifySetGain(pre, cp0);   // #11(2차) 세트 발동 카드
       const done=el('div','center small eq-done', `리더 ${lead.name} 장착 완료 · ${cpDeltaLine(p0,p1)}`);
       if(eqb.parentNode) eqb.parentNode.insertBefore(done, eqb); eqb.remove();
       Battle.refreshParty(); refreshHUD(); save(); };
@@ -9495,6 +9543,27 @@ function heroRevealFx(list, gained){
     });
     sfx('legendary'); sysLog(`${gradeBadge(r.grade)} ${r.name} 획득!`);
   })();
+}
+/* ★ 2026-09-25(워크플로 2차 #9): 영웅 합성(등급 상승) 등장 연출 — 종전엔 토스트 한 줄뿐이고 새 카드는 목록 아래(스크롤 밖)라 보이지 않았다
+   (튜토리얼 7단계라 모든 신규 이용자가 이 장면을 거친다; 실측 totalCP +80% 가 조용히 지나감). 소환 등장(heroRevealFx)의 문법(초상·등급색 광선·이름판)을
+   재사용하되 별도 함수 — heroRevealFx 는 smoke 가 소환 경로 호출 수를 세고, '획득!' 문구도 합성에 맞지 않는다.
+   ⚠ 버튼 문구는 '확인' 유지 — 튜토리얼 손가락이 TUT_PRIMARY_TEXT 로 이 버튼을 찾는다. 확인 후 영웅 목록에서 새 카드로 스크롤·깜빡임. */
+function fuseRevealFx(r, prevG, lv, cp0){
+  const e=heroEntry(r.hero_id), G=GRADES[r.grade];
+  b2Overlay('영웅 합성',(bd,close)=>{
+    bd.appendChild(el('div','center hr-shard', `${prevG && GRADES[prevG] ? GRADES[prevG].name : ''} → <b style="color:${G.color}">${G.name}</b>`));
+    const art=el('div','hr-art hr-g-'+r.grade, `<div class="hr-rays"></div><div class="hr-pic">${heroPortrait(r.hero_id,6.5)||jobIcon(e.job.id)}</div>`); art.style.setProperty('--hg', G.color);
+    bd.appendChild(art);
+    bd.appendChild(el('div','hr-plate', `<b style="color:${G.color}">${G.name}</b> ${e.name}<div class="small mut">Lv${lv} 승계 · 총 ${cpDeltaLine(cp0, totalCP())}</div>`));
+    const ok=el('button','btn gold wide','확인'); ok.onclick=()=>{ close(); fuseFocusCard(r.hero_id); };
+    bd.appendChild(ok);
+  });
+  sfx('legendary');
+}
+function fuseFocusCard(hid){
+  try{ if(currentModal!=='hero') return; const i=HERO_ROSTER.findIndex(x=>x.hero_id===hid);
+    const c=document.querySelectorAll('#modalBody .hero-grid .herocard')[i]; if(!c) return;
+    c.scrollIntoView({block:'nearest'}); c.classList.remove('hc-pulse'); void c.offsetWidth; c.classList.add('hc-pulse'); setTimeout(()=>c.classList.remove('hc-pulse'), 900); }catch(e){}
 }
 
 /* ------- 투기장 전투 (기여도% 포함) ------- */

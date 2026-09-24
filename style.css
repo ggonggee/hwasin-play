@@ -288,6 +288,10 @@ body{
 .away-bank .ab-t{ grid-column:1; font-weight:700; color:#f0d59a; }
 .away-bank .ab-d{ grid-column:1; color:var(--txt-dim); line-height:1.45; word-break:keep-all; }
 .away-bank .btn{ grid-column:2; grid-row:1 / span 2; }
+/* ★ 2026-09-25(워크플로 2차 #9): 합성 뒤 새 영웅 카드 깜빡임 */
+.herocard.hc-pulse{ animation:hcPulse .9s ease-out; }
+@keyframes hcPulse{ 0%{ box-shadow:0 0 0 0 var(--gc,#f2b23a); } 40%{ box-shadow:0 0 0 6px var(--gc,#f2b23a); } 100%{ box-shadow:0 0 0 0 transparent; } }
+@media (prefers-reduced-motion: reduce){ .herocard.hc-pulse{ animation:none; outline:2px solid var(--gc,#f2b23a); } }
 
 /* ===== 모달 ===== */
 #modal-root{ position:absolute; inset:0; z-index:20; display:none; }
@@ -1647,6 +1651,15 @@ body.fx-noflash .boss-banner .bb-vig{ opacity:.35; animation:none; }
 .boss-banner .bb-band{ position:absolute; left:0; right:0; top:36%; padding:6px 0 7px; text-align:center;
   background:linear-gradient(90deg, transparent, rgba(0,0,0,.78) 14%, rgba(0,0,0,.78) 86%, transparent);
   transform-origin:50% 50%; animation:bbBand 1.4s cubic-bezier(.2,.9,.3,1) forwards; }
+/* ★ 2026-09-25(워크플로 2차 #15): 탑 웨이브 돌파 띠 — 비네트 없이 금색 작은 띠(보스 경고보다 가볍게), 1초 */
+.wave-banner{ position:absolute; inset:0; z-index:8; pointer-events:none; overflow:hidden; }
+.wave-banner .wb-band{ position:absolute; left:10%; right:10%; top:18%; padding:5px 10px; text-align:center; border-radius:8px;
+  background:linear-gradient(90deg,transparent,rgba(60,40,10,.85) 18%,rgba(60,40,10,.85) 82%,transparent); color:#ffe7a8; font-weight:700; font-size:var(--fs-base);
+  text-shadow:0 1px 3px #000; animation:bbBand 1s cubic-bezier(.2,.9,.3,1) forwards; }
+.wave-banner .wb-band b{ font-size:1.15em; letter-spacing:.04em; }
+.wave-banner .wb-rec{ margin-left:8px; color:#fff3c4; }
+body.fx-noflash .wave-banner .wb-band{ animation:none; }
+@media (prefers-reduced-motion: reduce){ .wave-banner .wb-band{ animation:none; } }
 @keyframes bbBand{ 0%{ transform:scaleX(0); opacity:1; } 13%{ transform:scaleX(1); } 75%{ opacity:1; } 100%{ transform:scaleX(1); opacity:0; } }
 .boss-banner .bb-t{ font-size:var(--fs-xs); font-weight:800; letter-spacing:.32em; color:#ffb4a0; }
 .boss-banner .bb-n{ margin-top:1px; font-size:26px; font-weight:900; letter-spacing:.1em; color:var(--bc, #ff5a3c);

@@ -722,7 +722,7 @@ step('소진·수령 즉시 저장 — dailyUse 관문 + 수령·구매 12곳', 
     'p.give(); S.claimed.mail[p.id]=true',
     'S.claimed.attend[i]=true; S.attendLastDate=today(); save();',
     '우편 ${n}건 일괄 수령',
-    'give(); S.claimed.mail[id]=true; toast(`${t}`)',
+    'give(); S.claimed.mail[id]=true; claimSfx(); toast(`${t}`)',   // 2026-09-25(#10 2차): 수령음 추가 — 같은 줄 save() 규약 유지
     /* v5.309 — 2차 스캔(공용 관문·클로저 결제) */
     "tutEvent('hsum'); save();",
     "tutEvent('msum'); save();",
@@ -2421,6 +2421,35 @@ step('퀘스트 기본 탭(주간 우선) · 길드 레이드 결과 뒤 복귀'
   if(ev('DG_BACK_PARENT').guildRaid!=='guild') errs.push('부모 모달 매핑 없음');
   ev('Battle').finishNow(); ev('closeModal')();
   S.guideStep=keep.gs;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
+/* ★ 2026-09-25(워크플로 2차 #9·#11·#10·#4·#15): 성장·보상 순간 연출 — 합성 등장 · 세트 발동 카드 · 칭호 획득 알림 · 수령음 · 골드 레벨업 전후 카드 · 탑 웨이브 돌파. */
+step('2차 C묶음 — 합성 등장·세트 카드·칭호 알림·수령음·레벨업 카드·웨이브 돌파', ()=>{
+  const errs=[], S=ev('S'), root=ev("$('#modal-root')");
+  const keep={ st:S.seenTutorial, sh:JSON.parse(JSON.stringify(S.shards)), hs:JSON.parse(JSON.stringify(S.heroShards||{})), heroes:JSON.parse(JSON.stringify(S.heroes)), gold:S.gold, own:JSON.parse(JSON.stringify(S.titleOwn||{})), eq:S.equips.slice(), kills:S.stats.kills };
+  S.seenTutorial=true;
+  // 합성 → '영웅 합성' 등장 팝업(확인 버튼)
+  const nx=ev('HERO_ROSTER').find(r=>!ev('heroOwned')(r.hero_id) && ev('heroFusePrereq')(r.hero_id));
+  if(nx){ S.shards[nx.class_id]=ev('heroFuseNeed')(nx.hero_id)+5;
+    const hb=new Node2('div'); ev('MODALS').hero.render(hb);   // 스텁은 openModal 의 modalBody 가 비어 render(b) 직접(관례)
+    let fb=null; const rec=n=>{ if(!n||typeof n!=='object'||fb) return; if(n.tagName==='BUTTON' && String(n._html||n._text||'').trim()==='합성' && !n.disabled) fb=n; (n.children||[]).forEach(rec); }; rec(hb);
+    if(!fb) errs.push('합성 버튼 없음'); else { fb.onclick({stopPropagation(){}}); if(!ev('heroOwned')(nx.hero_id)) errs.push('합성 안 됨'); if(!collectText(root).includes('영웅 합성')) errs.push('합성 등장 팝업 없음'); }
+    ev('closeModal')(); }
+  // 칭호: 새로 달성하면 titleSyncOwn(true) 가 반환·기록
+  S.titleOwn={}; S.stats.kills=999999; const add=ev('titleSyncOwn')(true); if(!add.length) errs.push('칭호 달성 반환 없음');
+  // 골드 레벨업: 전후 카드(growthBurst) · 클릭 시점 가격
+  const lead=ev('party')()[0]; const lv0=ev('heroSlot')(lead.hero_id).level||1; S.gold=1e9;
+  ev("_heroTab='스탯'"); ev('heroDetail')(lead.hero_id); const lb=findBtnByText(root,`레벨업 (골드 ${ev('fmt')(lv0*80000)})`,true);
+  if(!lb) errs.push('레벨업 버튼 없음'); else { const g0=S.gold; lb.onclick(); if(ev('heroSlot')(lead.hero_id).level!==lv0+1 || g0-S.gold!==lv0*80000) errs.push('레벨업 결과'); if(!collectText(root).includes(`Lv${lv0+1}`)) errs.push('레벨업 전후 카드 없음'); }
+  ev('closeSub')();
+  // 소스 계약: 수령음 9곳 · setCur 방치 틱 맥동 억제 · 웨이브 배너 가드(시뮬 무관)
+  if((js.match(/claimSfx\(\)/g)||[]).length<9) errs.push('수령음 호출 부족');
+  if(!js.includes("setCur('#curGold', S.gold, idleGoldPerMin()/40)")) errs.push('골드 맥동 임계 없음');
+  const wb=js.slice(js.indexOf('function waveBanner('), js.indexOf('function bossBanner('));
+  if(!/^function waveBanner\(n\)\{\n  if\(_instantRun>0\) return;/.test(wb) || /dg\.|bRnd\(|shake/.test(wb)) errs.push('waveBanner 가드/시뮬 상태 접근');
+  if(!js.includes('waveBanner(dg.waveNo)')) errs.push('웨이브 돌파 호출 없음');
+  if(js.includes('const setTier = st=>')) errs.push('세트 판정 람다 복제 잔존(setTierOf 로 통일)');
+  S.seenTutorial=keep.st; S.shards=keep.sh; S.heroShards=keep.hs; S.heroes=keep.heroes; S.gold=keep.gold; S.titleOwn=keep.own; S.equips=keep.eq; S.stats.kills=keep.kills;
   if(errs.length) throw new Error(errs.join(' | '));
 });
 /* ★ 2026-09-25(워크플로 2차 #18·#6): 창을 닫지 않은 부재 — 켠 채 절전 간격 정산 · 숨김 중 날짜 전환의 부재 적립 기준일 · 합성 가능 점. */
