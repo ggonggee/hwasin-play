@@ -2255,6 +2255,16 @@ step('세이브·입력 문자열 HTML 제거 — 가져오기 세이브 태그 
   ev('load')();
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ 2026-09-25 회귀: 던전 래퍼(enterDungeonFight)가 hpMul 을 버려 용광로 시련 ×3 장기전이 라이브에 미적용이었다. */
+step('던전 래퍼 옵션 전달 — hpMul·overtime', ()=>{
+  const B=ev('Battle'); let cap=null; const orig=B.startDungeon;
+  B.startDungeon=function(c){ cap=c; };
+  try{ ev('enterDungeonFight')({ name:'smoke', foeCP:100, kind:'boss', dur:45, hpMul:3, overtime:true, onEnd:()=>{} }); }
+  finally { B.startDungeon=orig; }
+  if(!cap) throw new Error('startDungeon 미호출');
+  if(cap.hpMul!==3) throw new Error('hpMul 전달 안 됨: '+cap.hpMul);
+  if(cap.overtime!==true) throw new Error('overtime 전달 안 됨: '+cap.overtime);
+});
 /* ★ 2026-09-25 회귀(검증 워크플로 #4·#3): ① 던전 종료 후 홈 사냥이 3인 파티(전투력 3배)로 남던 결함 — enterDungeonFight 의 onEnd 가
    refreshParty 로 1인 복귀 ② 고급 조각(레전더리 판정)에 미보유 영웅 '영웅 등장'·'획득!' 거짓 표시 — 실제 해금만 연출. */
 step('던전 종료 홈 1인 복귀 · 고급 조각 거짓 획득 연출 제거', ()=>{

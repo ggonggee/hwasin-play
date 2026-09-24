@@ -2017,6 +2017,13 @@ el.click() 은 덮여 있어도 통과해 가림을 못 잡는다) · `docs/qa/2
 구조 관찰: `.b2/.b5-ovl` 확인창은 openModal/closeModal 이 지우지 않는다 — 새 보상 버튼을 그 위에
 만들 때는 onYes 안에서 상태를 반드시 재조회할 것.
 
+### 2026-09-25 v5.333 — 던전 래퍼가 hpMul 을 버려 용광로 시련 ×3 이 라이브 미적용이던 결함
+
+enterDungeonFight 가 Battle.startDungeon 에 고정 필드만 넘겨 cfg.hpMul(용광로 시련 3)이 버려졌다 — v5.301 의 '9.8초 접전' 실측은 startDungeon 직접 호출값이었고
+라이브는 ×1(약 1/3 시간에 종료)이었다. hpMul·overtime 을 넘기게 수정(D 시나리오는 startDungeon 직접 → 해시 불변). 실물: 파티 CP 4,800 vs 적 30,000 →
+14.8초 전투·승리(설계 의도·확인창 '장기전(45초 안에 처치)'과 정합). 라이브 난이도 상승이라 [수정] 공지. smoke '던전 래퍼 옵션 전달'.
+**원칙: 새 전투 옵션을 startDungeon 에 추가하면 enterDungeonFight 에서도 넘겨라.**
+
 ### 2026-09-25 v5.332 — 정확성 4건(워크플로 #20·#21·#4·#3, 전부 반박 검증 통과)
 
 - **#4 던전 종료 후 홈이 3인 파티로 남음**(전투력 3배·처치 +71%) → enterDungeonFight onEnd 에서 finally Battle.refreshParty(투기장 복귀와 같은 자리).

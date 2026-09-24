@@ -1362,6 +1362,11 @@ const ATTEND_DAYS = [
 ];
 /* ★ B9/G-134: 공지 — 제목 밴드 + 양피지 서술형 본문 (목록 → 상세 2단) */
 const NOTICES = [
+  /* ★ v5.333: 용광로 시련 난이도 정상화 — 라이브 난이도가 오르는 변경이라 숨기지 않고 알린다. */
+  { cat:'[수정]', ic:'⚒️', t:'용광로 시련이 안내대로 장기전이 됩니다', d:'2026-09-25',
+    body:'군주들에게 알립니다.<br><br>매월 1회 도전하는 <b>용광로 시련</b>은 "45초 안에 처치하는 장기전"으로 안내되었지만, 오류로 수호자의 체력이 설계의 1/3만 적용되어 너무 빨리 끝났습니다.<br><br>'+
+      '이제 안내대로 수호자의 체력이 적용됩니다. 도전 전에 전투력을 확인하고, 필요하면 장비 강화·영웅 성장을 먼저 해 주세요. '+
+      '(도전 확인창에 적 전투력이 표시됩니다.)' },
   /* ★ v5.331: 투기장 보상 지급 시작 — 표에만 있고 지급되지 않던 약속을 이행. 표 금액 조정(1/10)도 숨기지 않고 알린다. */
   { cat:'[업데이트]', ic:'🏟️', t:'투기장 보상이 실제로 지급됩니다 — 매일 티어 골드 · 주간 순위 주사위', d:'2026-09-25',
     body:'군주들에게 알립니다.<br><br>투기장 [매일 보상] 표에 안내만 되고 지급되지 않던 보상을 이제 실제로 드립니다.<br><br>'+
@@ -9344,8 +9349,11 @@ function towerExchange(){
 function enterDungeonFight(cfg){
   if(busyFight()) return;
   closeModal(); sysLog(`${cfg.name} 입장`); sfx('tap');
+  /* ★ 2026-09-25: hpMul·overtime 전달 — 종전 래퍼는 고정 필드만 넘겨 용광로 시련의 hpMul:3(v5.301 장기전화 설계)이 **라이브에서 한 번도
+     적용되지 않았다**(v5.301 실측은 startDungeon 직접 호출로 잰 값). 확인창은 '장기전(45초 안에 처치)'을 약속한다 → 설계대로 적용.
+     새 전투 옵션을 추가하면 여기서도 넘겨야 한다(검사: smoke '던전 래퍼 옵션 전달'). */
   Battle.startDungeon({ name:cfg.name, col:cfg.col, foeCP:cfg.foeCP, kind:cfg.kind, count:cfg.count, dur:cfg.dur, waveDur:cfg.waveDur,
-    soloSurvival:cfg.soloSurvival||false,
+    soloSurvival:cfg.soloSurvival||false, hpMul:cfg.hpMul, overtime:cfg.overtime,
     /* ★ 2026-09-25: 던전이 끝나면 홈 1인 사냥으로 되돌린다(Battle.refreshParty → layoutHeroes). 종전엔 endDungeon 이 mode 만 'hunt' 로
        돌리고 재배치를 안 해 3인 파티(전투력 3배)가 홈 사냥을 계속했다(검증 워크플로 실측: 20초 처치 17→29). 투기장 arenaResult 의
        setPartySource(null) 복귀와 같은 자리. 결과창(보상·resultExtra)을 먼저 만들고 재배치는 뒤에 — 예외가 나도 finally 로 복귀.
