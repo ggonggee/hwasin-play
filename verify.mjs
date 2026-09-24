@@ -348,6 +348,9 @@ console.log('[I] FORGE_SLOTS act 대상:',JSON.stringify([...new Set(acts)]));
         + '손가락이 짚는 ✕ 를 눌러도 박스만 눌려 튜토리얼이 막힌다(2026-09-24 실측, STEP 7/9 영웅 합성).' },
     { sel:'#onboard.ob-low', prop:'bottom',
       why:'안내 박스가 손가락 목표를 덮을 때 비키는 자리. game.js tutDockBox() 가 이 클래스를 붙인다.' },
+    { sel:'#tab-lock', prop:'z-index', min:71,
+      why:'다중 창 잠금 화면. 저장을 멈춘 창을 덮어 조작을 막는다 — 없거나 무언가에 가려지면 이용자가 '
+        + '저장 안 되는 창에서 계속 플레이해 진행을 잃는다. 오류 띠(#errbar 70)보다 위.' },
     { sel:'#chat', prop:'height',
       why:'채팅 영역 높이. 값이 비면 채팅이 전장을 밀어내거나 사라진다(대표가 직접 조정하는 값이라 크기는 고정하지 않는다).' },
   ];

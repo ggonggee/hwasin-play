@@ -2253,6 +2253,25 @@ step('세이브·입력 문자열 HTML 제거 — 가져오기 세이브 태그 
   ev('load')();
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ 2026-09-24 회귀: 다중 창 세이브 덮어쓰기. 두 창이 세이브 하나를 번갈아 써서 새 창의 진행이 옛 창의
+   자동저장으로 사라졌다(라이브: 999,999,999 → 6.5초 뒤 3,347). load 가 주도권을 잡고, 주도권을 잃은 창의
+   save() 는 아무것도 쓰지 않고 잠기는지 본다. */
+step('다중 창 잠금 — 주도권 잃은 창은 저장하지 않는다', ()=>{
+  const errs=[], OK='hwasin_save_v1_owner';
+  ev('_saveSealed = false; _tabLost = false');
+  ev('load')();
+  if(store.get(OK)!==ev('TAB_ID')) errs.push('load 가 주도권을 잡지 않았다');
+  ev('save')(); const mine=store.get('hwasin_save_v1');
+  store.set(OK, 'other-tab');                                   // 다른 창이 세이브를 읽고 주도권을 가져감
+  const S=ev('S'), g=S.gold; S.gold=g+123456;
+  ev('save')();
+  if(store.get('hwasin_save_v1')!==mine) errs.push('주도권을 잃었는데 세이브를 덮어썼다');
+  if(ev('_tabLost')!==true) errs.push('잠금 상태로 전환되지 않았다');
+  ev('save')();                                                 // 잠긴 뒤에도 계속 안 쓴다(봉인)
+  if(store.get('hwasin_save_v1')!==mine) errs.push('잠긴 뒤 두 번째 save 가 덮어썼다');
+  S.gold=g; store.set(OK, ev('TAB_ID')); ev('_saveSealed = false; _tabLost = false');   // 원복
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 step('save→JSON 직렬화 왕복 무손실', ()=>{
   /* 바로 위 검사가 모달 클릭을 다시 전수 실행하면서 [데이터 초기화]·[가져오기]를 또 눌러
      저장을 재봉인한다(사유는 [7] 끝 주석 참조). 이 검사는 save() 가 실제로 써야 성립하므로

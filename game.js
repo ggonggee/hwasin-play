@@ -1522,6 +1522,7 @@ function freshState(){
    파싱 실패 시 원본 문자열을 백업 키(hwasin_save_corrupt_타임스탬프)로 옮겨두고 부팅 뒤 알린다.
    백업은 localStorage 에 남아 수동 복구가 가능하고, 신규 진행 흐름은 종전과 동일하다. */
 function load(){
+  claimTab();   // ★ 2026-09-24: 세이브를 읽는 창이 저장 주도권을 가진다(다른 창은 저장을 멈춘다 — claimTab 주석)
   try{ const raw = localStorage.getItem(SAVE_KEY); if(raw){ S = JSON.parse(raw); mergeDefaults(); computeOffline(); return; } }catch(e){
     try{ const raw2 = localStorage.getItem(SAVE_KEY);
       if(raw2) localStorage.setItem(SAVE_KEY+'_corrupt_'+Date.now(), raw2);
@@ -1666,7 +1667,41 @@ let _saveFailFlag = false;
    그래서 가져오기 직전에 이 플래그를 세워 이후의 모든 save() 를 무효화한다.
    ⚠ 이 플래그를 끄는 코드를 넣지 마라 — 세운 뒤에는 곧바로 새로고침해 페이지가 사라지는 것이 전제다. */
 let _saveSealed = false;
+/* ★ 2026-09-24: 다중 창 잠금 — 한 번에 한 창만 저장한다.
+   같은 브라우저에서 게임을 두 창으로 열면(백그라운드에 남은 탭 + 메신저 링크로 새로 연 탭이 흔하다)
+   두 창이 세이브 하나를 5초마다 번갈아 덮어썼다. 새 창에서 한 시간 진행해도, 옛 창의 자동저장·
+   닫기(beforeunload)가 **옛 상태로 덮어써 진행이 통째로 사라졌다**(라이브 실측: 새 창 골드
+   999,999,999 가 6.5초 뒤 옛 창의 3,347 로 되돌아감).
+   · 세이브를 읽는(load) 창이 주도권 키(OWNER_KEY)에 자기 id 를 쓴다 — 가장 최근에 연 창이 주인.
+   · 다른 창은 storage 이벤트로 즉시, 또는 다음 save() 의 소유 확인으로 늦어도 5초 안에 알아채고
+     저장을 봉인한 뒤 잠금 화면을 띄운다. [이 창에서 계속] = 새로고침 → 최신 세이브를 읽고 주도권을 가져온다.
+   ⚠ 잠긴 창에서 '마지막으로 한 번만 저장' 하면 안 된다 — 새 창은 이미 세이브를 읽었으므로, 그 뒤 쓰는 것은
+     전부 새 창의 진행을 덮어쓰는 것이다. 잃는 것은 옛 창의 마지막 자동저장 이후 몇 초뿐이다
+     (재화·소진 확정 지점은 v5.306~309 부터 즉시 저장한다). */
+const TAB_ID = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const OWNER_KEY = SAVE_KEY + '_owner';
+let _tabLost = false;
+function claimTab(){ try{ localStorage.setItem(OWNER_KEY, TAB_ID); }catch(e){} }
+function tabOwned(){ try{ const o=localStorage.getItem(OWNER_KEY); return !o || o===TAB_ID; }catch(e){ return true; } }   // 저장소 자체가 막힌 환경(시크릿 등)은 판정 불가 → 종전대로
+function loseTab(){
+  if(_tabLost) return;
+  _tabLost = true; _saveSealed = true;
+  try{
+    const host = document.getElementById('device') || document.body;
+    const ov = el('div', null, `<div class="tl-box"><div class="tl-ic">🔒</div><b>다른 창에서 게임이 열렸습니다</b>`
+      + `<div class="tl-msg">진행도가 섞이지 않도록 이 창은 저장을 멈췄습니다.<br>다른 창을 닫고 여기서 이어가려면 아래를 누르세요.</div></div>`);
+    ov.id = 'tab-lock';
+    const go = el('button', 'btn gold wide', '이 창에서 계속하기'); go.id = 'tlHere';
+    go.onclick = ()=>location.reload();
+    ov.firstChild.appendChild(go);
+    host.appendChild(ov);
+  }catch(e){}
+}
+if(typeof window!=='undefined' && window.addEventListener){
+  window.addEventListener('storage', e=>{ if(e && e.key===OWNER_KEY && e.newValue && e.newValue!==TAB_ID) loseTab(); });
+}
 function save(){ if(_saveSealed) return;
+  if(!tabOwned()){ loseTab(); return; }
   try{ S.lastSeen=Date.now(); localStorage.setItem(SAVE_KEY, JSON.stringify(S)); _saveFailFlag=false; }
   catch(e){ if(!_saveFailFlag){ _saveFailFlag=true; try{ toast('⚠ 저장에 실패했습니다. 시크릿 모드이거나 저장 공간이 가득 찼을 수 있습니다.'); }catch(_){} } } }
 
@@ -8188,6 +8223,7 @@ function itemDetail(e, heroId){ _itemDetailHeroId=heroId||null;
            부기로 알린다. 세트 파밍의 '완성 순간'이 조용히 지나가면 수집 동기가 반감되고,
            반대로 더 강한 한 조각에 낀 것때문에 6세트가 소리 없이 깨지면 화면 전투력과
            실제 체감이 어긋난다. 장착 경로는 이 onYes 한 곳뿐이라 여기서만 감시한다. */
+        if(!S.equips.includes(e)){ closeSub(); toast('이미 처분된 장비입니다.'); return; }   // 확인창이 떠 있는 사이 처분된 경우 — [분해] onYes 와 대칭
         const setTier = st=>{ const c=setPieceCount(st.n); let best=0; st.tiers.forEach(t=>{ if(c>=t.k) best=Math.max(best,t.k); }); return best; };
         const pre = SETS.map(s=>({ s, k:setTier(s) }));
         const destroyed = equipItem(e, _itemDetailHeroId);

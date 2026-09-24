@@ -1425,6 +1425,17 @@ body{
   background:linear-gradient(180deg,#8d3036,#5e1f24); border:1px solid #c05a60; color:#ffe9e5; }
 #errbar button:active{ filter:brightness(1.3); }
 
+/* ★ 2026-09-24: 다중 창 잠금 화면 (game.js loseTab). 저장을 멈춘 창이 계속 플레이되는 것처럼 보이면
+   이용자는 여기서 한 진행이 사라지는 걸 나중에야 안다 — 그래서 화면 전체를 덮어 조작 자체를 막는다.
+   오류 띠(#errbar 70)보다도 위: 잠긴 창에서는 어떤 조작도 의미가 없다. */
+#tab-lock{ position:absolute; inset:0; z-index:80; display:flex; align-items:center; justify-content:center;
+  padding:24px; background:rgba(6,4,2,.9); }
+#tab-lock .tl-box{ width:100%; max-width:320px; padding:18px 16px; text-align:center; border-radius:10px; word-break:keep-all;
+  background:linear-gradient(180deg,#2a1e10,#150f08); border:1px solid var(--frame); box-shadow:0 8px 28px rgba(0,0,0,.6); }
+#tab-lock .tl-ic{ font-size:34px; margin-bottom:6px; }
+#tab-lock b{ display:block; font-size:var(--fs-lg, 16px); color:var(--txt-hi); margin-bottom:8px; }
+#tab-lock .tl-msg{ font-size:var(--fs-sm); color:#cdbd9f; line-height:1.5; margin-bottom:14px; }
+
 /* ★ 2026-09-10: 진행도 내보내기/가져오기 텍스트 상자 (설정 → 진행도 백업).
    파일 다운로드가 막히는 환경(인앱 브라우저 등)이 있어 복사·붙여넣기 방식으로 만들었다. */
 .save-ta{ width:100%; box-sizing:border-box; height:120px; margin:6px 0;
