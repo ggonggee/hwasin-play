@@ -4406,7 +4406,7 @@ function updateSkillCD(){
         if(!cdEl){
           const ov = document.createElement('div');
           ov.className = 'sk-cd';
-          ov.style.cssText = 'position:absolute;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:bold;color:#ffd36a;border-radius:5px;pointer-events:none';
+          ov.style.cssText = 'position:absolute;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:bold;color:#ffd36a;text-shadow:0 1px 2px #000;border-radius:5px;pointer-events:none';   // ★ 2026-09-25(#10): 9px(화면 7.5px) → 12px
           sk.style.position='relative';
           sk.appendChild(ov);
         }
