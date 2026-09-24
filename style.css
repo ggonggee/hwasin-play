@@ -903,6 +903,11 @@ body{
 @keyframes hrSpin{ to{ transform:rotate(360deg); } }
 @keyframes hrRaysIn{ from{ opacity:0; } to{ opacity:1; } }
 @keyframes hrPop{ 0%{ transform:scale(.5); opacity:0; } 60%{ transform:scale(1.1); opacity:1; } 100%{ transform:scale(1); } }
+/* ★ 2026-09-25: 소환 확인창 수량 칩(1회·10회·최대) + 여러 회 결과 요약 줄 */
+.sum-n{ display:flex; justify-content:center; gap:6px; margin:4px 0 6px; flex-wrap:wrap; }
+.sum-n .sum-n-c{ min-width:56px; }
+.sum-n .sum-n-c.on{ background:linear-gradient(180deg,#f0cd82,#b8862e); color:#1a1006; border-color:#f0cd82; font-weight:800; }
+.sum-batch{ font-size:var(--fs-base); color:var(--txt-hi); margin:2px 0 6px; }
 /* ★ 2026-09-25: 고급 조각이 난 직업 카드 — 정적 금테(연출 줄이기와 무관) */
 .cell.lg-hit{ box-shadow:inset 0 0 0 2px var(--g-legend), 0 0 10px var(--g-legend); }
 /* ★ 2026-09-25: 소환 결과 카드 뒤집기 + 고등급 예고광 */

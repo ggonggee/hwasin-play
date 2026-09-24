@@ -6347,7 +6347,11 @@ const MODALS = {
     b.appendChild(srow);
     const grid=el('div','grid c2 summon-grid'); grid.style.marginTop='8px';
     // 석판 타일 — 확인 오버레이(G-58) 경유 후에만 실제 소환
-    const mkTile=(ic,title,sub,costTxt,qty,can,run,gr,id)=>{
+    /* ★ 2026-09-25: multi(n) — 여러 회 소환(일반 영웅 소환권 타일만). 확인창에 [1회][10회][최대] 수량 칩을 둔다.
+       근거(검증 워크플로 #2 실측): 1회당 약 3.5탭 → 주간 의뢰 30회 ≈105탭·월간 150회 ≈525탭, 유료 소환서 800장이면 ≈2,800탭의 순수 노동.
+       루비 타일(고급·최상급)과 직업 지정은 1회 유지 — 루비를 실수로 날리지 않게. 칩 글자에 '소환'을 쓰지 말 것(튜토리얼 손가락이
+       TUT_PRIMARY_TEXT 로 '소환' 버튼을 짚는다) · 튜토리얼 중엔 칩을 숨긴다. */
+    const mkTile=(ic,title,sub,costTxt,qty,can,run,gr,id,multi)=>{
       const t=el('div','sum-tile gframe grade-'+gr); if(id) t.id=id;   // ★ v5.119: 튜토리얼 손가락 타깃
       t.style.setProperty('--gc',GRADES[gr].color);
       t.innerHTML=`<div class="st-t" style="color:${GRADES[gr].color}">${title}</div>
@@ -6358,12 +6362,21 @@ const MODALS = {
         b2Overlay('소환 확인',(bd,close)=>{
           bd.appendChild(el('div','b2-big',ic));
           bd.appendChild(el('div','b2-name',title));
-          bd.appendChild(el('div','center',`<div class="sum-qty">X ${fmt(qty)}</div>`));
-          bd.appendChild(el('div','b2-flavor',`소모: ${costTxt}`));
+          const qd=el('div','center',`<div class="sum-qty">X ${fmt(qty)}</div>`); bd.appendChild(qd);
+          const cd=el('div','b2-flavor',`소모: ${costTxt}`); bd.appendChild(cd);
+          let n=1;
+          if(multi && S.seenTutorial && S.tickHero>1){
+            const maxN=S.tickHero, opts=[['1회',1],['10회',Math.min(10,maxN)],[`최대 ${fmt(maxN)}회`,maxN]].filter((o,i,a)=>i===0||o[1]>a[i-1][1]);
+            const ch=el('div','sum-n');
+            const paint=()=>{ ch.querySelectorAll('.sum-n-c').forEach((c,i)=>c.classList.toggle('on', opts[i][1]===n));
+              qd.innerHTML=`<div class="sum-qty">X ${fmt(qty*n)}</div>`; cd.textContent=`소모: 소환권 ${fmt(n)}`; };
+            opts.forEach(([lab,v])=>{ const c=el('button','btn xs sum-n-c',lab); c.onclick=()=>{ n=v; sfx('tap'); paint(); }; ch.appendChild(c); });
+            bd.insertBefore(ch, qd); paint();
+          }
           const row=el('div','btnrow');
           const no=el('button','btn','아니요'); no.onclick=close;
           const yes=el('button','btn gold','소환'); yes.onclick=()=>{ close();
-            const r=run(); if(!r){ toast('재화가 부족합니다.'); openModal('summon'); return; }
+            const r = n>1 ? multi(n) : run(); if(!r){ toast('재화가 부족합니다.'); openModal('summon'); return; }
             refreshHUD(); playSummon(r); };
           row.append(no,yes); bd.appendChild(row);
         });
@@ -6371,7 +6384,7 @@ const MODALS = {
       t.appendChild(btn); grid.appendChild(t);
     };
     // 영웅 3티어
-    mkTile('📜','영웅 소환','일반 · 조각 X20','소환권 1', 20, S.tickHero>=1, ()=>{ if(S.tickHero<1)return null; S.tickHero--; return summonRun(20); },'R','sumHero1');
+    mkTile('📜','영웅 소환','일반 · 조각 X20','소환권 1', 20, S.tickHero>=1, ()=>{ if(S.tickHero<1)return null; S.tickHero--; return summonRun(20); },'R','sumHero1', n=>summonBatch(n));
     mkTile('📜','영웅 소환','고급 · 조각 X50', (S.tickHeroP>0?'고급 소환권 1':'루비 300'), 50, (S.tickHeroP>0||S.ruby>=300),
       ()=>{ if(S.tickHeroP>0){ S.tickHeroP--; } else if(S.ruby>=300){ S.ruby-=300; } else return null; return summonRun(50); },'E');
     mkTile('📜','영웅 소환','최상급 · 조각 X100','루비 800', 100, S.ruby>=800, ()=>{ if(S.ruby<800)return null; S.ruby-=800; return summonRun(100); },'L');
@@ -8973,6 +8986,19 @@ function summonRun(count, fixJob){
   }
   Battle.refreshParty(); tutEvent('hsum'); save(); return { gained, legend, unlocked, legendJobs };   /* ★ v5.309: 소환 지급 확정 즉시 저장 */
 }
+/* ★ 2026-09-25: 영웅 소환 여러 회 — summonRun 을 n 회 반복(판정 단위·피티·stats.summons·즉시 저장이 호출마다 그대로 → 주간/월간 의뢰 의미 보존).
+   summonRun 본문은 고치지 않는다(smoke 앵커 "tutEvent('hsum'); save();"). 결과는 직업별 조각 합계 한 장, 연출·영웅 등장은 한 번. */
+function summonBatch(n){
+  const agg={ gained:{}, legend:false, unlocked:[], legendJobs:[], n:0, legends:0 };
+  for(let i=0;i<n;i++){
+    if(S.tickHero<1) break;
+    S.tickHero--; const x=summonRun(20);
+    for(const k in x.gained) agg.gained[k]=(agg.gained[k]||0)+x.gained[k];
+    if(x.legend){ agg.legend=true; agg.legends++; (x.legendJobs||[]).forEach(j=>{ if(!agg.legendJobs.includes(j)) agg.legendJobs.push(j); }); }
+    agg.unlocked.push(...(x.unlocked||[])); agg.n++;
+  }
+  return agg.n ? agg : null;
+}
 /* ★ v5.4: 등급 공용풀 폐지(v4.3) 잔재 — `S.mats[g]++` (g='N'/'R'/'E') 로 적재하고 있었다.
    matAvail/matSpend 는 실제 재료명 키만 인식하므로, 이렇게 쌓인 값은 대장간에서 조회도 소비도 안 된다.
    튜토리얼 STEP6 이 직접 가르치는 '재료 소환'이 정작 쓸 수 있는 결과를 안 만들던 셈이다.
@@ -9005,6 +9031,7 @@ function playSummon(res){
       const allBtn=el('button','btn gold wide','모두 열기'); allBtn.style.marginTop='10px'; allBtn.onclick=()=>{ cells.forEach(openOne); allBtn.disabled=true; }; b.appendChild(allBtn);
     }
     else {
+      if((res.n||1)>1) b.appendChild(el('div','center sum-batch',`소환 <b>${fmt(res.n)}회</b>${res.legends?` · 고급 조각 <b class="lgd">${res.legends}회</b>`:''}`));   // ★ 2026-09-25: 여러 회 소환 요약
       /* ★ 2026-09-25: '레전더리' 판정의 실체는 해당 직업 조각 +3 이다 — 소환 화면 용어('고급 조각 확률 보정')와 맞춘다. */
       if(res.legend) b.appendChild(el('div','center legend-burst',`<div class="ei" style="font-size:56px">🌟</div><div class="big lgd">고급 조각!</div>`));
       // ★ B4/G-60: 결과 그리드 5열 → 4열 (X20 = 4열 × 5행)

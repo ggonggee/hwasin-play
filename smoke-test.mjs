@@ -2255,6 +2255,21 @@ step('세이브·입력 문자열 HTML 제거 — 가져오기 세이브 태그 
   ev('load')();
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ 2026-09-25: 영웅 소환 여러 회(summonBatch) — 판정 단위·집계 보존 · 소환권 부족 시 중단 · 0장이면 null. */
+step('영웅 소환 여러 회 — 집계 보존 · 소환권 한도', ()=>{
+  const errs=[], S=ev('S');
+  const keep={ tick:S.tickHero, sum:S.stats.summons, shards:JSON.parse(JSON.stringify(S.shards)), heroes:JSON.parse(JSON.stringify(S.heroes)), fail:S.summonFail, hs:JSON.parse(JSON.stringify(S.heroShards||{})) };
+  S.tickHero=25; const s0=S.stats.summons, sh0=Object.values(S.shards).reduce((a,b)=>a+(b||0),0);
+  const r=ev('summonBatch')(10);
+  if(!r || r.n!==10) errs.push('10회 실행 수 '+(r&&r.n));
+  if(S.stats.summons-s0!==10) errs.push('stats.summons +'+(S.stats.summons-s0)+' (기대 10 — 주간/월간 의뢰 집계 단위)');
+  if(S.tickHero!==15) errs.push('소환권 '+S.tickHero+' (기대 15)');
+  const gain=Object.values(r.gained).reduce((a,b)=>a+b,0); if(gain<200 || gain>600) errs.push('조각 합계 '+gain+' (200뽑기 × 1~3)');
+  S.tickHero=3; const r3=ev('summonBatch')(10); if(!r3 || r3.n!==3 || S.tickHero!==0) errs.push('소환권 3장에서 3회로 멈추지 않음');
+  if(ev('summonBatch')(5)!==null) errs.push('소환권 0장인데 null 아님');
+  S.tickHero=keep.tick; S.stats.summons=keep.sum; S.shards=keep.shards; S.heroes=keep.heroes; S.summonFail=keep.fail; S.heroShards=keep.hs;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ 2026-09-25 회귀(워크플로 #19): 1위 NPC 길드 [신청] 한 번으로 레전더리 칭호 2종 / 조건형 칭호 달성 후 조건을 잃으면 보유 목록에서
    사라지는데 착용 효과는 남던 불일치 / 옛 조건으로 이미 얻은 이용자 보존(1회 이관). */
 step('칭호 — 길드 1클릭 차단 · 달성 보유 기록 · 기존 획득 이관', ()=>{
