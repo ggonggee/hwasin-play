@@ -2319,6 +2319,44 @@ step('인트로 ✕ 건너뛰기 — 남은 보상 1회 지급 · introDone · �
   store.set('hwasin_save_v1', raw); ev('load')();
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ 2026-09-25(워크플로 #6): 튜토리얼 직후 '강해지는 길' — 제작 결과 [리더에게 장착](빈 부위만·파괴 없음) · 추천 사냥터 점(본 뒤 소등) · 전투력 구성 라벨. */
+step('제작 결과 리더 장착(빈 부위만) · 추천 사냥터 점 · 구성 라벨', ()=>{
+  const errs=[], S=ev('S'), root=ev("$('#modal-root')");
+  const keep={ eq:S.equips.slice(), st:S.seenTutorial, ht:S.huntTier, hs:S.huntHintSeen, lv:JSON.parse(JSON.stringify(S.heroes)) };
+  S.seenTutorial=true;
+  const lead=ev('party')()[0]||ev('ownedHeroes')()[0];
+  const fsl=ev('FORGE_SLOTS').find(x=>x.items&&x.items.N&&x.items.N.length&&ev('slotKeyOf')(x.items.N[0].n)[0]!=='#'), it=fsl.items.N[0];
+  const part=ev('slotKeyOf')(it.n);
+  S.equips=S.equips.filter(x=>!(x.equipped && (!x.heroId||x.heroId===lead.hero_id) && ev('slotKeyOf')(x.slot)===part));
+  const craft=()=>{ S.craft={ grade:'N', slot:it.n, cat:fsl.k, ic:'⚔️', endAt:0, p0:1, sec:1, gold:0, recipe:[] }; ev('craftAutoCheck')(); };
+  const label=`리더 ${lead.name}에게 장착`;
+  craft(); const btn=findBtnByText(root, label, true);
+  if(!btn) errs.push('빈 부위인데 장착 버튼 없음');
+  else {
+    const n0=S.equips.length, p0=ev('heroPower')(lead), ne=S.equips[S.equips.length-1];
+    btn.onclick();
+    if(!(ne.equipped && ne.heroId===lead.hero_id)) errs.push('장착 안 됨');
+    if(!(ev('heroPower')(lead)>p0)) errs.push('리더 전투력 불변');
+    if(S.equips.length!==n0) errs.push('장비 수 변화(파괴) '+(S.equips.length-n0));
+    btn.onclick(); if(S.equips.length!==n0) errs.push('재클릭 부작용');
+    ev('closeSub')();
+    // 같은 부위 착용 중 → 새 결과 팝업엔 버튼이 없어야 한다(스텁은 옛 팝업이 남을 수 있어 라벨 개수 증감으로 판정)
+    const cnt=()=>collectText(root).split(label).length-1, c1=cnt();
+    craft(); if(cnt()>c1) errs.push('착용 중 부위에 장착 버튼 → 기존 장비 파괴 위험');
+    ev('closeSub')();
+  }
+  // 추천 사냥터: 리더를 강하게 → 점 대상 · 몬스터 화면 본 뒤 소등
+  S.huntTier=0; S.huntHintSeen=0; S.heroes[lead.hero_id].level=200;
+  const up=ev('huntUpgradeTier')();
+  if(!(up>0)) errs.push('강한 리더인데 추천 없음 '+up);
+  const b=new Node2('div'); ev('MODALS').monster.render(b);
+  if(!collectText(b).includes('여기서 사냥')) errs.push('몬스터 화면 추천 행 없음');
+  if(ev('huntUpgradeTier')()!==-1) errs.push('본 뒤에도 점 유지');
+  S.seenTutorial=false; S.huntHintSeen=0; if(ev('huntUpgradeTier')()!==-1) errs.push('튜토리얼 중 점');
+  if(js.includes('영웅 9종 합계')) errs.push("구성 라벨 '영웅 9종 합계' 잔존");
+  S.equips=keep.eq; S.seenTutorial=keep.st; S.huntTier=keep.ht; S.huntHintSeen=keep.hs; S.heroes=keep.lv;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 step('잠긴 창 복귀 정산 차단 · 배경 로드 탭 숨김 시각 포착', ()=>{
   const errs=[], S=ev('S'), doc=ev('document'), vis=doc._ev && doc._ev.visibilitychange;
   if(typeof vis!=='function') throw new Error('visibilitychange 핸들러 미등록');

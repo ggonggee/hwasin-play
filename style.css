@@ -255,6 +255,14 @@ body{
 .nav span{ font-size:var(--fs-sm); color:#e4d7b8; font-weight:600; text-shadow:0 1px 2px #000,0 0 3px rgba(0,0,0,.8); }   /* ★ v5.110 */
 .nav:active{ filter:brightness(1.4); }
 .nav.center{ flex:0 0 auto; margin:0 1px; padding:4px 6px; }
+.nav{ position:relative; }   /* ★ 2026-09-25: 몬스터 버튼 추천 점(.rdot absolute) 기준점 */
+/* ★ 2026-09-25(워크플로 #6): 몬스터 화면 추천 사냥터 행 · 제작 결과 장착 완료 줄 */
+.hunt-rec{ display:flex; align-items:center; gap:8px; margin:6px 0 8px; padding:7px 9px; border:1px solid #8a6424; border-radius:8px;
+  background:linear-gradient(180deg,rgba(60,40,12,.55),rgba(24,16,8,.55)); font-size:var(--fs-sm); line-height:1.4; word-break:keep-all; }
+.hunt-rec .hr-t{ flex:0 0 auto; padding:1px 6px; border-radius:5px; background:#c9a04a; color:#1a1208; font-weight:800; font-size:var(--fs-xs); }
+.hunt-rec .hr-x{ flex:1 1 auto; min-width:0; }
+.hunt-rec .btn{ flex:0 0 auto; }
+.eq-done{ margin-top:10px; color:var(--ok,#8fd18f); }
 .nav.center .anvil{ width:64px; height:64px; border-radius:50%; margin-top:-20px; border:2px solid #8a6a38;
   background:radial-gradient(circle at 50% 34%,#4a3823,#160f09 72%); display:flex; flex-direction:column; align-items:center; justify-content:center;
   box-shadow:0 0 20px rgba(255,140,50,.4), inset 0 -6px 14px rgba(0,0,0,.6); }

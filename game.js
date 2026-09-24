@@ -1582,7 +1582,7 @@ function freshState(){
             bossTop:0,                      // 레전더리 보스 처치 횟수
             rubyBox:0,                      // 루비 상자(충전 상품) 구매 횟수
             chat:{} },                      // 월드챗 문구 칭호 전송 플래그
-    seenTutorial:false, introDone:false, tutStep:0, guideStep:0, guideProg:0, huntTier:0, mobCount:30,   // mobCount: 홈 필드 동시 스폰 상한 (마릿수 선택기, 기본 30). ★ _huntV 는 freshState 에 두지 않는다 — mergeDefaults 가 먼저 채우면 이관이 통째로 스킵된다
+    seenTutorial:false, introDone:false, tutStep:0, guideStep:0, guideProg:0, huntTier:0, huntHintSeen:0, mobCount:30,   // mobCount: 홈 필드 동시 스폰 상한 (마릿수 선택기, 기본 30). ★ _huntV 는 freshState 에 두지 않는다 — mergeDefaults 가 먼저 채우면 이관이 통째로 스킵된다
     // ★ B1 신규 — G-01 튜토리얼 진행 관측 / G-04 보상 1회 지급 / G-11 길드 미가입 / G-13 자동전투 표시
     tut:{ base:{}, matBase:null, matN:0, formSig:'', formN:0 },
     _missionPaid:false,
@@ -1930,6 +1930,16 @@ function _setDot(parent, on){
   if(on && !dot) parent.appendChild(el('div','rdot'));
   else if(!on && dot) dot.remove();
 }
+/* ★ 2026-09-25(워크플로 #6): 리더 전투력으로 안정 사냥 가능한 최고 단계(showWipeAdvice 의 '안전 사냥터'와 같은 정의)가 지금 사냥터보다
+   높고, 이용자가 아직 그 단계를 몬스터 화면에서 본 적이 없을 때만 그 인덱스를 돌려준다(아니면 -1).
+   '본 적' 기록(huntHintSeen)이 있어야 일부러 낮은 사냥터에서 특정 재료를 모으는 이용자에게 점이 계속 켜져 있지 않다.
+   실측: 튜토리얼 직후 163초에 리더 261 > 권장 225 인데도 12분 내내 최하급(골드 ×1.9 차이)에 머물렀다 — 알림이 없었다. */
+function huntSafeTier(){ const lead=party()[0]||ownedHeroes()[0]; if(!lead) return 0; const cp=heroPower(lead); let safe=0; HUNT_TIERS.forEach((x,i)=>{ if(x.cp<=cp) safe=i; }); return safe; }
+function huntUpgradeTier(){
+  if(!S || !S.seenTutorial) return -1;
+  const safe=huntSafeTier();
+  return safe > Math.max(S.huntTier||0, S.huntHintSeen|0) ? safe : -1;
+}
 function refreshClaimBadges(){
   /* ★ v5.269: 미수령 오프라인 정산 배지 — offlinePending(방치 골드)이 쌓여 있어도
      timepod 을 누르기 전엔 표시가 없어 보상 존재를 몰랐다. 점으로 상시 알리고
@@ -1942,6 +1952,7 @@ function refreshClaimBadges(){
   _setDot(document.getElementById('timepod'), od);                 // ★ v5.269: 오프라인 정산(id 부여 — 클래스 쿼리가 스텁에서 노드별 새 인스턴스를 만드는 문제 회피)
   const m=mailPending();   // ★ 2026-09-25: 미수령 우편
   _setDot(document.querySelector('[data-modal="mail"]'), m);
+  _setDot(document.querySelector('[data-modal="monster"]'), huntUpgradeTier()>=0);   // ★ 2026-09-25(워크플로 #6): 더 좋은 안전 사냥터
   _setDot(document.getElementById('btnMenuToggle'), q||a||n||od||m);
   /* ★ v5.271: 칭호 개선 가능 — [data-modal="titles"] 항목(드로어 내 칭호). ☰ 합산. */
   titleSyncOwn();   // ★ 2026-09-25: 달성한 칭호를 보유로 기록(5초 주기)
@@ -2205,7 +2216,7 @@ function openCPBreakdown(fromHome){   // fromHome: 홈 전투력 칩에서 열�
     * (f==='trait'?1:trait) * (f==='costume'?1:costume) * (f==='setm'?1:setm) * (f==='tome'?1:tome));
   setModalTitle('전투력 구성');
   const b=$('#modalBody'); b.innerHTML='';
-  b.appendChild(el('div','center',`<div class="big" style="color:var(--g-legend)">${fmt(totalCP())}</div><div class="small mut">총 전투력 (영웅 9종 합계) · 아래는 리더 [${h.name}] 기준</div>`));
+  b.appendChild(el('div','center',`<div class="big" style="color:var(--g-legend)">${fmt(totalCP())}</div><div class="small mut">총 전투력 (보유 영웅 ${ownedHeroes().length}명 합계) · 아래는 리더 [${h.name}] 기준</div>`));
   b.appendChild(el('div','',row('기본 (Lv '+h.level+')', fmt(base), pct(base))));
   b.appendChild(el('div','',row('등급 ('+GRADES[h.grade].name+')', '×'+g.toFixed(1), pct(final-without('g')))));
   b.appendChild(el('div','',row('각성 +'+S.awaken+((S.awakenCrystal||0)>0?(' · 결정 +'+S.awakenCrystal):''), '×'+aw.toFixed(2), pct(final-without('aw')))));
@@ -8023,6 +8034,12 @@ const MODALS = {
     b.appendChild(mcPre);
     if(gi===3){ const bd=el('div','mon-diff','난이도 X1'); b.appendChild(bd); }   // 레전더리 탭 배지
     b.appendChild(el('div','hint',`선택한 몬스터가 <b>홈 필드에 계속 출현</b>합니다. 홈 출격 <b style="color:#f0d59a">${(party()[0]||ownedHeroes()[0]).name}</b> 전투력 <b style="color:#f0d59a">${fmt(leadCP)}</b> — 권장보다 약하면 전멸합니다. <span class="mut">(총 전투력 ${fmt(totalCPv)} · 홈은 영웅 1명, 던전은 3인 파티)</span>`));
+    { const safe=huntSafeTier(); S.huntHintSeen=Math.max(S.huntHintSeen|0, safe);   // 이 화면을 봤다 → 몬스터 버튼 점 소등(huntUpgradeTier)
+      if(safe>(S.huntTier||0)){ const sf=HUNT_TIERS[safe], cu=HUNT_TIERS[S.huntTier||0]||HUNT_TIERS[0];
+        const r=el('div','hunt-rec', `<span class="hr-t">추천</span><span class="hr-x">리더로 안정 사냥 가능한 최고 단계 <b style="color:${sf.c}">${sf.n}</b> · 처치 골드 <b>×${(sf.gold/Math.max(1,cu.gold)).toFixed(1)}</b></span>`);   // 글을 한 span 에 — 맨 텍스트 노드는 flex 항목으로 쪼개져 세로로 꺾였다
+        const go=el('button','btn sm gold','여기서 사냥');
+        go.onclick=()=>{ S.huntTier=safe; Battle.setHunt(); sfx('tap'); toast(`${sf.n} 사냥 — 리더 전투력으로 안정 사냥`); MODALS.monster._tab=Math.max(0,GORDER.indexOf(sf.drop)); openModal('monster'); refreshHUD(); save(); };
+        r.appendChild(go); b.appendChild(r); } }
     const g0=GT[gi][0];
     for(const {t,i} of byG(g0)){
       const cur = (S.huntTier||0)===i;
@@ -8982,7 +8999,8 @@ function resolveCraft(forceSuccess){
     }
   }
   S.craft=null;
-  if(ok){ S.equips.push({ grade, slot, enh:0, equipped:false }); sysLog(`${gradeBadge(grade)} ${slot} 제작 성공`);
+  let ne=null;
+  if(ok){ ne={ grade, slot, enh:0, equipped:false }; S.equips.push(ne); sysLog(`${gradeBadge(grade)} ${slot} 제작 성공`);
     /* ★ v5.211: 곡괭이 획득 플래그 — 칭호 '견습 광부증/숙련 광부'의 조건이 '오래된/찬란한 곡괭이
        획득'인데 플래그(S.picks)는 유료 패키지 give()에서만 세팅됐다. 제작으로 곡괭이를 만들면
        아이템은 있지만 칭호 조건이 영영 안 풀렸다(2026-09-13 감사, 정합 9호).
@@ -9012,7 +9030,28 @@ function resolveCraft(forceSuccess){
      리셋돼 재도전 때마다 탭을 다시 눌러야 했다). [다시 제작] 은 craftStart 로 즉시 재시작 —
      재료·골드 부족과 제작 슬롯 점유 가드는 craftStart 안에서 토스트로 막힌다.
      실패 시 재료 90% 환급이므로 '부족합니다' 토스트가 뜨는 것 자체가 다시 파밍하라는 신호다. */
-  const again=el('button','btn gold wide','다시 제작'); again.style.marginTop='10px';
+  /* ★ 2026-09-25(워크플로 #6): [리더에게 장착] — 튜토리얼 직후 리더(홈 출격 영웅)의 장비칸이 10칸 모두 비어 있고, 길잡이로 만든
+     장비도 인벤토리에 쌓이기만 해 '만들었는데 강해지지 않는' 구간이 생겼다(실측: 장비 1→3개 동안 전투력 칩 그대로).
+     리더의 그 부위가 **비어 있을 때만** 띄운다 — equipItem 은 같은 부위 기존 장비를 파괴하므로 교체 판단은 착용창(비교·경고)에 맡긴다.
+     빈칸 판정은 전투력 계산과 같은 술어(equipped && (!heroId || heroId===리더)). 튜토리얼 중엔 숨긴다(STEP 장착 판정과 겹침). */
+  const lead = ok && S.seenTutorial ? (party()[0]||ownedHeroes()[0]) : null;
+  const slotFree = h => !S.equips.some(x=>x!==ne && x.equipped && (!x.heroId || x.heroId===h.hero_id) && slotKeyOf(x.slot)===slotKeyOf(slot));
+  const canEq = !!(lead && ne && slotKeyOf(slot)[0]!=='#' && slotFree(lead));
+  if(canEq){
+    const eqb=el('button','btn gold wide',`리더 ${lead.name}에게 장착`); eqb.style.marginTop='10px';
+    eqb.onclick=()=>{
+      if(!S.equips.includes(ne) || ne.equipped || !slotFree(lead)){ toast('이미 처리된 장비입니다'); eqb.remove(); return; }   // 팝업이 떠 있는 사이 분해·장착된 경우
+      const setTier = st=>{ const c=setPieceCount(st.n); let best=0; st.tiers.forEach(t=>{ if(c>=t.k) best=Math.max(best,t.k); }); return best; };
+      const pre=SETS.map(s=>({ s, k:setTier(s) })), p0=heroPower(lead);
+      equipItem(ne, lead.hero_id);
+      const p1=heroPower(lead); sfx('tap');
+      pre.forEach(x=>{ const now=setTier(x.s); if(now>x.k){ toast(`🎉 <b style="color:var(--g-legend)">${x.s.n} ${now}세트</b> 효과 발동!`); sfx('legendary'); sysLog(`${x.s.n} ${now}세트 효과 발동`); } });
+      const done=el('div','center small eq-done', `리더 ${lead.name} 장착 완료 · ${cpDeltaLine(p0,p1)}`);
+      if(eqb.parentNode) eqb.parentNode.insertBefore(done, eqb); eqb.remove();
+      Battle.refreshParty(); refreshHUD(); save(); };
+    b.appendChild(eqb);
+  }
+  const again=el('button','btn'+(canEq?'':' gold')+' wide','다시 제작'); again.style.marginTop=canEq?'6px':'10px';   // 장착이 주 행동일 땐 금색을 양보
   again.onclick=()=>{ closeSub();
     const sdef=FORGE_SLOTS.find(s=>s.k===cat);
     const it=(sdef&&sdef.items&&sdef.items[grade]||[]).find(x=>x.n===slot);
