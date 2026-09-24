@@ -2403,6 +2403,40 @@ step('퀘스트 기본 탭(주간 우선) · 길드 레이드 결과 뒤 복귀'
   S.guideStep=keep.gs;
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ 2026-09-25(워크플로 2차 #1·#8·#13·#7·#12): 골드던전권 실사용 · 재료 상한 무지급/표시 · 주·월 롤오버 5초 주기 · 길잡이 다음 목표 · 처치음. */
+step('2차 A묶음 — 골드던전권·재료 상한·주월 롤오버·길잡이 다음·처치음', ()=>{
+  const errs=[], S=ev('S'), root=ev("$('#modal-root')");
+  const keep={ tk:S.goldTicket, mats:JSON.parse(JSON.stringify(S.mats)), gs:S.guideStep, st:S.seenTutorial, eq:S.equips.slice(), gp:S.guideProg, goldAuto:S.goldAuto };
+  ev('rollDaily')();
+  // ① 골드던전권: 자동 연전은 권을 태우지 않고, 수동은 3회 소진 뒤 권 1장으로 1회
+  const d=ev('GOLD_DUNGEON')[0]; ev('matGain')(d.mat, d.need*3); S.daily.counts.gold=3; S.goldTicket=2;
+  if(ev('enterGoldDungeon')(d,true)!==false || S.goldTicket!==2) errs.push('자동 입장이 골드던전권을 씀');
+  ev('enterGoldDungeon')(d,false);
+  const yes=findBtnByText(root,'예',true); if(!yes) errs.push('골드던전 확인창 없음'); else { yes.onclick();
+    if(S.goldTicket!==1) errs.push('권 차감 '+S.goldTicket); if(S.daily.counts.gold!==3) errs.push('일일 횟수가 권 입장에 소모됨');
+    if(!ev('Battle').inDungeon()) errs.push('권 입장 실패'); ev('Battle').finishNow(); ev('closeModal')(); }
+  // ② 재료 상한: matGain 실제 증가분 · 등급 전부 상한이면 회색코인 교환 품절 · avoidCap 은 남은 재료로
+  const E=ev('MAT_BY_GRADE').E, capE=ev('MAT_CAP').E;
+  E.forEach(m=>S.mats[m.k]=capE); if(!ev('matGradeCapped')('E')) errs.push('E 전부 상한 판정');
+  if(ev('matGain')(E[0].k,5)!==0) errs.push('상한에서 matGain 반환 ≠ 0');
+  const gsE=ev('GRAYSHOP').find(x=>/영웅 재료/.test(x.t)); if(!(gsE.soldOut && gsE.soldOut())) errs.push('E 전부 상한인데 회색코인 영웅 재료 교환이 판매 중');
+  if(ev('matGainGrade')('E',1,{avoidCap:true})!==null) errs.push('전부 상한 avoidCap 이 null 아님');
+  S.mats[E[3].k]=0; for(let i=0;i<20;i++){ const m=ev('matGainGrade')('E',1,{avoidCap:true}); if(!m || m.k!==E[3].k){ errs.push('avoidCap 이 상한 재료를 고름'); break; } }
+  // ③ 주·월 롤오버 — 5초 주기가 weeklyState/monthlyState 를 refreshClaimBadges 보다 먼저 부른다(_loopOn·보일 때)
+  { const i=js.indexOf("if(_loopOn && !document.hidden){ try{ weeklyState(); monthlyState(); flushLoginToasts(); }catch(e){} } save(); refreshClaimBadges();"); if(i<0) errs.push('5초 주기 주·월 롤오버 없음'); }
+  // ④ 길잡이 단계를 넘긴 제작 결과 → [다음 길잡이 · 다음 목표 ▶]
+  S.seenTutorial=true; S.guideStep=0; S.guideProg=0; const G=ev('GUIDE_CHAIN');
+  const loc=ev('forgeLocate')(G[0].slot);
+  if(loc){ const s2=ev('FORGE_SLOTS')[loc.slotIdx]; S.craft={ grade:loc.grade, slot:G[0].slot, cat:s2.k, ic:'⚔️', endAt:0, p0:1, sec:1, gold:0, recipe:[] }; ev('craftAutoCheck')();
+    if(S.guideStep!==1) errs.push('길잡이 1단계 제작 뒤 guideStep '+S.guideStep+' (검사 전제 불성립)');
+    else if(!findBtnByText(root,`다음 길잡이 · ${G[1].slot} ▶`,true)) errs.push('다음 길잡이 버튼 없음');
+    ev('closeSub')(); ev('closeModal')(); } else errs.push('길잡이 1단계 레시피 위치 불명');
+  // ⑤ 처치음: 우두머리 처치는 bossdown(레전더리 음 희소성) · coin 합치기·리미터 코드
+  if(js.includes("sfx(boss?'legendary':'coin')")) errs.push('우두머리 처치에 legendary 음');
+  if(!/bossdown:\[/.test(js) || !js.includes('_coinG') || !js.includes('createDynamicsCompressor')) errs.push('처치음 합치기·리미터 코드 없음');
+  S.goldTicket=keep.tk; S.mats=keep.mats; S.guideStep=keep.gs; S.seenTutorial=keep.st; S.equips=keep.eq; S.guideProg=keep.gp; S.goldAuto=keep.goldAuto;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ 2026-09-25(워크플로 #26): 복귀 적립 — 부재 일 수(로컬 자정 반올림)·7일 상한·시계 앞뒤 반복 적립 차단(hi)·적립 시점 금액 확정·수령 1회. */
 step('복귀 적립 — 일 수·7일 상한·시계 조작 차단·금액 확정·수령', ()=>{
   const errs=[], S=ev('S'), acc=ev('awayAccrue'), di=ev('dayIdx');

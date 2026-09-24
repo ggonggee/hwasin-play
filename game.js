@@ -272,14 +272,20 @@ function matSpend(k,n){ if(!MAT_BY_KEY[k]) return; S.mats[k]=Math.max(0,(S.mats[
    Math.max(cur, …) — 구세이브에서 이미 넘친 값은 깎지 않고 성장만 멈춘다(파괴적 클램프 금지). */
 const MAT_CAP = { N:2000, R:2000, E:900, L:900 };
 function matGain(k,n){
-  const m=MAT_BY_KEY[k]; if(!m) return;
+  const m=MAT_BY_KEY[k]; if(!m) return 0;
   const cap=MAT_CAP[m.g]||Infinity, cur=S.mats[k]||0;
-  S.mats[k]=Math.max(cur, Math.min(cap, cur+n));
+  const nv=Math.max(cur, Math.min(cap, cur+n)); S.mats[k]=nv;
+  return nv-cur;   // ★ 2026-09-25(워크플로 2차 #8): 실제 증가분(상한 절삭 후) — '획득' 표시·경고용. 종전 호출부는 반환값을 쓰지 않아 영향 없음
 }
 // 등급별 합계 — 요약 표시 전용(정산·절전 그리드). 소모는 언제나 개별 재료 단위다.
 function matGradeTotal(g){ return (MAT_BY_GRADE[g]||[]).reduce((a,m)=>a+(S.mats[m.k]||0),0); }
+// 그 등급 재료가 전부 보유 상한인가 — 대가를 받고 주는 경로(교환·보상)의 '무지급' 판정용.
+function matGradeCapped(g){ const pool=MAT_BY_GRADE[g]||[]; return pool.length>0 && pool.every(m=>(S.mats[m.k]||0)>=(MAT_CAP[g]||Infinity)); }
 // 등급만 정해진 획득처(드랍·상점·보상)는 그 등급 재료 중 하나로 실체화한다.
-function matGainGrade(g,n){ const pool=MAT_BY_GRADE[g]||[]; if(!pool.length||n<=0) return null;
+/* ★ 2026-09-25(#8): opt.avoidCap — 대가를 치른 교환(회색코인 등)은 상한이 아닌 재료로만 준다(전부 상한이면 null).
+   기본(사냥 드랍 등)은 종전 균등 선택 그대로 — 유효 재료 유입이 바뀌면 시뮬 곡선이 바뀌므로 여기서 바꾸지 않는다. */
+function matGainGrade(g,n,opt){ let pool=MAT_BY_GRADE[g]||[]; if(!pool.length||n<=0) return null;
+  if(opt && opt.avoidCap){ pool=pool.filter(m=>(S.mats[m.k]||0)<(MAT_CAP[g]||Infinity)); if(!pool.length) return null; }
   const m=pool[(Math.random()*pool.length)|0]; matGain(m.k,n); return m; }
 /* 구세이브 이관 — 공용풀 잔량을 같은 등급 재료들에 균등 분배하고 키를 제거한다.
    진행도가 사라지지 않도록 나머지는 첫 재료에 몰아준다. */
@@ -753,9 +759,11 @@ const SKILLS = {
      같은 절이 '길드 참여(레이드/약탈/출석)'를 회색코인 활동군으로 함께 묶고 있다. */
 const GRAYSHOP = [
   { t:'강화석 10개',        ic:'🪨', cost:5,    give:()=>{ S.stones+=10; } },
-  { t:'희귀 재료 1개',      ic:'🟦', cost:20,   give:()=>{ matGainGrade('R',1); } },
-  { t:'영웅 재료 1개',      ic:'🟪', cost:35,   give:()=>{ matGainGrade('E',1); } },
-  { t:'레전더리 재료 1개',  ic:'🟨', cost:90,   give:()=>{ matGainGrade('L',1); } },
+  /* ★ 2026-09-25(워크플로 2차 #8): 재료 교환은 상한이 아닌 재료로만 주고, 그 등급이 전부 상한이면 목록에서 내린다 — 종전엔 상한인 재료가
+     뽑히면 코인만 빠지고 아무것도 안 줬다(실측: 영웅 재료 교환 코인 −35 · 재료 합계 불변 · 토스트는 '획득'). 코스튬 품절(soldOut)과 같은 원칙. */
+  { t:'희귀 재료 1개',      ic:'🟦', cost:20,   soldOut:()=>matGradeCapped('R'), give:()=>{ matGainGrade('R',1,{avoidCap:true}); } },
+  { t:'영웅 재료 1개',      ic:'🟪', cost:35,   soldOut:()=>matGradeCapped('E'), give:()=>{ matGainGrade('E',1,{avoidCap:true}); } },
+  { t:'레전더리 재료 1개',  ic:'🟨', cost:90,   soldOut:()=>matGradeCapped('L'), give:()=>{ matGainGrade('L',1,{avoidCap:true}); } },
   { t:'영웅 소환권(고급) 1장', ic:'🎟️', cost:300,  give:()=>{ S.tickHero+=1; } },
   /* ★ 2026-09-25: 종전 give 는 레거시 카운터 +1 뿐이라 카운터가 이미 3 이상(루비 구매로 올라간 경우)이면 코인만 빠지고 아무것도 안 줬다.
      이제 아직 없는 한정 코스튬(작열·서리·황금 예복)을 하나 준다. 전부 보유면 목록에서 내린다(soldOut). */
@@ -1385,6 +1393,12 @@ const ATTEND_DAYS = [
 ];
 /* ★ B9/G-134: 공지 — 제목 밴드 + 양피지 서술형 본문 (목록 → 상세 2단) */
 const NOTICES = [
+  /* ★ v5.352: 골드던전권 사용처 — 판매·지급만 되고 쓸 곳이 없던 재화(과금 후 무지급)를 약속대로 쓰게 했다. 재료 상한 표기 정정도 함께 알린다. */
+  { cat:'[수정]', ic:'🪪', t:'골드던전권을 이제 사용할 수 있습니다 · 재료 보유 상한 안내', d:'2026-09-25',
+    body:'군주들에게 알립니다.<br><br>'+
+      '· <b>🪪 골드던전권</b> — 상점·광고 보상으로 받은 골드던전권이 오류로 쓰이지 않고 있었습니다. 이제 골드던전 일일 3회를 모두 쓴 뒤, 골드던전권 1장으로 1회씩 더 입장할 수 있습니다(자동 입장은 일일 횟수 안에서만 돌며 골드던전권을 쓰지 않습니다).<br>'+
+      '· <b>📦 재료 보유 상한</b> — 재료가 보유 상한에 닿아 보상이 들어오지 않을 때도 \"획득\"으로 표시되던 것을 바로잡았습니다. 요일던전 결과·목록에 상한 안내가 뜨고, 회색코인 재료 교환은 상한이 아닌 재료로만 주며 그 등급이 모두 상한이면 목록에서 내립니다.<br><br>'+
+      '길잡이 제작을 마치면 결과 창의 [다음 길잡이 ▶]로 바로 다음 목표를 제작할 수 있습니다.' },
   /* ★ v5.350: 복귀 적립 — 며칠 비워도 일일 콘텐츠 몫을 일부 지켜 준다. */
   { cat:'[업데이트]', ic:'🏠', t:'며칠 비워도 괜찮습니다 — 부재 적립(최대 7일)', d:'2026-09-25',
     body:'군주들에게 알립니다.<br><br>바쁜 날이 이어져 접속하지 못해도, 그동안 매일 받을 수 있었던 몫의 일부를 적립해 드립니다.<br><br>'+
@@ -2110,8 +2124,14 @@ const _reducedMotion=(()=>{ try{ return !!(window.matchMedia && window.matchMedi
 function fxOn(k){ const st=S&&S.settings; if(k==='fxShake' && _reducedMotion) return false; return !st || st[k]!==false; }
 function applyFxClass(){ try{ document.body.classList.toggle('fx-noflash', !fxOn('fxFlash')); }catch(e){} }
 /* ---- SFX (Web Audio 합성음, 외부 파일 없음) ---- */
-let _actx=null;
-function initAudio(){ if(_actx) return; try{ _actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} }
+let _actx=null, _abus=null;
+/* ★ 2026-09-25(워크플로 2차 #12): 출력 앞에 리미터 버스 — 광역 처치 한 프레임에 같은 주파수·위상의 coin 이 수십 개 겹쳐 합산 음량이 1 을 넘었다(실측 21개·1.25).
+   단일 음 최대치(boss 0.22 ≈ -13dB)는 문턱(-6dB) 아래라 기존 음색은 그대로, 몰린 순간만 눌린다. */
+function initAudio(){ if(_actx) return; try{ _actx=new (window.AudioContext||window.webkitAudioContext)();
+  try{ _abus=_actx.createDynamicsCompressor(); _abus.threshold.value=-6; _abus.knee.value=0; _abus.ratio.value=20; _abus.attack.value=0.002; _abus.release.value=0.12; _abus.connect(_actx.destination); }catch(e){ _abus=null; } }catch(e){} }
+/* OS 가 오디오를 멈추면(백그라운드·전화 등) 새로고침 전까지 무음이 될 수 있었다(resume 경로 0건) — 사용자 조작 때 되살린다. */
+try{ document.addEventListener('pointerdown',()=>{ if(_actx && _actx.state!=='running'){ try{ const p=_actx.resume(); if(p&&p.catch) p.catch(()=>{}); }catch(e){} } },{capture:true,passive:true}); }catch(e){}
+let _coinAt=-1, _coinN=0, _coinG=null;   // 같은 오디오 시각의 coin 합치기(아래 sfx)
 /* ★ 2026-09-25(워크플로 #11): 즉시 결과(Battle.finishNow) 동안 켜지는 무음 구간 — 남은 전투를 한 프레임에 소화하면
    효과음이 한꺼번에 울린다(실측: 탑 1회 coin 319·legendary 8·fail 2 — 오실레이터 수백 개 동시 생성). 우두머리 경고 배너도 생략.
    표시 전용 플래그다 — 전투 상태·시드 난수와 무관. */
@@ -2123,14 +2143,25 @@ function sfx(type){
      개별 효과음 파라미터(P 표)는 그대로 두고 출력 게인에만 곱한다. */
   const vol=(S.settings&&typeof S.settings.vol==='number') ? Math.max(0,Math.min(1,S.settings.vol)) : 1;
   try{
-    const t=_actx.currentTime, o=_actx.createOscillator(), g=_actx.createGain(); o.connect(g); g.connect(_actx.destination);
+    const t=_actx.currentTime;
+    /* ★ 2026-09-25(#12): 같은 오디오 시각의 coin 은 오실레이터 1개로 합치고 음량만 로그로 키운다(최대 3배 = 0.12). 종전엔 광역 처치마다 동일 위상 coin 이
+       선형으로 쌓여 게임에서 가장 큰 소리가 됐다(legendary 단독의 약 9배). */
+    if(type==='coin'){
+      if(t===_coinAt){ _coinN++;
+        if(_coinG && _coinN<=8){ const gv=0.04*vol*Math.min(3,1+Math.log2(_coinN)); _coinG.gain.cancelScheduledValues(t); _coinG.gain.setValueAtTime(gv,t); _coinG.gain.exponentialRampToValueAtTime(0.0001,t+0.05); }
+        return; }
+      _coinAt=t; _coinN=1;
+    }
+    const o=_actx.createOscillator(), g=_actx.createGain(); o.connect(g); g.connect(_abus||_actx.destination);
+    /* bossdown: 홈·던전 우두머리 처치 — 종전엔 legendary 음을 써서 레전더리 제작·+5 강화·세트 발동의 희소성이 흐려졌다(45초 사냥에 3회). */
     const P={ hit:[220,0.06,'square',0.05], crit:[440,0.09,'square',0.08], craft:[520,0.16,'triangle',0.12], fail:[150,0.2,'sawtooth',0.1],
       summon:[330,0.26,'sine',0.09], legendary:[660,0.45,'triangle',0.14], coin:[880,0.05,'square',0.04], tap:[300,0.03,'square',0.035],
-      awaken:[520,0.3,'sine',0.12], win:[440,0.2,'triangle',0.11], boss:[92,0.16,'sine',0.22] };
+      awaken:[520,0.3,'sine',0.12], win:[440,0.2,'triangle',0.11], boss:[92,0.16,'sine',0.22], bossdown:[196,0.3,'triangle',0.13] };
     const p=P[type]||P.tap; o.type=p[2]; o.frequency.setValueAtTime(p[0],t);
     if(type==='craft'||type==='legendary'||type==='awaken'||type==='win') o.frequency.exponentialRampToValueAtTime(p[0]*2,t+p[1]);
-    if(type==='fail'||type==='boss') o.frequency.exponentialRampToValueAtTime(p[0]*0.5,t+p[1]);
+    if(type==='fail'||type==='boss'||type==='bossdown') o.frequency.exponentialRampToValueAtTime(p[0]*0.5,t+p[1]);
     g.gain.setValueAtTime(p[3]*vol,t); g.gain.exponentialRampToValueAtTime(0.0001,t+p[1]);
+    if(type==='coin') _coinG=g;
     o.start(t); o.stop(t+p[1]+0.03);
   }catch(e){}
 }
@@ -3479,9 +3510,9 @@ const Battle = (()=>{
      그 블록엔 RNG가 전혀 없어(고정 수식) 결정론에는 영향 없다. */
   function onKill(m,mx,my,boss){
     combo++; comboT=1.5; if(comboPop<=0) comboPop=0.22;   // ★ v5.165: 콤보 — 1.5초 내 연속 처치
-    if(mode==='dungeon'&&dg){ dg.killed++; S.stats.kills++; dailyCount('kill'); sfx(boss?'legendary':'coin'); cosmetic(()=>addGold(ri(200,600))); return; } // 던전 보상은 결과창에서 일괄
+    if(mode==='dungeon'&&dg){ dg.killed++; S.stats.kills++; dailyCount('kill'); sfx(boss?'bossdown':'coin'); cosmetic(()=>addGold(ri(200,600))); return; } // 던전 보상은 결과창에서 일괄
     const t=tierDef();
-    S.stats.kills++; dailyCount('kill'); sfx(boss?'legendary':'coin');
+    S.stats.kills++; dailyCount('kill'); sfx(boss?'bossdown':'coin');
     /* ★ v5.145: 몬스터 도감 집계 — 표시 전용 상태라 시뮬레이션 되먹임 없음(위 stats.kills 와 동일 급).
        던전 모드는 함수 상단에서 return 되므로 홈 사냥 몬스터만 걸린다.
        ★ v5.149: 첫 조우(0→1)와 등급 전종 조우 순간을 토스트+sysLog 으로 축하한다.
@@ -7206,7 +7237,9 @@ const MODALS = {
       [1,2,3].forEach(st=>{
         const qty=Math.max(1,Math.round(DD_RQ[ti]/3*st));
         const rg=['N','R','E'][st-1];
-        const row=el('div','pack'); row.innerHTML=`<div class="pic">${mic}</div><div class="info"><div class="t">${mn} ${st}단계</div><div class="d">${md} · ${DD_ELM[ti]} 원소 재료(${GRADES[rg].name}) X${qty} <span class="mut">(등급 내 무작위)</span></div></div>`;
+        /* ★ 2026-09-25(워크플로 2차 #8): 그 등급 재료가 전부 보유 상한이면 보상이 0 이다 — 입장은 막지 않되(칭호 ddStage 경로) 미리 알린다. */
+        const capAll=matGradeCapped(rg);
+        const row=el('div','pack'); row.innerHTML=`<div class="pic">${mic}</div><div class="info"><div class="t">${mn} ${st}단계</div><div class="d">${md} · ${DD_ELM[ti]} 원소 재료(${GRADES[rg].name}) X${qty} <span class="mut">(등급 내 무작위)</span>${capAll?` <span class="warn">· 보유 상한 — 보상 없음</span>`:''}</div></div>`;
         const btn=el('button','btn sm'+(S.ticket>=1?' gold':''),'입장');
         btn.onclick=()=>{ if(busyFight())return;
           if(dailyLeft('daily',5)<=0){toast('오늘 입장 소진');return;}
@@ -7219,9 +7252,11 @@ const MODALS = {
             enterDungeonFight({ name:`정령의 시련 · ${mn} ${st}단계`, col:'#7fd0c0', foeCP:mi?Math.round(foe*0.85):foe,
               kind:'mobs', count:mi?14:(6+st*4), dur:mi?22:25,
               rewardText:`${DD_ELM[ti]} 원소 재료(${GRADES[rg].name}) X${qty}`,
-              reward:()=>{ matGainGrade(rg, qty);   // ★ v4.5.1: 등급풀 폐지 후 실제 재료로 지급(구: S.mats[rg] → NaN)
+              /* ★ 2026-09-25(#8): 실제 증가분으로 기록한다 — 종전엔 상한에 걸려 0 을 받아도 '+qty' 로 찍혔다(결과창 제목·문구도 성공·수량을 약속). */
+              reward:()=>{ const g0=matGradeTotal(rg); matGainGrade(rg, qty); _ddGot=matGradeTotal(rg)-g0;   // ★ v4.5.1: 등급풀 폐지 후 실제 재료로 지급(구: S.mats[rg] → NaN)
                 S.stats.ddStage=Math.max(S.stats.ddStage||0, st);   // ★ F2 칭호 '노련한 사냥꾼'(요일던전 2단계 클리어)
-                sysLog(`정령의 시련 ${mn} ${st}단계 클리어 · ${GRADES[rg].name} 재료 +${qty}`); } });
+                sysLog(`정령의 시련 ${mn} ${st}단계 클리어 · ${_ddGot>0?`${GRADES[rg].name} 재료 +${_ddGot}${_ddGot<qty?` (보유 상한으로 ${qty-_ddGot}개 미획득)`:''}`:`${GRADES[rg].name} 재료 보유 상한 — 미획득`}`); },
+              capNote:()=>_ddGot===0 });
           }, { title:`${mn} ${st}단계`, sub:`${DD_ELM[ti]} 원소 · 입장권 1개 차감` });
         };
         row.appendChild(btn); b.appendChild(row);
@@ -7234,7 +7269,7 @@ const MODALS = {
        G-67 가로 스크롤 캐러셀(2~3장 노출) + 단계별 요구 재료 1/1/3/4/5개 소비 + 좌하단 '자동 입장' 원형 토글
        G-68 지급액 50만 / 150만 / 500만 / 1000만 / 1500만 (v4.1 A1-1 실측 확정, GOLD_DUNGEON 주석 참조) */
   golddungeon:{ title:'골드던전', render(b){
-    b.appendChild(el('div','hint',`황금 용광로 — 단계 1~5, 고정 골드 지급. 일일 3회 (오늘 남은 ${dailyLeft('gold',3)}/3)`));
+    b.appendChild(el('div','hint',`황금 용광로 — 단계 1~5, 고정 골드 지급. 일일 3회 (오늘 남은 ${dailyLeft('gold',3)}/3) · 🪪 골드던전권 ${fmt(S.goldTicket|0)}장 — 3회를 다 쓴 뒤 1장당 1회 추가 입장`));
     const car=el('div','gd-carousel');
     GOLD_DUNGEON.forEach(d=>{
       const have=matAvail(d.mat), ok=have>=d.need;
@@ -7251,7 +7286,7 @@ const MODALS = {
     const ab=el('button','gd-auto'+(S.goldAuto?' on':''),`⟳<span>자동<br>입장</span>`);
     ab.onclick=()=>{ S.goldAuto=!S.goldAuto; toast(`자동 입장 ${S.goldAuto?'ON':'OFF'}`); openModal('golddungeon'); };
     row.appendChild(ab);
-    row.appendChild(el('div','small mut','자동 입장을 켜면 전투가 끝난 뒤 같은 단계로 다시 입장합니다 (재료·횟수가 남아 있을 때만).'));
+    row.appendChild(el('div','small mut','자동 입장을 켜면 전투가 끝난 뒤 같은 단계로 다시 입장합니다 (재료·일일 횟수가 남아 있을 때만 — 골드던전권은 쓰지 않습니다).'));
     b.appendChild(row);
   }},
 
@@ -9207,6 +9242,7 @@ function resolveCraft(forceSuccess){
     }
   }
   S.craft=null;
+  const gStep0=S.guideStep;   // #7(2차): 길잡이 단계를 이번 제작으로 넘겼는지 판정용
   let ne=null;
   if(ok){ ne={ grade, slot, enh:0, equipped:false }; S.equips.push(ne); sysLog(`${gradeBadge(grade)} ${slot} 제작 성공`);
     /* ★ v5.211: 곡괭이 획득 플래그 — 칭호 '견습 광부증/숙련 광부'의 조건이 '오래된/찬란한 곡괭이
@@ -9231,7 +9267,12 @@ function resolveCraft(forceSuccess){
   /* ★ 2026-09-25(워크플로 #17): 결과 팝업 뒤 잔상 — 대장간이면 '제작 중 · 남은 시간'·즉시완성 버튼이, 홈에서 자연 완료면 closeModal 이 비우지 않은
      마지막 모달 본문(예: 상점)이 팝업 뒤에 비쳤다(검증 실측). 대장간이거나 모달이 닫혀 있으면 대장간을 새로 그린 뒤 띄운다.
      다른 모달을 보고 있는 중이면 그 화면을 빼앗지 않는다(종전대로 그 위에 띄움 — [확인]이 대장간으로 보낸다). */
-  if(!currentModal || currentModal==='forge') openModal('forge', slot);
+  /* ★ 2026-09-25(워크플로 2차 #7): 길잡이 단계를 이번 제작으로 넘겼으면 대장간은 **다음 목표**로 연다. v5.151 의 '같은 아이템 유지'는
+     실패 후 재도전용이다 — 넘긴 직후에도 유지하면 필요 골드 150만→5,000 짜리 비길잡이 [제작]이 주 버튼이 되어 무관한 제작이 슬롯을 차지했고,
+     실제 진행엔 ✕→[바로가기]→[제작]→[제작 시작] 4탭이 8단계 내내 반복됐다(실측). */
+  const gNext = (ok && S.seenTutorial && S.guideStep>gStep0 && guideTarget()) ? guideTarget().slot : null;
+  const fSlot = gNext || slot;
+  if(!currentModal || currentModal==='forge') openModal('forge', fSlot);
   const G=GRADES[grade]; const b=subBody(ok?'제작 성공':'제작 결과', {noX:true});   // ★ v5.1 대장간 위 오버레이
   /* 연출 크기 = 희소성(v5.190 원칙): N·R 은 제목 팝만, E 는 보라 광선(작게), L 은 금 광선(+legendaryFlash). 실패는 흔들림. */
   const rays = grade==='L' ? '<div class="rc-rays"></div>' : grade==='E' ? '<div class="rc-rays rr-e"></div>' : '';
@@ -9265,15 +9306,15 @@ function resolveCraft(forceSuccess){
       Battle.refreshParty(); refreshHUD(); save(); };
     b.appendChild(eqb);
   }
-  const again=el('button','btn'+(canEq?'':' gold')+' wide','다시 제작'); again.style.marginTop=canEq?'6px':'10px';   // 장착이 주 행동일 땐 금색을 양보
+  const again=el('button','btn'+((canEq||gNext)?'':' gold')+' wide','다시 제작'); again.style.marginTop=canEq?'6px':'10px';   // 장착·다음 길잡이가 주 행동일 땐 금색을 양보
   again.onclick=()=>{ closeSub();
     const sdef=FORGE_SLOTS.find(s=>s.k===cat);
     const it=(sdef&&sdef.items&&sdef.items[grade]||[]).find(x=>x.n===slot);
     if(it) craftStart(grade, cat, it);
     else openModal('forge', slot); };
   b.appendChild(again);
-  const btn=el('button','btn wide','확인'); btn.style.marginTop='6px';
-  btn.onclick=()=>{ closeSub(); openModal('forge', slot); }; b.appendChild(btn);
+  const btn=el('button','btn'+((gNext && !canEq)?' gold':'')+' wide', gNext ? `다음 길잡이 · ${gNext} ▶` : '확인'); btn.style.marginTop='6px';
+  btn.onclick=()=>{ closeSub(); openModal('forge', fSlot); }; b.appendChild(btn);
   $('#modal-root').classList.add('on'); currentModal='craftResult';
 }
 /* ★ v5.58: 제작 완성 시 중앙 강제 팝업 (완성되면 알림 팝업이 중앙에 뜨는 설계). */
@@ -9733,22 +9774,29 @@ function grantWorldBossReward(){
 function wbScoreOf(st){ return Math.max(1, Math.round((st&&st.kills)||0)); }
 /* ★ B5/G-67: 골드던전 입장 — 재료·횟수 체크 → styledConfirm → 차감.
    auto=true 는 '자동 입장' 연전 경유(확인창 생략). 재입장에 성공하면 true 를 돌려준다. */
+/* ★ 2026-09-25(워크플로 2차 #1): 골드던전권(S.goldTicket) 실제 사용 — 루비 상점 'X10(골드던전 10회)·X30' 과 광고 보상으로 팔고
+   방치 정산 화면에도 보이는데, 입장 관문은 일일 3회와 재료만 봐서 **쓰는 곳이 0**이었다(과금 후 무지급). v5.330 원칙(약속을 지운 게 아니라 지킨다, U1)대로:
+   일일 3회를 다 쓴 뒤 권 1장당 1회 추가 입장. ⚠ 자동 입장 연전은 일일 횟수 안에서만 — 권을 연달아 태우지 않는다(자동 입장 안내와 정합).
+   배지·길잡이 표시(dailyLeft('gold',3))는 권 보유를 반영하지 않는다(모험 배지 원칙과 같음). */
 function enterGoldDungeon(d, auto){
   if(busyFight()) return false;
-  if(dailyLeft('gold',3)<=0){ if(!auto) toast('오늘 입장 3회 소진'); return false; }
+  const needTk = dailyLeft('gold',3)<=0;
+  if(needTk && (auto || !((S.goldTicket|0)>0))){ if(!auto) toast('오늘 입장 3회 소진 · 골드던전권 없음'); return false; }
   if(matAvail(d.mat)<d.need){ if(!auto) toast(`${d.mat} ${d.need}개 필요 (보유 ${matAvail(d.mat)})`); return false; }
   const go=()=>{
-    if(dailyLeft('gold',3)<=0){ toast('오늘 입장 3회 소진'); return; }
+    const useTk = dailyLeft('gold',3)<=0;                     // [예] 시점 재조회(확인창이 떠 있는 사이 바뀐 경우)
+    if(useTk && !((S.goldTicket|0)>0)){ toast('골드던전권이 없습니다'); return; }
     if(matAvail(d.mat)<d.need){ toast('재료가 부족합니다'); return; }
-    matSpend(d.mat,d.need); dailyUse('gold');                  // ← 차감은 [예] 이후에만
+    matSpend(d.mat,d.need);                                    // ← 차감은 [예] 이후에만
+    if(useTk){ S.goldTicket=(S.goldTicket|0)-1; save(); } else dailyUse('gold');   // dailyUse 는 즉시 저장한다
     enterDungeonFight({ name:`황금 용광로 ${d.lv}단계`, col:'#e8b552', foeCP:d.foe, kind:'mobs', count:8+d.lv*2, dur:25,
       rewardText:`골드 +${fmt(d.gold)}`,
-      reward:()=>{ addGold(d.gold); sysLog(`골드던전 ${d.lv}단계 클리어 · 골드 +${fmt(d.gold)}`); },
-      autoNext:()=>S.goldAuto ? enterGoldDungeon(d,true) : false });
+      reward:()=>{ addGold(d.gold); sysLog(`골드던전 ${d.lv}단계 클리어 · 골드 +${fmt(d.gold)}${useTk?' (골드던전권)':''}`); },
+      autoNext:()=>(S.goldAuto && !useTk) ? enterGoldDungeon(d,true) : false });
   };
   if(auto){ go(); return true; }
   styledConfirm('입장 하시겠습니까?', go,
-    { title:`황금 용광로 ${d.lv}단계`, sub:`${matIcon(d.mat)} ${d.mat} ${d.need}개 소모 · 골드 ${fmt(d.gold)}` });
+    { title:`황금 용광로 ${d.lv}단계`, sub:`${matIcon(d.mat)} ${d.mat} ${d.need}개 소모 · 골드 ${fmt(d.gold)}${needTk?` · 🪪 골드던전권 1장 사용 (보유 ${fmt(S.goldTicket|0)})`:''}` });
   return true;
 }
 /* ★ B5/G-75: [교환] — 웨이브 도달 상자(S.towerBox)를 재료로 환전하는 서브 팝업 */
@@ -9788,7 +9836,7 @@ function towerExchange(){
      계열 키 = 이름의 ' · ' 앞부분에서 'N단계'를 뗀 것(단계마다 따로 세지 않는다 — 결과가 관람과 같으므로 누락 위험이 없다).
      기존 이용자는 이미 있는 최고 기록(탑·요일·미궁)으로 소급 인정.
    · 투기장(Battle.startDungeon 직접 호출)은 대상 아님 — _dgCfg 가 없으면 버튼이 뜨지 않는다. */
-let _dgCfg=null, _dgResultSfx=null, _dgLastBack=null;
+let _dgCfg=null, _dgResultSfx=null, _dgLastBack=null, _ddGot=-1;   // _ddGot: 요일던전 보상의 실제 재료 증가분(#8 상한 표시)
 const DG_BACK_OK = new Set(['dailydungeon','golddungeon','boss','worldboss','tower','embermaze','forgetrial','raid','conquest','guildRaid']);
 /* ★ 2026-09-25(리뷰 확정): 길드 레이드·점령전은 길드 모달 위 하위 오버레이(openSub)라 currentModal 은 'guild' 로 남는다 —
    currentModal 만 보면 'conquest' 항목은 한 번도 맞지 않는 죽은 항목이었고 두 콘텐츠 모두 홈으로 튕겼다.
@@ -9870,6 +9918,8 @@ function showDungeonResult(cfg, win, stats){
   b.appendChild(el('div','result-card rc-anim '+(win?'rc-win':'rc-lose'),`<div class="rc-icon">${win?'<div class="rc-rays"></div>':''}${win?eImg("🎉",2):(cfg.race?'🐉':'💥')}</div><div class="rc-title ${win?'win':'lose'}">${title}</div>
     <div class="small mut">${rewarded?(cfg.rewardText||'보상 획득'):'부대가 전멸했습니다. 더 강해진 후 재도전하세요.'}${stats&&stats.dmg?` · 누적 데미지 ${fmt(stats.dmg)}`:''}</div>`));
   if(cfg.resultExtra) cfg.resultExtra(b, win, stats||{});
+  // ★ 2026-09-25(워크플로 2차 #8): 보상이 전부 보유 상한에 막혀 0 이면 이유를 적는다 — 종전엔 '도전 성공! … X15' 만 있고 칩이 없어 버그처럼 보였다.
+  if(rewarded && !_gains.length && cfg.capNote && cfg.capNote()) b.appendChild(el('div','center small warn','재료 보유 상한 도달 — 이번 보상은 받지 못했습니다 (인벤토리에서 제작·합성으로 소비하세요)'));
   // ★ v4.5.1: 실제 획득물 칩 — 예고 문구가 아니라 이번 판에 실제로 늘어난 것만 보여준다.
   if(_gains.length){
     const gw=el('div','dg-gain');
@@ -9917,7 +9967,12 @@ function gameLoop(ts){
   hudT-=dt; if(hudT<=0){ hudT=0.5; refreshHUD(); tickClock(); tickForge(); reviveHUDTick(); tickDgSkip(); syncGuideBannerFight(); }
   requestAnimationFrame(gameLoop);
 }
-setInterval(()=>{ save(); refreshClaimBadges(); try{ updateGuideBanner(); }catch(e){} }, 5000);   // ★ 2026-09-25: 골드가 차면 배너가 '부족'에서 원래대로(글자는 바뀔 때만 씀)   /* ★ v5.162: 배지 갱신 동반 — 전투 중 미션 달성도 5초 안에 점이 켜진다 */
+/* ★ 2026-09-25(워크플로 2차 #13): 주·월 롤오버를 5초 주기에서도 잡는다 — v5.272 는 접속 시점만 잡아, 창을 켠 채 월요일 0시·매월 1일 0시를 넘기면
+   퀘스트 탭을 열기 전까지 새 주·월 스냅샷이 없어 그 사이 처치·도전이 의뢰(축제 포함)에서 빠졌다(실측: 밤새 3,005킬 증발).
+   _loopOn(홈 진입 뒤에만 true) + 보이는 동안만 — 숨김 중엔 rAF 가 멈춰 진행이 쌓이지 않으므로 복귀 첫 틱에 잡아도 손실이 없다.
+   rollDaily 에 넣지 않는 이유: load 중에도 불려 타이틀에서 알림이 사라지고 시뮬·smoke 경로에 부작용이 섞인다. 멱등(키가 같으면 무동작).
+   refreshClaimBadges 보다 앞 — 같은 틱의 배지가 새 주 기준으로 판정된다. 월 경계 탑 정산 알림도 이 세션에 뜬다(flushLoginToasts). */
+setInterval(()=>{ if(_loopOn && !document.hidden){ try{ weeklyState(); monthlyState(); flushLoginToasts(); }catch(e){} } save(); refreshClaimBadges(); try{ updateGuideBanner(); }catch(e){} }, 5000);   // ★ 2026-09-25: 골드가 차면 배너가 '부족'에서 원래대로(글자는 바뀔 때만 씀)   /* ★ v5.162: 배지 갱신 동반 — 전투 중 미션 달성도 5초 안에 점이 켜진다 */
 /* ★ v5.173: 백그라운드 탭 복귀 정산 — rAF 는 백그라운드에서 스로틀돼 방치 수입이 멈추는데,
    5초 저장 타이머는 살아 있어 lastSeen 이 계속 갱신된다 → 숨김 구간은 오프라인 정산
    (computeOffline, 세션 로드 시 1회)에도 못 들어가 완전히 증발했다.
