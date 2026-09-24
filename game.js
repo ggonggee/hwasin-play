@@ -9276,7 +9276,9 @@ function showDungeonResult(cfg, win, stats){
   setModalTitle(cfg.name); const b=$('#modalBody'); b.innerHTML='';
   // ★ v4.8: race 던전(탑·월드보스·길드레이드) 결과창 제목은 3곳 모두 '결과' 로 통일한다('전투 종료' 는 쓰지 않는다)
   const title = win?'도전 성공!':(cfg.race?'결과':'도전 실패');
-  b.appendChild(el('div','result-card',`<div class="rc-icon">${win?eImg("🎉",2):(cfg.race?'🐉':'💥')}</div><div class="rc-title ${win?'win':'lose'}">${title}</div>
+  /* ★ 2026-09-25: 결과 연출 — 승리는 제목 팝+광선, 획득 칩은 90ms 간격으로 튀어 오른다(rc-anim·dg-chip 지연). 패배는 짧은 흔들림.
+     3초 자동 퇴장(G-80 결정)은 그대로 — 움직임만 더한다. */
+  b.appendChild(el('div','result-card rc-anim '+(win?'rc-win':'rc-lose'),`<div class="rc-icon">${win?'<div class="rc-rays"></div>':''}${win?eImg("🎉",2):(cfg.race?'🐉':'💥')}</div><div class="rc-title ${win?'win':'lose'}">${title}</div>
     <div class="small mut">${rewarded?(cfg.rewardText||'보상 획득'):'부대가 전멸했습니다. 더 강해진 후 재도전하세요.'}${stats&&stats.dmg?` · 누적 데미지 ${fmt(stats.dmg)}`:''}</div>`));
   if(cfg.resultExtra) cfg.resultExtra(b, win, stats||{});
   // ★ v4.5.1: 실제 획득물 칩 — 예고 문구가 아니라 이번 판에 실제로 늘어난 것만 보여준다.
@@ -9284,7 +9286,7 @@ function showDungeonResult(cfg, win, stats){
     const gw=el('div','dg-gain');
     gw.appendChild(el('div','dg-gain-h','획득'));
     const row=el('div','dg-gain-row');
-    _gains.forEach(g=>row.appendChild(el('div','dg-chip',`${eImg(g.ic,1.5)} ${g.nm} <b>+${fmt(g.d)}</b>`)));
+    _gains.forEach((g,i)=>{ const c=el('div','dg-chip dg-pop',`${eImg(g.ic,1.5)} ${g.nm} <b>+${fmt(g.d)}</b>`); c.style.animationDelay=(250+i*90)+'ms'; row.appendChild(c); });
     gw.appendChild(row); b.appendChild(gw);
   }
   // ★ B5/G-80: [확인] 버튼과 3초 자동퇴장이 병존하던 구조 → 버튼 제거, 안내 텍스트만 남긴다.
