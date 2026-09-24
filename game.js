@@ -1878,6 +1878,20 @@ function pickN(arr, n){
 function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
 function toast(msg){ const box=$('#toast'); const t=el('div','toast',msg); box.appendChild(t); setTimeout(()=>t.remove(), 1900); }
 
+/* ★ 2026-09-25: 우두머리 등장 경고 배너 — 종전엔 토스트 한 줄('👑 … 출현!')이라 일반 알림과 구분이 안 됐다.
+   가장자리 붉은 비네트 + 전장 중앙을 가로지르며 펼쳐지는 띠(이름) + 낮은 이중 타격음. 1.4초 뒤 스스로 사라진다.
+   순수 DOM 연출 — 전투 상태·시드 난수를 건드리지 않는다(던전 결정론 경로에서도 불리지만 해시와 무관).
+   연출 문법(경고 띠·비네트·타이밍)만 참고했고 문구·모양은 자체 조어다. */
+function bossBanner(name, col){
+  const host=$('#stage-wrap'); if(!host) return;
+  host.querySelectorAll('.boss-banner').forEach(n=>n.remove());
+  const b=el('div','boss-banner', `<div class="bb-vig"></div><div class="bb-band"><div class="bb-line"></div>`
+    + `<div class="bb-t">⚠ 우두머리 출현</div><div class="bb-n"></div><div class="bb-line"></div></div>`);
+  const n=b.querySelector('.bb-n'); if(n){ n.textContent=String(name||''); if(col) n.style.setProperty('--bc', col); }
+  host.appendChild(b);
+  setTimeout(()=>{ try{ b.remove(); }catch(e){} }, 1500);
+  sfx('boss'); setTimeout(()=>sfx('boss'), 170);
+}
 /* ---- SFX (Web Audio 합성음, 외부 파일 없음) ---- */
 let _actx=null;
 function initAudio(){ if(_actx) return; try{ _actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} }
@@ -1890,10 +1904,10 @@ function sfx(type){
     const t=_actx.currentTime, o=_actx.createOscillator(), g=_actx.createGain(); o.connect(g); g.connect(_actx.destination);
     const P={ hit:[220,0.06,'square',0.05], crit:[440,0.09,'square',0.08], craft:[520,0.16,'triangle',0.12], fail:[150,0.2,'sawtooth',0.1],
       summon:[330,0.26,'sine',0.09], legendary:[660,0.45,'triangle',0.14], coin:[880,0.05,'square',0.04], tap:[300,0.03,'square',0.035],
-      awaken:[520,0.3,'sine',0.12], win:[440,0.2,'triangle',0.11] };
+      awaken:[520,0.3,'sine',0.12], win:[440,0.2,'triangle',0.11], boss:[92,0.16,'sine',0.22] };
     const p=P[type]||P.tap; o.type=p[2]; o.frequency.setValueAtTime(p[0],t);
     if(type==='craft'||type==='legendary'||type==='awaken'||type==='win') o.frequency.exponentialRampToValueAtTime(p[0]*2,t+p[1]);
-    if(type==='fail') o.frequency.exponentialRampToValueAtTime(p[0]*0.5,t+p[1]);
+    if(type==='fail'||type==='boss') o.frequency.exponentialRampToValueAtTime(p[0]*0.5,t+p[1]);
     g.gain.setValueAtTime(p[3]*vol,t); g.gain.exponentialRampToValueAtTime(0.0001,t+p[1]);
     o.start(t); o.stop(t+p[1]+0.03);
   }catch(e){}
@@ -2652,8 +2666,8 @@ const Battle = (()=>{
        (화면 밖)에서 vx:-10 으로 걸어 들어오는 동안 보이기도 전에 처치되곤 했다.
        중앙 즉시 배치+정지(vx:0)하고 등장을 알린다(홈 군주와 같은 어휘 — 흔들림·음·토스트).
        위치만 바꾸므로 스폰 RNG 소비 불변(결정론 보존). */
-    shake=Math.max(shake,0.35); sfx('legendary');
-    toast(`👑 <b style="color:${dg.col}">${dg.name}</b> 출현!`);
+    shake=Math.max(shake,0.35);
+    bossBanner(dg.name, dg.col);   // ★ 2026-09-25: 토스트 → 경고 배너(DOM 전용 — 결정론 무관)
     mobs.push({ name:dg.name, col:dg.col, boss:true, shape:'boss', img, x:W*0.62, y:H*0.45, vx:0, hpMax:hp, hp:hp, r:36, flash:0, atkT:bRnd(0.8,1.4) });   /* ★ M1: 시드 RNG */
   }
   function spawnMob(boss){
@@ -2674,8 +2688,8 @@ const Battle = (()=>{
          보스 처치 연발(shake 0.3 + 불꽃 12발)과 같은 어휘로 맞춘다.
          이 분기는 홈 전용이다(던전은 spawnDgBoss, soloSurvival 은 spawnMob() 무인자) —
          M1 결정론 검사(D1~D5)가 돌리는 던전 경로에 영향 없음. */
-      shake=Math.max(shake,0.35); sfx('legendary');
-      toast(`👑 <b style="color:${t.c}">${t.n} 군주</b> 출현!`);
+      shake=Math.max(shake,0.35);
+      bossBanner(t.n+' 군주', t.c);   // ★ 2026-09-25: 토스트 → 경고 배너
       return;
     }
     const cx=W*HERO_CENTER_X, cy=H*HERO_CENTER_Y;

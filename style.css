@@ -1453,6 +1453,24 @@ body{
   background:linear-gradient(180deg,#8d3036,#5e1f24); border:1px solid #c05a60; color:#ffe9e5; }
 #errbar button:active{ filter:brightness(1.3); }
 
+/* ★ 2026-09-25: 우두머리 등장 경고 배너 (game.js bossBanner) — 1.4초 타임라인:
+   0~0.14초 비네트·띠 펼침(scaleX 0→1) → 유지 → 1.05초부터 페이드. 전장(#stage-wrap) 안, STEP 박스(z9) 아래.
+   pointer-events:none — 연출이 조작을 막으면 안 된다. */
+.boss-banner{ position:absolute; inset:0; z-index:8; pointer-events:none; overflow:hidden; }
+.boss-banner .bb-vig{ position:absolute; inset:0; box-shadow:inset 0 0 70px 24px rgba(200,30,20,.55);
+  animation:bbVig 1.4s ease-out forwards; }
+@keyframes bbVig{ 0%{ opacity:0; } 10%{ opacity:1; } 70%{ opacity:.75; } 100%{ opacity:0; } }
+.boss-banner .bb-band{ position:absolute; left:0; right:0; top:36%; padding:6px 0 7px; text-align:center;
+  background:linear-gradient(90deg, transparent, rgba(0,0,0,.78) 14%, rgba(0,0,0,.78) 86%, transparent);
+  transform-origin:50% 50%; animation:bbBand 1.4s cubic-bezier(.2,.9,.3,1) forwards; }
+@keyframes bbBand{ 0%{ transform:scaleX(0); opacity:1; } 13%{ transform:scaleX(1); } 75%{ opacity:1; } 100%{ transform:scaleX(1); opacity:0; } }
+.boss-banner .bb-t{ font-size:var(--fs-xs); font-weight:800; letter-spacing:.32em; color:#ffb4a0; }
+.boss-banner .bb-n{ margin-top:1px; font-size:26px; font-weight:900; letter-spacing:.1em; color:var(--bc, #ff5a3c);
+  text-shadow:0 0 2px #000, 0 2px 0 #000, -1px 0 0 #000, 1px 0 0 #000, 0 0 14px rgba(255,90,60,.55);
+  animation:bbName 1.4s ease-out forwards; }
+@keyframes bbName{ 0%{ transform:scale(1.5); opacity:0; } 16%{ transform:scale(1); opacity:1; } 100%{ transform:scale(1); } }
+.boss-banner .bb-line{ height:2px; width:72%; margin:3px auto; background:linear-gradient(90deg, transparent, #ff5a3c, transparent); }
+
 /* ★ 2026-09-24: 다중 창 잠금 화면 (game.js loseTab). 저장을 멈춘 창이 계속 플레이되는 것처럼 보이면
    이용자는 여기서 한 진행이 사라지는 걸 나중에야 안다 — 그래서 화면 전체를 덮어 조작 자체를 막는다.
    오류 띠(#errbar 70)보다도 위: 잠긴 창에서는 어떤 조작도 의미가 없다. */
