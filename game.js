@@ -3187,8 +3187,9 @@ const Battle = (()=>{
     // ★ 설계 규칙: 전멸하면 "이전 단계"가 아니라 최하급 몬스터 맵으로 후퇴한다.
     //   방치하다 죽으면 저레벨 몹을 비효율로 사냥하게 되고, 유저가 직접 다시 세팅해야 한다.
     if(old>0){ S.huntTier=0;
-      toast(`부대 전멸! 최하급 사냥터(${HUNT_TIERS[0].n})로 후퇴 — 몬스터를 다시 선택하세요`);
+      toast(`부대 전멸 — ${HUNT_TIERS[0].n}(최하급)로 후퇴`);   // 무엇을 할지는 곧 뜨는 '전멸 분석' 패널이 안내한다(queueWipeAdvice)
       sysLog(`부대 전멸 · <span style="color:#e2504a">${HUNT_TIERS[old].n}</span> 실패 → <b>${HUNT_TIERS[0].n}(최하급)</b>으로 후퇴. 재세팅 필요`);
+      try{ queueWipeAdvice(old); }catch(e){}   // ★ 2026-09-25: 정체 계단 패널(DOM 전용 — 전투 상태 무관)
     } else toast('부대 전멸! 잠시 후 부활합니다');
     setTimeout(()=>{ if(mode==='dungeon') return; heroes.forEach(h=>{ h.dead=false; h.hp=1; h.respT=0; }); wave=1; }, 2400);
   }
@@ -4894,7 +4895,68 @@ function openModal(key, arg){   // ★ B3/G-45: arg 전달 (예: openModal('equi
   if(!same) tutorialProgress(key);
 }
 let _introActive=false;
-function closeModal(){ closeSub(); $('#modal-root').classList.remove('on'); currentModal=null; if(_introActive){ _introActive=false; startGuidedTutorial(); } tutFingerTick(); }
+function closeModal(){ closeSub(); $('#modal-root').classList.remove('on'); currentModal=null; if(_introActive){ _introActive=false; startGuidedTutorial(); } tutFingerTick();
+  if(_wipePending!==null){ const t=_wipePending; _wipePending=null; setTimeout(()=>{ if(!currentModal) showWipeAdvice(t); }, 250); } }
+/* ★ 2026-09-25: 정체 계단 패널 — 홈 사냥 전멸 시 "왜 졌나(권장 대비 부족분)" 와 "무엇으로 풀리나(수단 3개의 전투력 +N)" 를
+   숫자로 보여준다. 종전엔 토스트 한 줄 뒤 최하급으로 후퇴만 했다 — 무엇을 해야 다시 올라갈 수 있는지는 이용자가 알아서 찾아야 했다.
+   (설계 종합 1순위 P2: 자료의 강의 규칙집 140강 + 8게임 실측에서 가장 일관된 원칙 — '벽이 아니라 계단'. 구조만 차용)
+   · 수단의 전투력 증가는 heroPower 정본을 '잠깐 바꿔 계산하고 되돌리는' 가정 계산이다(heroPower 는 순수 함수).
+   · [안전 사냥터로] = 리더 전투력으로 권장을 넘는 가장 높은 사냥터 — 전멸 규칙(최하급 후퇴)은 그대로 두고 복귀 한 번을 줄여 준다.
+   · 다른 화면을 보고 있을 때 전멸하면 그 화면을 빼앗지 않고, 닫는 순간 띄운다(_wipePending). */
+let _wipePending=null;
+function queueWipeAdvice(tier){ if(currentModal){ _wipePending=tier; return; } setTimeout(()=>{ if(!currentModal) showWipeAdvice(tier); else _wipePending=tier; }, 900); }
+function wipeRemedies(lead){
+  const base=heroPower(lead), out=[];
+  const pct=d=>base>0?(d/base*100):0;
+  // ① 리더 레벨 +10 (레벨업 비용 = 현재 레벨 × 80,000 골드 — heroDetail 과 같은 식)
+  { const lv=lead.level||1, up=heroPower(Object.assign({}, lead, {level:lv+10})); let cost=0; for(let k=lv;k<lv+10;k++) cost+=k*80000;
+    out.push({ ic:'📈', t:`리더 레벨 +10 (Lv ${lv} → ${lv+10})`, d:up-base, p:pct(up-base), cost:`골드 ${fmt(cost)}`, can:S.gold>=cost,
+      go:()=>{ closeModal(); openModal('hero'); heroDetail(lead.hero_id); } }); }
+  // ② 착용 장비 강화 +1 — 안전 구간(+10 미만) 중 가장 효율 좋은 한 부위
+  { const mine=S.equips.filter(e=>e.equipped && (!e.heroId || e.heroId===lead.hero_id) && (e.enh||0)<10);
+    let best=null;
+    for(const e of mine){ const e0=e.enh||0; e.enh=e0+1; let v; try{ v=heroPower(lead); } finally { e.enh=e0; }
+      const cost=[50000,300000,1500000,6000000,20000000][Math.min(4,Math.floor(e0/5))];
+      if(!best || (v-base)/cost > best.r){ best={ e, d:v-base, r:(v-base)/cost, cost }; } }
+    if(best) out.push({ ic:'🔨', t:`${best.e.slot} 강화 +${(best.e.enh||0)+1}`, d:best.d, p:pct(best.d), cost:`골드 ${fmt(best.cost)}`, can:S.gold>=best.cost,
+      go:()=>{ closeModal(); openModal('inventory'); openEnhance(best.e); } }); }
+  // ③ 빈 부위 채우기 — 10부위 중 비어 있는 곳에 일반 장비 한 점을 입혔을 때
+  { const worn=new Set(S.equips.filter(e=>e.equipped && (!e.heroId || e.heroId===lead.hero_id)).map(e=>slotKeyOf(e.slot)));
+    const empty=Math.max(0, 10-worn.size);
+    if(empty>0){ const fake={ grade:'N', slot:'', enh:0, equipped:true, heroId:lead.hero_id, _qa:1 }; S.equips.push(fake); let v;
+      try{ v=heroPower(lead); } finally { S.equips.splice(S.equips.indexOf(fake),1); }
+      out.push({ ic:'⚒️', t:`빈 부위 ${empty}곳 — 장비 제작·착용 (1점당)`, d:v-base, p:pct(v-base), cost:'대장간', can:true,
+        go:()=>{ closeModal(); openModal('forge'); } }); } }
+  return out.filter(r=>r.d>0).sort((a,b)=>b.d-a.d).slice(0,3);
+}
+function showWipeAdvice(tier){
+  const t=HUNT_TIERS[tier]; const lead=party()[0]||ownedHeroes()[0]; if(!t || !lead) return;
+  const cp=heroPower(lead), gap=Math.max(0,t.cp-cp);
+  let safe=0; HUNT_TIERS.forEach((x,i)=>{ if(x.cp<=cp) safe=i; });
+  setModalTitle('전멸 분석');
+  const b=$('#modalBody'); b.innerHTML='';
+  b.appendChild(el('div','wa-head',`<div class="wa-t"><span style="color:${t.c}">${t.n}</span> 사냥 실패</div>`
+    + `<div class="wa-cmp">권장 <b>${fmt(t.cp)}</b> · 내 출격 영웅 <b class="bad">${fmt(cp)}</b></div>`
+    + `<div class="wa-bar"><i style="width:${Math.min(100, Math.round(cp/t.cp*100))}%"></i></div>`
+    + `<div class="wa-gap">${gap>0?`권장까지 <b>${fmt(gap)}</b> 부족 (${Math.round(cp/t.cp*100)}%)`:'권장은 넘었지만 운이 나빴습니다 — 조금만 더 강해지면 안정됩니다'}</div>`));
+  const rs=wipeRemedies(lead);
+  if(rs.length){
+    b.appendChild(el('div','wa-sub','지금 할 수 있는 것'));
+    rs.forEach(r=>{ const row=el('div','wa-row'+(r.can?'':' dim'),
+      `<div class="wa-ic">${r.ic}</div><div class="wa-info"><div class="wa-rt">${r.t}</div><div class="wa-rd">전투력 <b>+${fmt(r.d)}</b> <span class="ok">(+${r.p.toFixed(1)}%)</span> · ${r.cost}</div></div>`);
+      const go=el('button','btn sm'+(r.can?' gold':''),'가기'); go.onclick=()=>{ sfx('tap'); r.go(); }; row.appendChild(go); b.appendChild(row); });
+    if(gap>0){ const sum=rs.reduce((a,r)=>a+r.d,0), k=['','한','두','세'][rs.length]||String(rs.length);
+      b.appendChild(el('div','wa-note', sum>=gap ? `위 ${k} 가지를 모두 하면 권장 전투력에 닿습니다.` : `위 ${k} 가지로 부족분의 ${Math.round(sum/gap*100)}% 를 메울 수 있습니다 — 나머지는 아래 안전 사냥터에서 성장하며 채우세요.`)); }
+  }
+  const row=el('div','btnrow'); row.style.marginTop='10px';
+  const sf=HUNT_TIERS[safe];
+  const go=el('button','btn gold wide', `안전 사냥터로 — ${sf.n}`);
+  go.onclick=()=>{ S.huntTier=safe; Battle.setHunt(); sfx('tap'); toast(`${sf.n} 사냥 — 리더 전투력으로 안정 사냥`); closeModal(); refreshHUD(); save(); };
+  const cl=el('button','btn wide','닫기'); cl.onclick=()=>closeModal();
+  row.append(go, cl); b.appendChild(row);
+  iconizeEmoji(b);
+  $('#modal-root').classList.add('on'); currentModal='wipeAdvice';
+}
 function gradeBadge(g){ const G=GRADES[g]; return `<span style="color:${G.color};font-weight:700">${G.name}</span>`; }
 
 /* ---------- [B2] 제작·합성 공용 헬퍼 ---------- */

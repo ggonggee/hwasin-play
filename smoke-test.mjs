@@ -2253,6 +2253,26 @@ step('세이브·입력 문자열 HTML 제거 — 가져오기 세이브 태그 
   ev('load')();
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ 2026-09-25: 정체 계단 패널 — wipeRemedies 는 heroPower 를 '잠깐 바꿔 계산하고 되돌리는' 가정 계산을 한다
+   (장비 강화 +1 을 e.enh 에 임시 반영, 빈 부위는 가짜 장비를 S.equips 에 임시 삽입). 되돌리기가 빠지면 버튼 하나 안 눌렀는데
+   장비가 강화되거나 유령 장비가 세이브에 박힌다 → 호출 전후 S.equips·전투력이 비트 단위로 같아야 한다. */
+step('전멸 분석 패널 — 가정 계산 무부작용·렌더', ()=>{
+  const errs=[], S=ev('S');
+  const keepEq=S.equips; S.equips=[{grade:'R', slot:'강철 검', enh:3, equipped:true, heroId:null}];
+  const lead=ev('party')()[0]||ev('ownedHeroes')()[0];
+  const snap=JSON.stringify(S.equips), cp0=ev('heroPower')(lead), g0=S.gold;
+  const rs=ev('wipeRemedies')(lead);
+  if(JSON.stringify(S.equips)!==snap) errs.push('S.equips 가 바뀌었다(되돌리기 누락)');
+  if(ev('heroPower')(lead)!==cp0) errs.push('전투력이 바뀌었다');
+  if(S.gold!==g0) errs.push('골드가 바뀌었다');
+  if(!rs.length) errs.push('수단이 0개');
+  if(rs.some(r=>!(r.d>0))) errs.push('전투력 증가 0 이하 수단 포함');
+  ev('showWipeAdvice')(5);
+  if(ev('currentModal')!=='wipeAdvice') errs.push('패널 미표시');
+  if(!collectText(ev("document.getElementById('modalBody')")).includes('권장')) errs.push('권장 비교 문구 없음');
+  ev('closeModal')(); S.equips=keepEq;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ 2026-09-24 회귀: 다중 창 세이브 덮어쓰기. 두 창이 세이브 하나를 번갈아 써서 새 창의 진행이 옛 창의
    자동저장으로 사라졌다(라이브: 999,999,999 → 6.5초 뒤 3,347). load 가 주도권을 잡고, 주도권을 잃은 창의
    save() 는 아무것도 쓰지 않고 잠기는지 본다. */
