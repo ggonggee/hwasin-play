@@ -2616,6 +2616,13 @@ step('상한 재화 보호 · 대장간 마지막 선택 · 레벨업 버튼 · 
   S.ticket=10; if(tk.soldOut() || ad.soldOut()) errs.push('입장권 여유 있는데 품절');
   S.gold=CAP-1000; if(!ex.soldOut()) errs.push('골드 상한 직전인데 루비 환전 가능');
   S.gold=1000; if(ex.soldOut()) errs.push('골드 여유 있는데 환전 품절');
+  // 리뷰(v5.359~360): 광고 골드 · 재료를 대가로 파는 곳(길드·재료상점·루비 패키지)도 상한이면 결제 전 막는다
+  const adG=ev('ADPOOL').find(x=>x.t==='골드 X500,000'); S.gold=CAP; if(!(adG.soldOut&&adG.soldOut())) errs.push('골드 상한인데 광고 골드 가능'); S.gold=1000; if(adG.soldOut()) errs.push('광고 골드 오판');
+  const mf=ev('matFull'), capN=ev('MAT_CAP').N, keepMat=S.mats['흑염석'];
+  S.mats['흑염석']=capN; if(!mf('흑염석',1)) errs.push('흑염석 상한 판정'); S.mats['흑염석']=capN-2; if(!mf('흑염석',5) || mf('흑염석',2)) errs.push('흑염석 부분 손실 판정');
+  const gsh=ev('GUILDSHOP').filter(x=>/흑염석|대장장이의 눈물/.test(x.t)); if(gsh.length!==3 || gsh.some(x=>typeof x.soldOut!=='function')) errs.push('길드상점 재료 soldOut 없음');
+  if(!/GUILDSHOP\.forEach\(it=> mkBuy\([^\n]*it\.soldOut\)\)/.test(js) || !/\(\)=>matFull\(m\.k,1\)/.test(js)) errs.push('길드·재료상점 호출부가 soldOut 을 넘기지 않음');
+  S.mats['흑염석']=keepMat;
   // 방치 정산 [수령]: 상한 근처면 여유만큼 · 나머지는 대기
   const room=ev('goldRoomBase'); S.gold=CAP-500000; S.offlinePending=10000000;
   const bx=new Node2('div'); ev('MODALS').settle.render(bx); const bt=findBtnByText(bx,'수령',true);

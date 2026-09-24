@@ -281,6 +281,9 @@ function matGain(k,n){
 function matGradeTotal(g){ return (MAT_BY_GRADE[g]||[]).reduce((a,m)=>a+(S.mats[m.k]||0),0); }
 // 그 등급 재료가 전부 보유 상한인가 — 대가를 받고 주는 경로(교환·보상)의 '무지급' 판정용.
 function matGradeCapped(g){ const pool=MAT_BY_GRADE[g]||[]; return pool.length>0 && pool.every(m=>(S.mats[m.k]||0)>=(MAT_CAP[g]||Infinity)); }
+/* 특정 재료 n 개를 '다 받을 수 없으면' 참 — 대가를 받고 재료를 주는 곳(길드·재료상점·루비 패키지·웨이브 상자)의 결제 전 판정(리뷰 v5.359~360 실측: 상한에서 코인·루비만 빠짐).
+   부분 손실도 막는다(흑염석 1998 에 X5 = +2 만 들어가던 것). */
+function matFull(k,n){ const m=MAT_BY_KEY[k]; return !!m && (S.mats[k]||0)+(n|0) > (MAT_CAP[m.g]||Infinity); }
 // 등급만 정해진 획득처(드랍·상점·보상)는 그 등급 재료 중 하나로 실체화한다.
 /* ★ 2026-09-25(#8): opt.avoidCap — 대가를 치른 교환(회색코인 등)은 상한이 아닌 재료로만 준다(전부 상한이면 null).
    기본(사냥 드랍 등)은 종전 균등 선택 그대로 — 유효 재료 유입이 바뀌면 시뮬 곡선이 바뀌므로 여기서 바꾸지 않는다. */
@@ -868,9 +871,9 @@ const MATSHOP = [
 /* ★ B7/G-95: 길드상점 11항목 (길드코인 S.guildCoin) */
 const GUILDSHOP = [
   { t:'주사위 X300',            ic:'🎲', cost:5000, give:()=>{ S.dice+=300; } },
-  { t:'대장장이의 눈물 X20',    ic:'💠', cost:3500, give:()=>{ matGain('대장장이의 눈물',20); } },
-  { t:'흑염석 X1',              ic:'🪨', cost:400,  give:()=>{ matGain('흑염석',1); } },
-  { t:'흑염석 X5',              ic:'🪨', cost:2000, give:()=>{ matGain('흑염석',5); } },
+  { t:'대장장이의 눈물 X20',    ic:'💠', cost:3500, give:()=>{ matGain('대장장이의 눈물',20); }, soldOut:()=>matFull('대장장이의 눈물',20) },
+  { t:'흑염석 X1',              ic:'🪨', cost:400,  give:()=>{ matGain('흑염석',1); }, soldOut:()=>matFull('흑염석',1) },
+  { t:'흑염석 X5',              ic:'🪨', cost:2000, give:()=>{ matGain('흑염석',5); }, soldOut:()=>matFull('흑염석',5) },
   { t:'영웅 소환서 X20',        ic:'📜', cost:200,  give:()=>{ S.tickHero+=20; } },
   { t:'재료 열쇠 X40',          ic:'🗝️', cost:200,  give:()=>{ S.tickMat+=40; } },
   { t:'망치 X20',               ic:'🔨', cost:200,  give:()=>{ S.hammerN=(S.hammerN||0)+20; } },
@@ -887,7 +890,7 @@ const ADPOOL = [
   { t:'투기장 입장권 X1',    ic:'🎫', give:()=>{ S.ticket=Math.min(30,S.ticket+1); }, soldOut:()=>(S.ticket|0)>=30 },   // 상한 30 — 광고 1회만 소모되고 무지급이던 것(2차 미검증 U5)
   { t:'재료 열쇠 X3',        ic:'🗝️', give:()=>{ S.tickMat+=3; } },
   { t:'망치 X3',             ic:'🔨', give:()=>{ S.hammerN=(S.hammerN||0)+3; } },
-  { t:'골드 X500,000',       ic:'🪙', give:()=>{ addGold(500000); } },
+  { t:'골드 X500,000',       ic:'🪙', give:()=>{ addGold(500000); }, soldOut:()=>goldRoomBase(500000,false)<500000 },   // 50억 근처 — 광고 1회만 소모·무지급인데 '획득' 토스트이던 것(리뷰 v5.359~360, U5 누락분)
 ];
 
 /* ★ B7/G-100: 버프 상점 6항목 (루비) */
@@ -914,7 +917,7 @@ const RUBYPKG = [
   { grp:'소량', t:'즉시 완성권 X20',      ic:'📃', cost:300,  d:'제작 즉시완성 20회분', give:()=>{ S.craftScroll+=20; } },
   { grp:'소량', t:'골드던전 입장권 X10',  ic:'🎟️', cost:300,  d:'골드던전 10회',       give:()=>{ S.goldTicket=(S.goldTicket||0)+10; } },
   { grp:'소량', t:'주사위 X10',           ic:'🎲', cost:300,  d:'주사위 10개',         give:()=>{ S.dice+=10; } },
-  { grp:'소량', t:'대장장이의 눈물 X40',  ic:'💠', cost:2800, d:'영웅 등급 재료 40개', give:()=>{ matGain('대장장이의 눈물',40); } },
+  { grp:'소량', t:'대장장이의 눈물 X40',  ic:'💠', cost:2800, d:'영웅 등급 재료 40개', give:()=>{ matGain('대장장이의 눈물',40); }, soldOut:()=>matFull('대장장이의 눈물',40) },
   // 대량 10
   { grp:'대량', t:'재료 열쇠 X800',       ic:'🗝️', cost:2800,  d:'재료 소환권 800장',   give:()=>{ S.tickMat+=800; } },
   { grp:'대량', t:'영웅 소환서 X800',     ic:'📜', cost:2800,  d:'영웅 소환권 800장',   give:()=>{ S.tickHero+=800; } },
@@ -1419,6 +1422,11 @@ const ATTEND_DAYS = [
 ];
 /* ★ B9/G-134: 공지 — 제목 밴드 + 양피지 서술형 본문 (목록 → 상세 2단) */
 const NOTICES = [
+  /* ★ v5.362: 리뷰(v5.359~360) — 재료·골드 상한에서 대가만 빠지던 나머지 상품(과금 재화 포함). */
+  { cat:'[수정]', ic:'🧾', t:'재료 보유 상한에서 루비·코인만 빠지던 구매를 막았습니다', d:'2026-09-25',
+    body:'군주들에게 알립니다.<br><br>'+
+      '· 재료가 보유 상한일 때 <b>재료상점(루비)</b>·<b>길드상점</b>(흑염석·대장장이의 눈물)·<b>루비 패키지</b>(대장장이의 눈물)·<b>웨이브 상자 교환</b>(재료)이 대가만 쓰고 재료를 주지 않던 것을 막았습니다. 다 받을 수 없으면 \"보유 상한\"으로 표시되고 결제되지 않습니다.<br>'+
+      '· 골드가 보유 상한 근처일 때 광고 제단의 골드 보상이 광고 횟수만 쓰던 것도 막았습니다.' },
   /* ★ v5.360: 보유 상한에서 값만 빠지던 구매·수령(2차 미검증 U5) · 대장간 마지막 선택 기억(U3). */
   { cat:'[수정]', ic:'🧾', t:'보유 상한에서 값만 빠지던 구매·수령을 바로잡았습니다', d:'2026-09-25',
     body:'군주들에게 알립니다.<br><br>'+
@@ -7231,8 +7239,8 @@ const MODALS = {
           <div class="sh-right"><div class="sh-t">${t}</div><div class="sh-d">${d}</div></div>
         </div>`;
       const capped=!!(soldOut && soldOut()), ok=have(cur)>=cost && !capped;
-      const btn=el('button','btn sm'+(ok?' gold':''), capped?'보유 상한':(label||'구매')); if(!ok) btn.disabled=true;
-      btn.onclick=()=>{ if(soldOut && soldOut()){ toast(`${t} — 보유 상한이라 지금은 교환할 수 없습니다`); render(); return; }
+      const btn=el('button','btn sm'+(ok?' gold':''), capped?'보유<br>상한':(label||'구매')); if(!ok) btn.disabled=true;   // 62px 버튼에서 '상/한'으로 쪼개지던 것 — 공용 규칙에 keep-all 을 걸면 '광고 보고 받기'가 3줄이 된다(리뷰 실측)
+      btn.onclick=()=>{ if(soldOut && soldOut()){ toast(`${t} — 보유 상한이라 지금은 받을 수 없습니다`); render(); return; }
         if(have(cur)<cost){ toast(`${CURN[cur]}가 부족합니다.`); return; }
         payCur(cur,cost); give(); sfx('tap'); toast(`${t} 획득`); render(); refreshHUD(); save(); };   /* ★ v5.309: 구매 확정 즉시 저장 */
       card.querySelector('.sh-left').appendChild(btn);
@@ -7252,7 +7260,7 @@ const MODALS = {
         [ADPOOL[(di*2)%ADPOOL.length], ADPOOL[(di*2+1)%ADPOOL.length]].forEach(it=>{
           const card=shopCard(it.ic, it.t, S.buffs.adFree?'즉시 수령(광고 제거)':'광고 시청 후 무료');
           const capAd=!!(it.soldOut && it.soldOut());   // 상한이면 광고 횟수만 쓰고 무지급이던 것(U5)
-          const btn=el('button','btn sm'+(left>0&&!capAd?' gold':''),capAd?'보유 상한':S.buffs.adFree?'받기':'광고 보고 받기'); if(left<=0||capAd) btn.disabled=true;
+          const btn=el('button','btn sm'+(left>0&&!capAd?' gold':''),capAd?'보유<br>상한':S.buffs.adFree?'받기':'광고 보고 받기'); if(left<=0||capAd) btn.disabled=true;
           btn.onclick=()=>{ if(it.soldOut && it.soldOut()){ toast(`${it.t} — 보유 상한입니다`); render(); return; }
             if(dailyLeft('ad',15)<=0){ toast('오늘 소진'); return; } dailyUse('ad'); it.give(); toast(`${it.t} 획득`); render(); refreshHUD(); };
           card.mount(btn); });
@@ -7348,7 +7356,7 @@ const MODALS = {
           card.mount(btn); });
         let rg='';
         RUBYPKG.forEach(it=>{ if(it.grp!==rg){ rg=it.grp; grpLabel(`${rg} 패키지`); }
-          mkBuy(it.ic,it.t,`${it.d} · ${priceTxt('ruby',it.cost)}`,'ruby',it.cost,it.give); });
+          mkBuy(it.ic,it.t,`${it.d} · ${priceTxt('ruby',it.cost)}`,'ruby',it.cost,it.give,undefined,it.soldOut); });
         /* ★ v5.291(대표 요청): 한정 패키지(ACCOUNT_PACKS) — 종전 별도 '패키지' 모달에서
            이 탭으로 이관. 구매 상태(claimed.mail)·계정당 1회·루비 차감 규칙은 그대로. */
         grpLabel('[한정] 패키지 — 전 카드 계정당 1회');
@@ -7386,8 +7394,8 @@ const MODALS = {
         body.appendChild(el('div','hint','제작 재료 직접 구매 (루비)'));
         curLine('ruby');
         MATSHOP.forEach(m=>{ const ic=matIcon(m.k);
-          mkBuy(ic,`${m.k} X1`,`${priceTxt('ruby',m.p1)} · 보유 ${fmt(S.mats[m.k]||0)}`,'ruby',m.p1,()=>matGain(m.k,1));
-          mkBuy(ic,`${m.k} X5`,`${priceTxt('ruby',m.p5)} · 보유 ${fmt(S.mats[m.k]||0)}`,'ruby',m.p5,()=>matGain(m.k,5)); });
+          mkBuy(ic,`${m.k} X1`,`${priceTxt('ruby',m.p1)} · 보유 ${fmt(S.mats[m.k]||0)}`,'ruby',m.p1,()=>matGain(m.k,1),undefined,()=>matFull(m.k,1));   // 과금 재화 — 상한이면 결제 전 막는다(리뷰 실측: 루비 600 무지급)
+          mkBuy(ic,`${m.k} X5`,`${priceTxt('ruby',m.p5)} · 보유 ${fmt(S.mats[m.k]||0)}`,'ruby',m.p5,()=>matGain(m.k,5),undefined,()=>matFull(m.k,5)); });
 
       /* ── ⑦ 루비 (G-99): 4단계 + 프로모 4행 ── */
       } else if(tab==='ruby'){
@@ -7407,7 +7415,7 @@ const MODALS = {
       } else if(tab==='guild'){
         body.appendChild(el('div','hint','길드 레이드·점령전 참여로 길드 코인을 획득합니다.'));
         curLine('guild');
-        GUILDSHOP.forEach(it=> mkBuy(it.ic,it.t,priceTxt('guild',it.cost),'guild',it.cost,it.give,'교환'));
+        GUILDSHOP.forEach(it=> mkBuy(it.ic,it.t,priceTxt('guild',it.cost),'guild',it.cost,it.give,'교환',it.soldOut));
         /* ★ v5.6: 회색코인 소비처 복구. GRAYSHOP 은 상수만 정의돼 있고 어디서도 호출되지 않아
            획득처 4곳 / 소비처 0곳 인 고아 재화였다(재료상점이 §4-5 판정으로 루비 결제가 되면서 끊겼다).
            길드 레이드·약탈·기여로 버는 재화이므로 길드 탭 하단에 교환소로 되붙인다. */
@@ -10233,6 +10241,7 @@ function towerExchange(){
     const r=el('div','pack'); r.innerHTML=`<div class="pic">${matIcon(mk)}</div><div class="info"><div class="t">${mk} X${gain}</div><div class="d">웨이브 상자 ${cost}개 소모</div></div>`;
     const bt=el('button','btn sm'+((S.towerBox||0)>=cost?' gold':''),'교환');
     bt.onclick=()=>{ if((S.towerBox||0)<cost){ toast('상자가 부족합니다'); return; }
+      if(matFull(mk,gain)){ toast(`${mk} 보유 상한 — 제작·합성으로 쓴 뒤 교환하세요`); return; }   // 리뷰: 상한이면 상자만 빠지던 것
       S.towerBox-=cost; matGain(mk,gain); toast(`${mk} +${gain}`); openModal('tower'); towerExchange(); refreshHUD(); save(); };   /* ★ 2026-09-25: 교환 창 유지 */
     r.appendChild(bt); pop.appendChild(r);
   });
