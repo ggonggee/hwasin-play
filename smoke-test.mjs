@@ -3415,6 +3415,29 @@ step('D7 · 전투 중 refreshParty(UI 갱신) → 쿨·기여도 보존 · 결�
   if(errs.length) throw new Error(errs.join(' | '));
   console.log(`     전투 중 갱신 3회 = 끝까지 관람 = ${base.hash}`);
 });
+/* ★ 2026-09-25(4차 발견 K4): [시스템] 기록이 가짜 채팅에 밀려 사라지지 않는다 · 절전 해제 때 이번 방치 요약. */
+step('4차 K4 — 시스템 기록 보존 · 절전 세션 요약', ()=>{
+  const errs=[], S=ev('S'), log=ev("$('#chatLog')");
+  log.children.length=0;
+  ev('sysLog')('S1-보존검사'); for(let i=0;i<200;i++) ev('pushChat')('가짜'+i, '전체');
+  const txt=log.children.map(n=>String(n._html||'')).join('|');
+  const nS=log.children.filter(n=>n.dataset && n.dataset.ch==='시스템').length, nO=log.children.length-nS;
+  if(!txt.includes('S1-보존검사')) errs.push('시스템 기록이 가짜 채팅에 밀려남');
+  if(nO>40 || nS>30) errs.push(`채널 상한 초과 시스템 ${nS} · 그 외 ${nO}`);
+  for(let i=0;i<40;i++) ev('sysLog')('시스템'+i); const nS2=log.children.filter(n=>n.dataset && n.dataset.ch==='시스템').length; if(nS2>30) errs.push('시스템 30줄 상한 '+nS2);
+  // 절전 요약: 기준점 → 재료 +5 → 해제 → 마지막 시스템 줄에 '+5'
+  ev('endPowerSave')();   // 앞선 검사가 열어 둔 절전 화면을 먼저 닫는다(열려 있으면 start 가 곧바로 돌아가 옛 기준점이 쓰인다)
+  const k0=S.stats.kills, mk=S.mats['흑염석']; S.mats['흑염석']=Math.max(0,mk-10);
+  ev('startPowerSave')(); if(!ev('_pwSnap')) errs.push('절전 기준점 없음');
+  ev('_pwSnap.t-=15000'); ev('matGain')('흑염석',5); S.stats.kills=k0+12;
+  ev('endPowerSave')();
+  const last=String((log.children[log.children.length-1]||{})._html||'');
+  if(!/절전 .*처치 \+12 .*일반 \+5/.test(last)) errs.push('절전 요약 문구 '+last.slice(0,120));
+  S.mats['흑염석']=mk;
+  S.stats.kills=k0;
+  if(!/'보유 재화'/.test(js)) errs.push("정산 '보유 재화' 라벨");
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ 2026-09-25(4차 발견 K2): 세트 결정 지점 — 역인덱스 1:1 · 장착 가정 계산은 원상 복원 · 응시 6세트에 L 투구를 끼면 해제·손해를 미리 보여 준다. */
 step('4차 K2 — 세트 역인덱스 · 장착 가정 계산 복원 · 세트 해제 경고', ()=>{
   const errs=[], S=ev('S'), SP=ev('SET_PIECES'), so=ev('setOfItem');

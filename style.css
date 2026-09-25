@@ -1163,6 +1163,7 @@ body.fx-noflash .hr-art .hr-rays{ display:none; }
   border:1px solid var(--frame-dk); border-radius:8px; background:rgba(0,0,0,.34); }
 .pw-ovl .pw-cur b{ color:var(--gold); }
 .pw-ovl .pw-batline{ text-align:center; }
+.pw-ovl .pw-sess{ text-align:center; font-size:var(--fs-sm); color:#f0d59a; margin-top:2px; }   /* 4차 K4: 이번 절전 경과·처치 */
 .pw-ovl .pw-bat{ display:inline-block; font-size:var(--fs-xs); color:#8ee6c0; padding:1px 8px; border-radius:9px;
   border:1px solid #2c4a3c; background:rgba(30,70,55,.35); }
 .pw-ovl .pw-clock{ text-align:center; font-size:46px; font-weight:800; line-height:1.1; letter-spacing:.06em;

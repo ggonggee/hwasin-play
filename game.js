@@ -4857,7 +4857,12 @@ function pushChat(html, ch){
   const log=$('#chatLog'); const c=el('div','cm',html); c.dataset.ch=ch;
   if(chatFilter!=='전체' && ch!==chatFilter && ch!=='시스템') c.style.display='none';
   log.appendChild(c);
-  while(log.children.length>40) log.removeChild(log.firstChild);
+  /* 4차 발견 K4: 채널별 상한 — 종전엔 전체 40줄 하나라 1.6~3.2초마다 들어오는 가짜 채팅이 [시스템] 기록(방치 중 보상·레벨업 등)을 약 100초 만에 밀어냈다(실측).
+     시스템 30줄 + 그 외 40줄. 리본(chat-ribbon)은 세지도 지우지도 않는다. ⚠ chatTick 빈도·난수는 건드리지 않는다(전역 Math.random 순서). */
+  { const kids=Array.from(log.children), rib=n=>n.classList&&n.classList.contains('chat-ribbon'), sys=n=>n.dataset&&n.dataset.ch==='시스템';
+    let nS=0, nO=0; kids.forEach(n=>{ if(rib(n)) return; if(sys(n)) nS++; else nO++; });
+    for(const n of kids){ if(nS<=30 && nO<=40) break; if(rib(n)) continue;
+      if(sys(n)){ if(nS>30){ log.removeChild(n); nS--; } } else if(nO>40){ log.removeChild(n); nO--; } } }
   log.scrollTop = log.scrollHeight;
 }
 function applyChatFilter(){ document.querySelectorAll('#chatLog .cm').forEach(c=>{ const ch=c.dataset.ch||'전체'; c.style.display=(chatFilter==='전체'||ch===chatFilter||ch==='시스템')?'':'none'; }); const log=$('#chatLog'); log.scrollTop=log.scrollHeight; }
@@ -8272,7 +8277,7 @@ const MODALS = {
       card.appendChild(abt); b.appendChild(card);
     }
     // ④ 3행×4열 = 12칸 획득 재화 그리드
-    b.appendChild(el('div','small mut','획득 재화'));
+    b.appendChild(el('div','small mut','보유 재화'));   // 4차 K4: 칸 값은 보유량(pwCells)이다 — 종전 '획득 재화'는 오표기
     const g=el('div','grid c4'); g.style.marginTop='6px';
     const cells=pwCells();   // ★ N3: 12칸 정본을 절전 오버레이와 공유(두 화면의 그리드가 동일 구성)
     cells.forEach(([ic,nm,v])=>{ const c=el('div','cell gframe'); c.innerHTML=`<div class="ei" style="font-size:19px">${eImg(ic,2)}</div><div class="cn">${nm}<br><b>${fmt(v||0)}</b></div>`; g.appendChild(c); });
@@ -9227,6 +9232,7 @@ function pwBodyHTML(){
     `<span class="pn-bar"><i style="width:${pct}%"></i></span><span class="pn-pct">${pct}%</span></div>`+
     `<div class="pw-cur"><span>${eImg("🪙",2)} <b>${fmt(S.gold)}</b></span><span>${eImg("💎",2)} <b>${fmt(S.ruby)}</b></span></div>`+
     `<div class="pw-batline"><span class="pw-bat">🔋 100%</span></div>`+
+    (_pwSnap ? `<div class="pw-sess">절전 ${mmss(Math.round((Date.now()-_pwSnap.t)/1000))} · 처치 +${fmt(Math.max(0,((S.stats&&S.stats.kills)|0)-_pwSnap.kills))}</div>` : '')+   // K4(4차): 이번 절전 경과·처치
     `<div class="pw-clock">${clock}</div>`+
     `<div class="pw-grid">${grid}</div>`+
     `<div class="pw-two">`+
@@ -9249,6 +9255,7 @@ function pwCells(){
     ['🎫',   '재료소환권',     S.tickMat],  ['🪪','골드던전권',   S.goldTicket||0],
   ];
 }
+let _pwSnap=null;   // 4차 K4: 절전 세션 요약 기준점(메모리 전용)
 function startPowerSave(){
   const home=$('#home'); if(!home) return;
   if(PW_OVL) return;
@@ -9257,6 +9264,8 @@ function startPowerSave(){
      (측정 불가한 환경에서는 전체를 덮되, 채팅은 z-index 로 위에 남는다) */
   const chat=$('#chat'); const cut=(chat&&chat.offsetTop)|0;
   if(cut>0){ ov.style.height=cut+'px'; } else { ov.style.bottom='0'; }
+  /* K4(4차): 절전 세션 요약 기준점 — 메모리만(S 에 넣지 않음). 해제할 때 '이번 방치에서 얻은 것'을 한 줄로 남긴다(종전: 해제해도 아무 기록이 없었다). */
+  _pwSnap={ t:Date.now(), gold:S.gold||0, kills:(S.stats&&S.stats.kills)|0, mats:GORDER.map(g=>matGradeTotal(g)) };
   ov.innerHTML=pwBodyHTML();
   home.appendChild(ov);
   // 하단: "밀어서 해제" 슬라이더 — 모루 손잡이를 트랙 끝까지 밀면 절전 해제.
@@ -9323,6 +9332,11 @@ function endPowerSave(){
   PW_OVL=null; PW_BAR=null;
   const home=$('#home'); if(home&&home.classList) home.classList.remove('pw-on');
   sfx('tap');
+  /* K4(4차): 절전 요약 — 토스트(6초)와 [시스템] 기록. growthBurst 는 쓰지 않는다(#modal-root 안이라 모달이 닫힌 홈에선 보이지 않는다). */
+  try{ const s=_pwSnap; _pwSnap=null; if(s){ const sec=Math.round((Date.now()-s.t)/1000);
+    if(sec>=10){ const g=Math.max(0,(S.gold||0)-s.gold), k=Math.max(0,((S.stats&&S.stats.kills)|0)-s.kills), dm=GORDER.map((gr,i)=>[gr, matGradeTotal(gr)-s.mats[i]]).filter(x=>x[1]>0);
+      const msg=`절전 ${sec>=60?Math.floor(sec/60)+'분 ':''}${sec%60}초 — 처치 +${fmt(k)} · 골드 +${fmt(g)}${dm.length?' · 재료 '+dm.map(([gr,n])=>GRADES[gr].name+' +'+fmt(n)).join(' '):''}`;
+      toast(msg, 6000); sysLog(msg); } } }catch(e){}
 }
 
 // ★ B9/G-126: 미수령 1건 이상이면 상단에 [모두 받기] 노출
