@@ -813,7 +813,7 @@ body{
 /* 공지 — 제목 밴드 + 양피지 본문 (G-134) */
 .notice-band{ display:flex; align-items:center; gap:6px; padding:7px 9px; border-radius:8px 8px 0 0;
   background:linear-gradient(180deg,#2e2417,#1b140d); border:1px solid var(--frame); border-bottom:none; }
-.notice-band .nb-cat{ color:var(--frame-lit); font-size:var(--fs-sm); font-weight:800; }
+.notice-band .nb-cat{ color:var(--frame-lit); font-size:var(--fs-sm); font-weight:800; flex-shrink:0; white-space:nowrap; }   /* v5.376: 제목이 두 줄이면 flex 가 배지를 줄여 '[개' / '선]' 으로 쪼갰다(360px 공지 29건 중 24건) */
 .notice-band .nb-t{ color:var(--txt-hi); font-size:var(--fs-base); font-weight:700; }
 .notice-date{ padding:3px 9px; font-size:var(--fs-sm); color:var(--txt-dim);
   border-left:1px solid var(--frame); border-right:1px solid var(--frame); background:rgba(0,0,0,.3); }

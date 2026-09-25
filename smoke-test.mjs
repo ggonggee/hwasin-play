@@ -3668,8 +3668,21 @@ step('D10 · 세트 전투 효과 — 순수 함수 · 쿨감 관측 · 재현�
   if(arun(0.05,-1)!==ab) errs.push('투기장 세트 재현성');
   if(arun(1/60,-1)!==ab) errs.push('투기장 세트 60fps ≠ 20Hz');
   for(const k of [1,20,45]) if(arun(0.05,k)!==ab){ errs.push('투기장 세트 갱신 '+k+'프레임 뒤 해시 변화'); break; }
+  /* ⑤ v5.376(리뷰 v5.372 확정 — U1): 점수형 보스(월드보스 규격 foeCP = 총전투력×3, 15초 race)에서 주술이 보스를 빨리 죽여 st.dmg(점수 정본)가 줄면 안 된다.
+     대조군 그늘칼 6 = 같은 dmg 60·같은 쿨감 20·같은 등급 — 다른 것은 주술 태그뿐. 시드 5개 평균, 전투력 대비 점수로 비교. */
+  const race=(names, seed)=>{ const B=freshBattle(); wear(ev('S'), names); B.setSeed(seed); B.setPartySource(partyFn); let res=null;
+    const foe=Math.round(ev('totalCP')()*3);
+    B.startDungeon({ name:'D10보스', foeCP:foe, kind:'boss', dur:15, race:true, onEnd:(win,info)=>{ res={ win, dmg:info.dmg }; } });
+    const r=B.runUntilDone(D_MAX_TICKS); if(!r.finished||!res) throw new Error('D10 보스 완주 못 함');
+    return { dmg:res.dmg, cp:B.partyCP() }; };
+  const avgRace=names=>{ let d=0, cp=0; for(const s of [0xC0FFEE,0x5DDE47,0x1234,0xBEEF,0xA11CE]){ const r=race(names,s); d+=r.dmg; cp=r.cp; } return { d:d/5, cp }; };
+  const rC=avgRace(['주술']), rS=avgRace(['그늘칼']);
+  if(rC.cp!==rS.cp) errs.push(`대조군 전투력 불일치 주술 ${rC.cp} · 그늘칼 ${rS.cp}`);
+  if(!(rC.d >= rS.d)) errs.push(`주술 착용이 점수형 보스 점수를 깎음 ${rC.d.toFixed(0)} < 대조 ${rS.d.toFixed(0)}(U1)`);
+  if(!/if\(gzB\) h\.dmgDone \+= Math\.round\(dmg\*gzB\)/.test(js)) errs.push('응시 가산분 점수 정산 없음');
   if(errs.length) throw new Error(errs.join(' | '));
   console.log(`     광란+주술: 2차 스킬 쿨 최대 ${maxCD1.toFixed(2)}초(기본 9) · 무효화·주술 순번 관측 · 3조합 재현성·실시간·갱신 일치 · 투기장(강철맹세+광란) 일치`);
+  console.log(`     점수형 보스(15초 race) 평균 점수: 주술 ${rC.d.toFixed(0)} ≥ 그늘칼(대조) ${rS.d.toFixed(0)} · 파티 전투력 ${rC.cp}`);
 });
 step('D2 · 서로 다른 시드 20개 → 서로 다른 해시(중복 0)', ()=>{
   const seeds = Array.from({length:20}, (_,i)=> (0x1000 + i*0x9E3779B1) >>> 0);

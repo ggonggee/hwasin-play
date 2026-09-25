@@ -446,11 +446,14 @@ const SETS = [
   { n:'광란',   tiers:[ { k:6, def:30, dmg:30, cdr:20, tags:['frenzy'], live:[0,1,2,3], bfx:[0,1], note:{0:'무효화는 한 번에 1회분까지 쌓임'}, fx:['일반 공격 4회마다 다음 데미지 무효화','모든 스킬 쿨타임 20% 감소',
                                    '받는 물리 피해·마법 피해 30% 감소','입히는 피해량 30% 증가'] } ] },
   /* 그늘칼 0·1번 줄은 전제 메커니즘이 없다 — 치명타 확률 상한(기본 22% + 장비 최대 +8%p)이라 100% 초과가 없고, 즉사 판정도 없다. 그래서 live 가 아니다. */
-  { n:'그늘칼', tiers:[ { k:6, dmg:60, cdr:20, live:[2,3], bfx:[2], fx:['크리티컬 확률이 100%를 넘는 경우, 일반·스킬 공격 시 넘는 초과분(%)만큼 추가 타격',
+  { n:'그늘칼', tiers:[ { k:6, dmg:60, cdr:20, live:[3,2], bfx:[2], fx:['크리티컬 확률이 100%를 넘는 경우, 일반·스킬 공격 시 넘는 초과분(%)만큼 추가 타격',
                                    '즉사 실패 시 50% 추가 타격','모든 스킬 쿨타임 20% 감소','입히는 피해량 60% 증가'] } ] },
-  { n:'주술',   tiers:[ { k:6, dmg:60, cdr:20, tags:['curse'], live:[0,1,2], bfx:[0,1], note:{0:'무작위 대신 1차→2차→3차 순서로 돌아가며(전투 재현성)'}, fx:['전설 스킬 사용 시 모든 스킬 중 한 개가 무작위로 추가 발동',
+  /* v5.376(리뷰): 주술 0번 줄 원문('… 무작위로 추가 발동')은 구현(순번)과 달랐고, 도감 요약·세트 발동 카드는 보충 설명(note) 없이 이 줄만 보여 준다 — 문구를 구현대로 고쳤다.
+     무작위로 되돌리지 마라: 새 난수를 뽑으면 전투 재현성(D10)이 깨진다(v5.216 선례). */
+  { n:'주술',   tiers:[ { k:6, dmg:60, cdr:20, tags:['curse'], live:[0,1,2], bfx:[0,1], note:{0:'무작위가 아닌 순번 — 전투 재현성'}, fx:['전설 스킬 사용 시 1차→2차→3차 스킬 중 하나가 차례로 추가 발동',
                                    '모든 스킬 쿨타임 20% 감소','입히는 피해량 60% 증가'] } ] },
-  { n:'강철맹세', tiers:[ { k:6, def:40, dmg:30, cdr:20, tags:['iron'], live:[0,1,2,3], bfx:[0,2], note:{0:'치명타를 쓰는 적은 투기장 적 영웅뿐'}, fx:['받는 치명타 데미지 40% 감소','받는 물리 피해·마법 피해 40% 감소',
+  /* live 순서 = 도감 요약·발동 카드에 앞세우는 순서(setFxSummary 는 첫 줄, 발동 카드는 앞 두 줄). 받는 치명타 −40% 는 투기장에서만 의미가 있어 뒤로 — 요약에 단독으로 뜨면 적용 범위가 넓어 보인다. */
+  { n:'강철맹세', tiers:[ { k:6, def:40, dmg:30, cdr:20, tags:['iron'], live:[1,3,0,2], bfx:[0,2], note:{0:'치명타를 쓰는 적은 투기장 적 영웅뿐'}, fx:['받는 치명타 데미지 40% 감소','받는 물리 피해·마법 피해 40% 감소',
                                    '모든 스킬 쿨타임 20% 감소','입히는 피해량 30% 증가'] } ] },
 ];
 /* v5.372: 세트 쿨감 합계 상한 — 작열 8(35) + 20 계열 둘이면 75% 가 되어 스킬이 거의 매 공격 나간다. 절반에서 자른다. */
@@ -800,6 +803,9 @@ const ARENA_DAILY_TICKET = 5;
    ★ B4/G-55: [이름, 설명, 쿨타임(초)] 3필드 — 쿨타임은 슬롯 순서대로 1.5 / 9 / 20 / 35 고정.
    등급 뱃지는 해금 여부와 무관하게 상시 노출한다(heroDetail 스킬 탭). */
 const SKILL_CD = [1.5, 9, 20, 35];
+/* v5.376(리뷰 v5.372): 스킬 타격 정본 — [위력 배율, 범위(px, 0 = 단일), 단일 여부]. 전투 스킬 분기·주술 추가 발동·영웅 상세 스킬 탭 문구가 이 한 곳을 읽는다.
+   따로 적으면 밸런스 패치 때 한쪽만 옛 값으로 남는다(종전: 전투 분기와 주술 표가 같은 숫자를 각자 하드코딩). */
+const SKILL_HIT = [[1.5,95,false],[4,0,true],[5,170,false],[8,250,false]];
 const SKILLS = {
   flame:[['화염 참격','전방 부채꼴 지속 피해',1.5],['작열 강타','단일 대상 대미지+화상',9],['불의 낙인','치명타 시 폭발',20],['겁화 폭발','광역 화염 폭발(궁극)',35]],
   frost:[['서리 화살','원거리 둔화 피해',1.5],['빙결 폭발','광역 둔화+피해',9],['절대영도','대상 빙결(행동불가)',20],['한파 소환','전체 빙결 폭풍(궁극)',35]],
@@ -3460,11 +3466,8 @@ const Battle = (()=>{
         if(useSkill>=0){
           const sk = jobSkills[useSkill];
           h.skillCD[useSkill] = sk[2] * setFx.cdMul;   // v5.372: 세트 쿨감(세트 없으면 ×1 정확 — 종전 값과 같다)
-          /* 스킬별 위력/범위/타입 + 애니메이션 */
-          if(useSkill===0){ skillMul=1.5; aoeR=95; }                        // 1차: 광역
-          else if(useSkill===1){ skillMul=4; aoeR=0; isSingle=true; }       // 2차: 단일 (강한 1체)
-          else if(useSkill===2){ skillMul=5; aoeR=170; }                    // 3차: 대형 광역
-          else { skillMul=8; aoeR=250; isUltimate=true; }                   // 궁극: 전체 광역
+          /* 스킬별 위력/범위/타입 — 1차 광역 ×1.5 · 2차 단일(강한 1체) ×4 · 3차 대형 광역 ×5 · 궁극 전체 광역 ×8. 값은 SKILL_HIT 정본(v5.376). */
+          [skillMul, aoeR, isSingle] = SKILL_HIT[useSkill]; isUltimate = useSkill===3;
           /* 스프라이트 애니메이션 설정 */
           h.skillAnim = SKILL_ANIMS[useSkill];
           h.skillAnimT = 0;
@@ -3486,7 +3489,9 @@ const Battle = (()=>{
            · 주술(curse): 궁극기 직후 1차→2차→3차 순서로 한 스킬을 추가 발동(무작위 대신 순번 — 난수를 새로 뽑으면 전투 재현성이 깨진다, v5.216 선례).
            ⚠ 세트가 없으면 gz 는 fd 를 그대로 돌려주고 추가 발동·카운터도 없다 — 종전 경로와 호출 순서·난수 추첨이 같아야 한다(D1~D9 해시 불변). */
         const basic = useSkill<0;
-        const gz = (m, fd)=> (basic && setFx.gaze) ? Math.round(fd*(1 + ((m.hp >= 0.5*(m.hpMax||1)) ? 0.7 : 0) + (m.boss ? 0.5 : 0))) : fd;
+        let gzB = 0;   // 이번 공격에 실제 적용된 응시 가산 비율의 최대값(점수 정산용 — 아래 dmgDone)
+        const gz = (m, fd)=>{ if(!(basic && setFx.gaze)) return fd;
+          const b = ((m.hp >= 0.5*(m.hpMax||1)) ? 0.7 : 0) + (m.boss ? 0.5 : 0); if(b > gzB) gzB = b; return Math.round(fd*(1+b)); };
         const strike = (fd, rad, single, cr)=>{
           if(solo || (dg && dg.soloSurvival)){   /* ★ v5.107: soloSurvival도 홈처럼 AoE 공격 */
             /* ★ v5.96: 홈 모드에서도 원거리 영웅은 발사체 연출 추가.
@@ -3529,15 +3534,22 @@ const Battle = (()=>{
           return true;
         };
         const landed = strike(finalDmg, aoeR, isSingle, crit);
+        /* v5.376(리뷰 v5.372 확정 — U1): dmgDone(= st.dmg)은 길드 토벌·월드보스 점수의 정본이고 단위는 '공격 1회 = 굴림값 dmg 1회분'(스킬 배율 미포함)이다.
+           보스(HP = foeCP×0.5)는 보통 첫 궁극기·스킬 일제 사격 1~2초에 죽는다 — 세트 효과로 더 빨리 죽이면 굴림 횟수가 줄어 점수가 오히려 떨어졌다
+           (실측: 월드보스 주술 −24%·응시+주술 −26%). 그래서 세트 가산분을 같은 단위로 센다: 응시 = dmg×가산 비율(광역이어도 1회분), 주술 추가 발동 = 1회분.
+           세트가 없으면 gzB 는 0, 추가 발동도 없어 종전 합계와 같다(D1~D9 해시 불변). */
+        if(gzB) h.dmgDone += Math.round(dmg*gzB);
         if(basic && landed && setFx.frenzy){
           h._frz = (h._frz||0) + 1;
-          if(h._frz >= 4){ h._frz = 0; if(!h._nullify){ h._nullify = 1; dmgText(h.x, h.y-34, '무효화 준비', false, '#9fd0ff'); } }
+          /* 이름표(h.y−58)·체력/마력 바(h.y−52~−46) 위에서 시작한다 — 피해 글자는 22px 떠오르므로 h.y−34 에서 띄우면 이름표를 덮는다(리뷰 실측). */
+          if(h._frz >= 4){ h._frz = 0; if(!h._nullify){ h._nullify = 1; dmgText(h.x, h.y-74, '무효화 준비', false, '#9fd0ff'); } }
         }
         if(isUltimate && setFx.curse){
           const xi = (h._curse||0) % 3; h._curse = xi + 1;
-          const XS = [[1.5,95,false],[4,0,true],[5,170,false]][xi], xk = jobSkills[xi];
-          fx.push({ type:'skill', x:h.x, y:h.y, t:0, color:h.color, idx:xi, name:(xk?xk[0]:'')+' · 주술', r:XS[1]||50, ult:false });
-          strike(Math.round(dmg*XS[0]), XS[1], XS[2], crit);
+          const XS = SKILL_HIT[xi], xk = jobSkills[xi];
+          /* curse:true — 스킬 fx 렌더러는 1차·2차의 이름을 그리지 않는다(평소 1.5초마다 글자가 뜨면 어지럽다). 주술 추가 발동만 이름을 띄운다(drawFx). */
+          fx.push({ type:'skill', x:h.x, y:h.y, t:0, color:h.color, idx:xi, name:(xk?xk[0]:'')+' · 주술', r:XS[1]||50, ult:false, curse:true });
+          if(strike(Math.round(dmg*XS[0]), XS[1], XS[2], crit)) h.dmgDone += dmg;
         }
       }
       /* ★ v5.91: 자연스러운 이동 시스템 — 홈(solo)은 제외, 던전/투기장에서 활성화.
@@ -4169,6 +4181,9 @@ const Battle = (()=>{
           ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(f.x,f.y,r,0,7); ctx.fill();
           ctx.globalAlpha = 1;
         }
+        /* v5.376(리뷰): 주술 추가 발동 이름표 — 위 분기는 3차만 이름을 그려서 1차·2차 추가 발동(3번 중 2번)은 표시가 없었다. 3차는 위에서 이미 그린다. */
+        if(f.curse && idx<2 && e<0.4){ ctx.globalAlpha=clamp(1-e/0.4,0,1); ctx.fillStyle='#e0c2ff'; ctx.font="bold 13px 'Malgun Gothic'";
+          ctx.fillText(f.name, f.x, f.y-R-10); ctx.globalAlpha=1; }
       }
       /* ★ v5.43→v5.102: 스킬 발사체 이펙트 — HERO_FX_NAMES로 영웅별 커스텀 이름 지원. */
       else if(f.type==='skillfx'){
@@ -9573,7 +9588,7 @@ function heroDetail(hidOrJob){
     /* 4차 발견(표시 = 적용): 종전 탭은 '(영웅 등급에 따라 해금)'·🔒 로 N 영웅은 1스킬만 쓰는 것처럼 보였지만, 전투는 등급과 무관하게 4스킬을 모두 쓴다
        (v5.216 — 해금 로직은 결정론을 깨서 유보, 표기를 동작에 맞추기로 했는데 이 탭이 빠졌다). 설명도 실제 동작(범위·배율)으로. SKILLS 의 화상·둔화 등 문구는 미구현이라 노출하지 않는다. */
     body.appendChild(el('div','small','<b>스킬</b> <span class="mut">(모든 영웅이 4스킬을 자동 사용)</span>'));
-    const REAL=['주변 적 광역 · 위력 ×1.5','가장 강한 적 1체 · 위력 ×4','넓은 범위 광역 · 위력 ×5','화면 전체 · 위력 ×8'];
+    const REAL=['주변 적 광역','가장 강한 적 1체','넓은 범위 광역','화면 전체'].map((t,i)=>`${t} · 위력 ×${SKILL_HIT[i][0]}`);   // v5.376: 배율은 SKILL_HIT 정본에서
     SKILLS[j.id].forEach(([nm,desc,cd],i)=>{
       const row=el('div','pack skill-row');
       row.innerHTML=`<div class="pic">✨</div>
