@@ -1368,7 +1368,9 @@ step('주간 의뢰 — 렌더·진행·1회성·렌더 무지급', ()=>{
 step('레벨 상한 9,999 — 캡 해제·상한 경계 정합', ()=>{
   const src=fs.readFileSync('game.js','utf8');
   const errs=[];
-  const loops=[...src.matchAll(/while\(st\.exp >= \(st\.level\|\|1\)\s*\*?\s*250 && \(st\.level\|\|1\)\s*<\s*(\d+)\)/g)].map(m=>m[1]);
+  /* v5.370: 필요량이 expNeed(st.level) 로 모였다 — 두 형태 모두 인정하되 expNeed 는 레벨×250 이어야 한다 */
+  const loops=[...src.matchAll(/while\(st\.exp >= (?:\(st\.level\|\|1\)\s*\*?\s*250|expNeed\(st\.level\)) && \(st\.level\|\|1\)\s*<\s*(\d+)\)/g)].map(m=>m[1]);
+  if(!/function expNeed\(lv\)\{ return \(lv\|\|1\)\*250; \}/.test(src)) errs.push('expNeed 가 레벨×250 이 아님');
   if(loops.length<2) errs.push('XP 루프 탐지 '+loops.length+'개(기대 2 이상)');
   loops.forEach((v,i)=>{ if(v!=='9999') errs.push('루프'+i+' 상한 '+v+'(기대 9999)'); });
   if(src.includes('<999)') || src.includes('< 999)')) errs.push('잔여 999 상한 조건식 존재');
@@ -3486,6 +3488,10 @@ step('4차 4A — 세트 live·장신구 치명·스탯/스킬 탭·절전 경�
   const pw=ev('pwBodyHTML')(); if(!pw.includes('>30%<') || pw.includes('>77%<')) errs.push('절전 경험치 바가 처치 수 기반');
   st.exp=ke;
   if(/kills\)\|\|0\)%100/.test(js)) errs.push('처치 수 % 100 잔재');
+  /* v5.370: 레벨업 필요 경험치는 expNeed 한 곳 — '레벨×250' 직접 계산이 다시 생기면 표시와 실제 레벨업이 어긋날 수 있다 */
+  if(ev('expNeed')(7)!==1750 || ev('expNeed')(0)!==250) errs.push('expNeed 값');
+  if(/level\)?\|\|1\)\s*\*\s*250/.test(js.replace(/function expNeed[^\n]*/,''))) errs.push('레벨×250 직접 계산 잔재(expNeed 를 써라)');
+  if(!/if\(cfg\.resultExtra\)\{ try\{[^\n]*catch\(e\)\{ if\(typeof console[^\n]*console\.error\(/.test(js)) errs.push('resultExtra 예외가 무로깅');
   // '/마리' 골드 = onKill 기대값
   const hg=ev('huntGoldPerKill'), T0=ev('HUNT_TIERS')[3], mc=S.mobCount; S.mobCount=30;
   if(hg(T0)!==Math.max(1,Math.round(T0.gold*1.2/30))) errs.push('/마리 골드 식'); S.mobCount=mc;

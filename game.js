@@ -3881,8 +3881,8 @@ const Battle = (()=>{
          12800h 시뮬에서 실제 포화(Lv999 도달 ≈ 9,500h)가 확인됐다(캡 이후 2,800h+
          레벨 성장 정지 — 장기 목표 소멸). 상향의 실질 효과는 목표 유지뿐: 필요 XP
          (Σ level×250)가 도달을 사실상 수십 년으로 밀어 밸런스 영향은 미미하다. */
-      while(st.exp >= (st.level||1) * 250 && (st.level||1) < 9999){
-        st.exp -= (st.level||1) * 250;
+      while(st.exp >= expNeed(st.level) && (st.level||1) < 9999){
+        st.exp -= expNeed(st.level);
         st.level = (st.level||1) + 1;
         h.lvl = st.level;
         /* ★ 2026-09-25(검증 발견): hero_id 를 넘긴다 — 종전 {grade, level} 만 넘겨 이 영웅에게 귀속된 장비(heroId)가 전부 빠진 전투력으로
@@ -3910,8 +3910,8 @@ const Battle = (()=>{
         if(inBattle[e.hero_id]) return;
         const st=S.heroes[e.hero_id]; if(!st) return;
         st.exp=(st.exp||0)+benchExp;
-        while(st.exp >= (st.level||1)*250 && (st.level||1)<9999){   // v5.252: 상한 999→9,999(주석은 전투 측 루프에)
-          st.exp-=(st.level||1)*250; st.level=(st.level||1)+1;
+        while(st.exp >= expNeed(st.level) && (st.level||1)<9999){   // v5.252: 상한 999→9,999(주석은 전투 측 루프에)
+          st.exp-=expNeed(st.level); st.level=(st.level||1)+1;
           /* ★ v5.189: 벤치 마일스톤 로그 — 10레벨마다 한 줄만. v5.186 으로 로스터 전체가
              자라는데 레벨업이 조용해서(v5.186 설계) '내 영웅들이 자라고 있다'가 체감 안 났다.
              토스트·효과음 없음(전투 흐름 방해 금지) — 시스템 채팅 로그만. */
@@ -6697,12 +6697,12 @@ const MODALS = {
       /* ★ v5.169: 실제 경험치 진행 바 — exp 는 레벨×250 필요량으로 쌓이는데(onKill) 어디에도
          보이지 않아 성장이 레벨업 토스트로만 느껴졌다. 정산 화면의 바는 데모용 가짜 값. */
       const st=S.heroes[r.hero_id]||{};
-      const xpPct=e.own?clamp((st.exp||0)/((e.level||1)*250)*100,0,100):0;
+      const xpPct=e.own?clamp((st.exp||0)/expNeed(e.level)*100,0,100):0;
       card.innerHTML=`<div class="hc-grade" style="color:${G.color}">${G.name}</div>
         <div class="hc-art" style="${e.own?'':'filter:grayscale(1);opacity:.35'}">${heroPortrait(r.hero_id,3)}</div>
         <div class="hc-name">${r.name}</div>
         <div class="hc-job">${e.job.name}${e.own?` · Lv${e.level}`:''}</div>
-        ${e.own?`<div class="hc-xp" title="다음 레벨까지 ${fmt((e.level||1)*250-(st.exp||0))}"><i style="width:${xpPct}%"></i></div>`:''}
+        ${e.own?`<div class="hc-xp" title="다음 레벨까지 ${fmt(expNeed(e.level)-(st.exp||0))}"><i style="width:${xpPct}%"></i></div>`:''}
         <div class="hc-shard ${e.own?'':(sh>=need?'ok':'lack')}">🔥 ${e.own?'보유':`${fmt(sh)}/${fmt(need)}`}</div>`;
       // [합성] — 우상단
       const fu=el('button','btn xs hc-fuse','합성');
@@ -8245,9 +8245,8 @@ const MODALS = {
     const p0=(typeof party==='function')?party()[0]:null;
     if(p0){
       /* ★ v5.180: 진행 바를 실제 경험치로 — 종전엔 '누적 처치 % 100' 데모값이었다(v5.169 주석 참조).
-         영웅 카드(v5.169)와 같은 정본 식: exp / 레벨×250. */
-      const st=(S.heroes&&S.heroes[p0.hero_id])||{};
-      const pct=clamp((st.exp||0)/((p0.level||1)*250)*100, 0, 100);
+         영웅 카드(v5.169)와 같은 정본 식: exp / 레벨×250. v5.370: 식을 직접 쓰지 않고 leadExpPct(정본)를 부른다. */
+      const pct=leadExpPct(p0);
       const bar=el('div','settle-hero');
       bar.innerHTML=`<div class="sh-top"><b style="color:${GRADES[p0.grade].color}">${p0.job.name}</b><span>${p0.level}LV</span></div>`;
       const pb=el('div','pbar'); pb.appendChild(el('i')); pb.firstChild.style.width=pct+'%'; bar.appendChild(pb);
@@ -9212,10 +9211,13 @@ function extLinkPanel(b, key){
      · 스와이프 해제의 실제 임계 거리·완료 연출. 잠정 60px. */
 let PW_OVL=null, PW_BAR=null, PW_TIMER=0;
 // 절전 오버레이 본문 — 1초 주기로 다시 그려 골드·시계·카운트다운이 실시간으로 움직인다
-/* 리더 경험치 % — 정산 화면·절전 화면 공용 정본(4차 K8) */
 /* 4차 발견 K9: 홈 사냥 1마리 기대 골드(버프 제외) — onKill 과 같은 식: (골드 + 0~40% 변주 평균 20%) ÷ 설정 마릿수(광역 분배). 종전 표시는 t.gold 원값이라 약 25배 과장. */
 function huntGoldPerKill(t){ return Math.max(1, Math.round((t.gold||0)*1.2/Math.max(1, (S && S.mobCount)||30))); }
-function leadExpPct(p0){ const st=(S && S.heroes && p0 && S.heroes[p0.hero_id])||{}; return p0 ? clamp((st.exp||0)/(((p0.level)||1)*250)*100, 0, 100) : 0; }
+/* v5.370: 영웅 레벨업 필요 경험치 정본 — 전투 레벨업 루프·벤치 루프·영웅 카드·정산·절전 화면이 모두 이걸 쓴다.
+   종전엔 '레벨×250'이 다섯 곳에 따로 적혀 있었다(리뷰 v5.367 확정). 한 곳만 바꾸면 표시와 실제 레벨업이 어긋난다 — 반드시 여기서만 고쳐라. */
+function expNeed(lv){ return (lv||1)*250; }
+/* 리더 경험치 % — 정산 화면·절전 화면 공용 정본(4차 K8) */
+function leadExpPct(p0){ const st=(S && S.heroes && p0 && S.heroes[p0.hero_id])||{}; return p0 ? clamp((st.exp||0)/expNeed(p0.level)*100, 0, 100) : 0; }
 function pwBodyHTML(){
   const clock=$('#clock')?$('#clock').textContent:'--:--';
   // ① 이름 + 레벨 + 경험치바
@@ -10524,7 +10526,9 @@ function showDungeonResult(cfg, win, stats){
      3초 자동 퇴장(G-80 결정)은 그대로 — 움직임만 더한다. */
   b.appendChild(el('div','result-card rc-anim '+(win?'rc-win':'rc-lose'),`<div class="rc-icon">${win?'<div class="rc-rays"></div>':''}${win?eImg("🎉",2):(cfg.race?'🐉':'💥')}</div><div class="rc-title ${win?'win':'lose'}">${title}</div>
     <div class="small mut">${rewarded?(cfg.rewardText||'보상 획득'):'부대가 전멸했습니다. 더 강해진 후 재도전하세요.'}${stats&&stats.dmg?` · 누적 데미지 ${fmt(stats.dmg)}`:''}</div>`));
-  if(cfg.resultExtra){ try{ cfg.resultExtra(b, win, stats||{}); }catch(e){} }
+  /* v5.370(리뷰 v5.367 확정): 부가 정보가 실패해도 결과창·효과음·3초 퇴장은 살린다(try 유지) — 단 흔적 없이 삼키지 말고 콘솔에 남긴다.
+     다시 던지지 마라: 결과창이 반쯤 그려진 채 멈춘다. */
+  if(cfg.resultExtra){ try{ cfg.resultExtra(b, win, stats||{}); }catch(e){ if(typeof console!=='undefined' && console.error) console.error('resultExtra 실패:', cfg.name, e); } }
   sfx(_dgResultSfx);
   // ★ 2026-09-25(워크플로 2차 #8): 보상이 전부 보유 상한에 막혀 0 이면 이유를 적는다 — 종전엔 '도전 성공! … X15' 만 있고 칩이 없어 버그처럼 보였다.
   if(rewarded && !_gains.length && cfg.capNote && cfg.capNote()) b.appendChild(el('div','center small warn','재료 보유 상한 도달 — 이번 보상은 받지 못했습니다 (인벤토리에서 제작·합성으로 소비하세요)'));
