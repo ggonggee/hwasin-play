@@ -3275,6 +3275,56 @@ step('5차 roster — 홈 출격 교체 확인·전멸 수단 · 세트 완성 �
   }
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ v5.378(5차 발견 return): ① 복귀 부팅 때 끝난 제작 결과가 방치 정산 창에 지워졌다 → 정산 예약(_settleHold) 동안·정산 창이 열린 동안 판정 보류, 그 뒤 판정
+   ② 제작 실패도 [시스템] 기록 ③ 달성·미수령 주간/월간 의뢰는 경계에서 자동 수령(1회·되감기 0·신규 0) ④ 투기장 티어 골드·출석 완주 알림은 '접속 보상' 머리말 없이. */
+step('5차 return — 정산 뒤 제작 결과 · 실패 기록 · 의뢰 자동 수령 · 알림 머리말', ()=>{
+  const errs=[], S=ev('S');
+  const keep={ craft:S.craft, cm:ev('currentModal'), w:JSON.parse(JSON.stringify(S.weekly||{})), m:JSON.parse(JSON.stringify(S.monthly||{})), pl:S._pendingLoginToast,
+    rec:S.records, ham:S.hammers, gold:S.gold, st:S.stones, kills:S.stats.kills, dd:S.daily&&S.daily.date, ae:S.stats.arenaEnters };
+  try{
+    // ① 보류: 예약 시한 전 → 판정 없음 · 시한 뒤라도 정산 창이 열려 있으면 없음 · 닫히면 판정·보류 해제
+    S.craft={ grade:'E', slot:'장비', cat:'무기', ic:'⚔️', endAt:0, p0:0, sec:1, gold:0, recipe:[] };
+    ev('_settleHold = Date.now()+9e9'); ev('currentModal=null'); ev('craftAutoCheck')();
+    if(!S.craft) errs.push('정산 예약 중인데 제작이 판정됨');
+    ev('_settleHold = Date.now()-1'); ev("currentModal='settle'"); ev('craftAutoCheck')();
+    if(!S.craft) errs.push('정산 창이 열려 있는데 제작이 판정됨');
+    const log=ev("$('#chatLog')"); ev('closeModal')(); ev('currentModal=null'); ev('craftAutoCheck')();
+    if(S.craft) errs.push('정산을 닫은 뒤에도 제작이 판정되지 않음');
+    if(ev('_settleHold')!==0) errs.push('판정 뒤 보류가 풀리지 않음');
+    // ② 실패(p0 0) → [시스템] 줄
+    const lastSys=log.children.map(n=>String(n._html||'')).filter(t=>/제작 실패 — 재료 90% 환급/.test(t));
+    if(!lastSys.length) errs.push('제작 실패가 [시스템] 기록에 없음');
+    ev('closeSub')(); ev('closeModal')();
+    if(!/_settleHold=Date\.now\(\)\+1500; setTimeout\(\(\)=>openModal\('settle'\), 450\)/.test(js)) errs.push('enterHome 정산 예약이 보류보다 뒤');
+    // ③ 주간 자동 수령: 지난주 키·기준에서 w1(5,000킬) 달성·미수령 → 새 주 진입 때 기록서 +3 1회 · {msg} 1개 · 다시 불러도 0 · 신규 키 '' 는 0
+    S._pendingLoginToast=null; S.records=0;
+    S.weekly={ key:'1999-W1', base:{ kills:(S.stats.kills||0)-5000, crafts:S.stats.crafts||0, summons:S.stats.summons||0, towerTries:S.stats.towerTries||0 }, claimed:{} };
+    ev('weeklyState')();
+    if(S.records!==3) errs.push('지난주 w1 자동 수령 기록서 '+S.records+'(기대 3)');
+    const q=S._pendingLoginToast||[];
+    if(!(q.length===1 && typeof q[0]==='object' && /지난 주간 의뢰 자동 수령 — 영웅 기록서 X3/.test(q[0].msg))) errs.push('자동 수령 알림 '+JSON.stringify(q));
+    ev('weeklyState')(); if(S.records!==3) errs.push('같은 주 재호출에 재지급');
+    S.records=0; S.weekly={ key:'', base:null, claimed:{} }; ev('weeklyState')(); if(S.records!==0) errs.push('신규 세이브(키 없음)에 지급');
+    // 되감기(미래 키) → 롤오버·지급 없음
+    S.records=0; S.weekly={ key:'2999-W1', base:{ kills:(S.stats.kills||0)-99999 }, claimed:{} }; ev('weeklyState')(); if(S.records!==0 || S.weekly.key!=='2999-W1') errs.push('시계 되감기에 자동 수령');
+    // 월간: m1(30,000킬) 달성·미수령 → 기록서 +10
+    S.records=0; S._pendingLoginToast=null;
+    S.monthly={ key:'1999-1', base:{ kills:(S.stats.kills||0)-30000, crafts:S.stats.crafts||0, summons:S.stats.summons||0, towerTries:S.stats.towerTries||0 }, claimed:{} };
+    ev('monthlyState')();
+    if(S.records!==10) errs.push('지난달 m1 자동 수령 기록서 '+S.records+'(기대 10)');
+    // ④ 투기장 티어 골드 알림은 객체(머리말 없음)
+    S._pendingLoginToast=null; S.stats.arenaEnters=Math.max(1,S.stats.arenaEnters||0); S.daily.date='2000-01-01'; ev('rollDaily')();
+    const q2=S._pendingLoginToast||[];
+    const arenaMsg=q2.find(x=>(typeof x==='string'?x:(x&&x.msg)||'').includes('티어 골드'));
+    if(!arenaMsg || typeof arenaMsg!=='object') errs.push('투기장 티어 골드 알림이 접속 보상 머리말을 받음 '+JSON.stringify(q2));
+    if(q2.filter(x=>typeof x==='string').length>1) errs.push('문자열(접속 보상 머리말) 알림이 둘 이상 '+JSON.stringify(q2));
+  } finally {
+    S.craft=keep.craft; ev('_settleHold = 0'); ev('closeSub')(); ev('closeModal')();
+    S.weekly=keep.w; S.monthly=keep.m; S._pendingLoginToast=keep.pl; S.records=keep.rec; S.hammers=keep.ham; S.gold=keep.gold; S.stones=keep.st; S.stats.kills=keep.kills;
+    if(S.daily) S.daily.date=keep.dd; S.stats.arenaEnters=keep.ae;
+  }
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ 2026-09-24 회귀: 다중 창 세이브 덮어쓰기. 두 창이 세이브 하나를 번갈아 써서 새 창의 진행이 옛 창의
    자동저장으로 사라졌다(라이브: 999,999,999 → 6.5초 뒤 3,347). load 가 주도권을 잡고, 주도권을 잃은 창의
    save() 는 아무것도 쓰지 않고 잠기는지 본다. */

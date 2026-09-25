@@ -1503,6 +1503,14 @@ const ATTEND_DAYS = [
 ];
 /* ★ B9/G-134: 공지 — 제목 밴드 + 양피지 서술형 본문 (목록 → 상세 2단) */
 const NOTICES = [
+  /* ★ v5.377~378: 5차 발견 — 복귀·편성·강화 화면 정리(보상 수치 변경 없음 · 받지 않은 의뢰 자동 수령은 이용자 유리). */
+  { cat:'[개선]', ic:'📜', t:'받지 않은 주간·월간 의뢰 보상을 자동으로 받습니다 · 복귀 화면 정리', d:'2026-09-25',
+    body:'군주들에게 알립니다.<br><br>'+
+      '· <b>의뢰 자동 수령</b> — 주간·월간 의뢰를 달성해 두고 받지 않은 채 초기화가 지나면 보상이 사라졌습니다. 이제 초기화 때 지난 주기의 달성 보상을 자동으로 받아 드립니다(일일 의뢰는 제외).<br>'+
+      '· <b>복귀 순서</b> — 자리를 비운 사이 끝난 제작의 결과가 방치 정산 창에 가려 사라지던 것을 고쳤습니다. 정산을 받은 뒤 제작 결과가 뜨고, 실패도 [시스템] 기록에 남습니다.<br>'+
+      '· <b>오프라인 골드</b> — 정산 창의 금액이 실제로 받는 금액(골드 효과 포함)으로 표시됩니다(종전엔 효과를 곱하기 전 금액이라 실제보다 적게 보였습니다).<br>'+
+      '· <b>홈 출격 영웅</b> — 영웅 [배치]나 진영 저장으로 홈·탑에 나가는 영웅이 크게 약해지면 먼저 확인합니다(장비는 영웅에게 귀속되어 옮겨지지 않습니다). 영웅 카드에 \"출격\" 표시와 전투력이 보이고, 진영 슬롯 이름이 실제 역할(출격·던전 동행)로 바뀌었습니다.<br>'+
+      '· <b>강화 +20·+25</b> — 달성 순간 전용 연출이 나오고, +25 장비의 강화 화면은 \"MAX\"로 표시됩니다.' },
   /* ★ v5.372: 4차 발견 K3 2단계 — v5.367 에서 '준비 중'으로 흐리게 했던 세트 효과를 실제 전투에 적용(이용자 유리). */
   { cat:'[개선]', ic:'⚔️', t:'세트 효과가 전투에 모두 적용됩니다(쿨타임 감소·응시·광란·주술·강철맹세)', d:'2026-09-25',
     body:'군주들에게 알립니다.<br><br>'+
@@ -2205,7 +2213,7 @@ function rollDaily(){
       const ti = stale ? 0 : clamp(S.arenaTier|0, 0, TIERS.length-1);
       const row = ARENA_TIER_ROWS.find(r=>r[0]===TIERS[ti]);
       if(row){ addGold(row[1], true);
-        (S._pendingLoginToast=S._pendingLoginToast||[]).push(`투기장 ${TIERS[ti]} 티어 골드 ${fmt(row[1])}`);
+        (S._pendingLoginToast=S._pendingLoginToast||[]).push({ msg:`🏟️ 투기장 ${TIERS[ti]} 티어 골드 ${fmt(row[1])}` });   // v5.378: 객체 = '🎁 N일차 접속 보상 —' 머리말 없이(투기장 보상이 접속 보상으로 잘못 표기됐다 — 탑 월간 정산 v5.350 과 같은 유형)
         sysLog(`투기장 매일 보상 — ${TIERS[ti]} 티어 골드 ${fmt(row[1])}`); }
     }
     /* ★ v5.284: 7일 출석 주기 반복 — claimed.attend 를 새 주기로 리셋하는 경로가 통째로
@@ -2217,7 +2225,7 @@ function rollDaily(){
        상태에서는 리셋하지 않는다(이어받기 우선). */
     if(S.claimed && S.claimed.attend && ATTEND_DAYS.every((_,i)=>S.claimed.attend[i])){
       S.claimed.attend={};
-      (S._pendingLoginToast=S._pendingLoginToast||[]).push('7일 출석 완주 — 새 주기가 시작됩니다');
+      (S._pendingLoginToast=S._pendingLoginToast||[]).push({ msg:'🗓️ 7일 출석 완주 — 새 주기가 시작됩니다' });   // v5.378: 접속 보상 머리말 없이
       sysLog('7일 출석 완주 — 새 주기 1일차부터 다시 수령 가능합니다.');
     }
   }
@@ -6030,10 +6038,21 @@ const FESTIVALS=[
   { id:'exp',  n:'성장 축제', ic:'📈', fx:'처치 경험치 +20%' },
   { id:'mat',  n:'채굴 축제', ic:'⛏️', fx:'사냥터 재료 드랍률 +20%' },
 ];
-function festival(){ const p=getWeekKey().split('-W'); return FESTIVALS[(parseInt(p[0])*53+parseInt(p[1]))%FESTIVALS.length]; }
+function festival(wk){ const p=(wk||getWeekKey()).split('-W'); return FESTIVALS[(parseInt(p[0])*53+parseInt(p[1]))%FESTIVALS.length]; }   // wk(선택): 지난주 자동 수령이 그 주 테마를 쓰게(v5.378)
 function festivalMul(id){ return festival().id===id ? 1.2 : 1; }
 /* #16: 주·월 키 서수 — 'YYYY-Wn' → y*53+n(ISO 주는 1~53이라 해가 바뀌어도 단조), 'YYYY-M' → y*12+m. 파싱 불가는 -1(= 비교 안 함, 종전 동작). */
 function weekOrd(k){ const m=/^(\d+)-W(\d+)$/.exec(k||''); return m ? (+m[1])*53+(+m[2]) : -1; }
+/* v5.378(5차 발견 return): 주·월 경계에서 달성했지만 받지 않은 의뢰 보상이 안내 없이 사라졌다(주간 최대 기록서 5·골드 2,000만·강화석 50, 월간 기록서 15 —
+   ✦ 병목 재화). 경계를 넘길 때(키를 덮어쓰기 전) 지난 주기 기준으로 달성·미수령 의뢰를 자동 수령한다 — 투기장 주간 정산 자동화(v5.356)·탑 월간 정산과 같은 방식.
+   보상 수치는 그대로, '받는 경로'만 추가(U1 비감소). 신규 세이브(키 '')는 지급하지 않는다. 되감기 가드(weekOrd/monthOrd) 뒤에서만 불린다 — 앞으로 갈 때 1회.
+   일일 의뢰는 넣지 않는다(보상이 작고, '로그인 하기'를 다음 날 주는 것이 어색하다). */
+function questAutoClaim(label, st, quests){
+  if(!st || !st.key || !st.base) return;
+  const cl=st.claimed||(st.claimed={}), got=[];
+  quests.forEach(q=>{ if(!cl[q.id] && ((S.stats[q.stat]||0)-(st.base[q.stat]||0))>=q.goal){ cl[q.id]=true; got.push(q.give()); } });
+  if(got.length){ (S._pendingLoginToast=S._pendingLoginToast||[]).push({ msg:`📜 지난 ${label} 의뢰 자동 수령 — ${got.join(' · ')}` });
+    try{ sysLog(`지난 ${label} 의뢰(${st.key}) 자동 수령 — ${got.join(' · ')}`); }catch(e){} }
+}
 function monthOrd(k){ const m=/^(\d+)-(\d+)$/.exec(k||''); return m ? (+m[1])*12+(+m[2]) : -1; }
 function weeklyState(){
   if(!S.weekly || typeof S.weekly!=='object') S.weekly={ key:'', base:null, claimed:{} };
@@ -6042,7 +6061,9 @@ function weeklyState(){
   /* ★ v5.295: 실제 주 롤오버(신규 세이브 최초 초기화가 아닐 때)에만 이번 주 축제를 알린다 —
      최초 부팅(키 '')에 토스트를 뿌리면 튜토리얼 흐름을 침범한다. */
   if(S.weekly.key && S.weekly.key!==k){ const f=festival(); toast(`${f.ic} 이번 주는 ${f.n}입니다 — ${f.fx}`); }
-  if(S.weekly.key!==k){ S.weekly.key=k; S.weekly.base={ kills:S.stats.kills||0, crafts:S.stats.crafts||0, summons:S.stats.summons||0, towerTries:S.stats.towerTries||0 }; S.weekly.claimed={}; save(); }
+  if(S.weekly.key!==k){
+    questAutoClaim('주간', S.weekly, WEEKLY_QUESTS.concat([festivalQuest(S.weekly.key||undefined)]));   // v5.378: 지난주 달성·미수령 자동 수령(덮어쓰기 전)
+    S.weekly.key=k; S.weekly.base={ kills:S.stats.kills||0, crafts:S.stats.crafts||0, summons:S.stats.summons||0, towerTries:S.stats.towerTries||0 }; S.weekly.claimed={}; save(); }
   return S.weekly;
 }
 /* ★ v5.256: 월간 의뢰 — 매월 1일 리셋. 목표는 성실 플레이 기준(일 킬 ~700×30일=21,000에
@@ -6054,6 +6075,7 @@ function monthlyState(){
   const k=getMonthKey();
   { const a=monthOrd(S.monthly.key), b=monthOrd(k); if(a>=0 && b>=0 && b<a) return S.monthly; }   // #16: 월을 되돌렸다 — 리셋·탑 정산·용광로 시련 재개방 없음
   if(S.monthly.key!==k){
+    questAutoClaim('월간', S.monthly, MONTHLY_QUESTS);   // v5.378: 지난달 달성·미수령 자동 수령(덮어쓰기 전)
     const prevKey=S.monthly.key, prevBase=S.monthly.base;
     S.monthly.key=k; S.monthly.base={ kills:S.stats.kills||0, crafts:S.stats.crafts||0, summons:S.stats.summons||0, towerTries:S.stats.towerTries||0 }; S.monthly.claimed={};
     /* ★ 2026-09-25(#24): 시련의 탑 월간 순위 정산 — 지난 달(마지막으로 기록된 달) 1회 이상 도전했으면 현재 순위로 주사위. 여러 달 비웠어도 1회만(그 달 기준). */
@@ -6112,8 +6134,8 @@ const WEEKLY_QUESTS=[
      전부 있고, 수령 플래그는 w.claimed['fest'] 동적 키(daily counts 관례). 주 경계가
      축제 교체와 같은 ISO 월요일이라 테마-의뢰 정합이 자동 보장된다. */
 const FEST_REWARD_TXT='강화석 X50';
-function festivalQuest(){
-  const f=festival();
+function festivalQuest(wk){
+  const f=festival(wk);
   const spec={
     gold:{ stat:'kills',  goal:6000, txt:'몬스터 6,000마리 처치' },
     exp: { stat:'summons',goal:20,   txt:'영웅 소환 20회' },
@@ -10025,7 +10047,8 @@ function resolveCraft(forceSuccess){
       toast(`✨ <b style="color:var(--g-legend)">레전더리 ${slot} 제작 성공!</b>`);
       sysLog(`<b style="color:var(--g-legend)">레전더리 ${slot} 탄생 — 40% 확률을 뚫었습니다</b>`); }
     Battle.refreshParty(); guideCheck('craft',{grade,cat,slot}); }
-  else { recipe.forEach(r=>matGain(r.k, Math.max(1,Math.floor(r.need*0.9)))); }
+  else { recipe.forEach(r=>matGain(r.k, Math.max(1,Math.floor(r.need*0.9))));
+    sysLog(`${gradeBadge(grade)} ${slot} 제작 실패 — 재료 90% 환급`); }   // v5.378: 결과 팝업을 놓쳐도 실패가 [시스템] 기록에 남게(성공은 이미 남는다 — K4 원칙). 난수 없음
   refreshHUD();
   // 제작 결과 팝업 (G-30: 성공 시 '제작 성공' 타이틀 + 상단 '확인' 헤더바 + 부위 아이콘 + 플레이버)
   /* ★ v5.123: [확인]이 유일한 동작이므로 ✕ 없이(noX). 종전의 b2-head '확인' 헤더바는
@@ -10109,8 +10132,13 @@ function craftAutoCheck(){
      (v5.123 noX 정책 미적용). 자연 만료도 확정/즉시와 같은 단일 경로로 판정한다. */
   /* ★ 2026-09-25(3차 발견 K2): 전투 중·결과 카드 3초 동안은 판정을 미룬다 — 종전엔 전투 5초에 제작이 자연 완료되면 대장간과 결과 팝업이 전투 화면을 덮고
      (던전 입장 때 closeModal 로 currentModal 이 비어 있다), 결과 카드 타이머의 closeModal 이 제작 결과 팝업을 지웠다. 결과는 같고 표시만 전투 뒤로 늦어진다. */
+  /* v5.378(5차 발견 return): 복귀 부팅 때 끝난 제작은 첫 프레임에 판정돼 결과 팝업이 뜨는데, 450ms 뒤 방치 정산(openModal → closeSub)이 그 팝업을 지웠다 —
+     L 제작 실패는 흔적이 0, 성공은 [리더에게 장착]·[다음 길잡이]가 사라졌다. 정산이 예약되면(enterHome) 그 창이 닫힐 때까지 판정을 미룬다 → 정산 → 결과 순서.
+     ⚠ 보류는 시각(_settleHold)으로 스스로 풀린다 — smoke·시뮬의 setTimeout 스텁은 콜백을 부르지 않아 '타이머가 풀어 주는 플래그'면 영구히 막힌다. */
+  if(_settleHold){ if(Date.now()<_settleHold || currentModal==='settle') return; _settleHold=0; }
   if(S.craft && Date.now()>=S.craft.endAt && !(Battle.inDungeon && Battle.inDungeon()) && currentModal!=='dgResult' && currentModal!=='arenaResult') resolveCraft();
 }
+let _settleHold=0;   // 메모리 전용(S 에 넣지 않는다) — 방치 정산 자동 표시 예약 중 제작 판정 보류 시한(ms)
 
 /* ------- 소환 ------- */
 /* ★ B4/G-50: 조각은 여전히 '직업' 단위로 누적되고, 20개를 넘으면 해당 직업의
@@ -10893,7 +10921,8 @@ function enterHome(){
   Battle.resize(); Battle.start(); refreshHUD(); tickClock();
   /* ★ 2026-09-25(#26): 복귀 적립 안내·접속 보상 토스트는 홈 진입 때 — 부팅(load 직후)에 띄우면 타이틀 화면에서 사라져 보지 못한다(실물 확인).
      접속 보상 큐 플러시(flushLoginToasts)는 아래 monthlyState 호출 뒤에 있다. */
-  if(S.awayBank && (S.awayBank.days|0)>0) setTimeout(()=>toast(`🏠 돌아오셨군요 — 비운 ${S.awayBank.days}일분 탑·미궁 몫을 적립했습니다 · 좌상단 시계에서 수령`), 900);
+  /* v5.378: 방치 정산 창이 떠 있으면 같은 카드(복귀 적립)를 그 창이 이미 보여 준다 — 토스트 중복·금액 가림을 막는다. 정산이 안 뜨는 복귀에서만 토스트. */
+  if(S.awayBank && (S.awayBank.days|0)>0) setTimeout(()=>{ if(currentModal!=='settle') toast(`🏠 돌아오셨군요 — 비운 ${S.awayBank.days}일분 탑·미궁 몫을 적립했습니다 · 좌상단 시계에서 수령`); }, 900);
   for(let i=0;i<5;i++) pushChat(pick(CHAT_LINES)(), '전체');
   sysLog('결정의 시대에 오신 것을 환영합니다, 군주여.');
   /* ★ v5.272: 의뢰 주간·월간 스냅샷을 접속 즉시 확정 — 종전엔 퀘스트 탭을 열어야
@@ -10917,7 +10946,7 @@ function enterHome(){
   /* ★ v5.113: 종전엔 '튜토리얼 미완료'이기만 하면 재접속할 때마다 인트로가 다시 돌아
      사전지급 자원이 무제한 중복 지급됐다(새로고침만으로 조각 파밍 가능). 1회로 못박는다. */
   if(!S.seenTutorial && !S.introDone){ _introRunning=true; setTimeout(runIntro, 500); }   // 동기로 먼저 켠다 — 500ms 틈의 tutPoll 도 막는다
-  else { renderTutorial(); if(S.offlinePending>0) setTimeout(()=>openModal('settle'), 450); }
+  else { renderTutorial(); if(S.offlinePending>0){ _settleHold=Date.now()+1500; setTimeout(()=>openModal('settle'), 450); } }   // v5.378: 정산 뒤에 제작 결과(craftAutoCheck)
 }
 /* ★ B1/G-06: START → 홈 직행이 아니라 로그인 목업 2단계(알약 버튼 → 계정 선택 시트)를 거친다.
    ★ B1/G-07: 서버 선택 [입장] 은 확인 오버레이를 띄우고, [예]에서만 enterHome() 한다. */
