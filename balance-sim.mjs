@@ -60,6 +60,15 @@ const orderTally={ unlockH:null, days:0, delivered:0, crafts:0, goldSpent:0, ham
    ⚠ v5.373 재판정: 0.17 은 0×0 전장(K1 교정 전) 값. 교정 전장에서 enterGuildRaid 실제 15초 전투로 잰 판당 피해/총CP 중앙값은 0.230~0.247(p10 0.163·p90 0.32~0.36) → 기본 0.23.
    (단계 표가 지수형이라 피해 ×1.4 여도 곡선은 약 +2단계 — 100일 48단계·기록서 +9 로 결론 동일.) */
 const GUILD_ON = process.argv.slice(3).some(a=>a==='guild=1');
+/* ★ v5.380(5차 발견 currency): 수령형 보상·코인 소비 — 시뮬 재화 모델의 누락(검증: 캐주얼 100일 주사위 유입의 약 24%만 보았다 → 소환서 +43%·조각 +52%,
+   풀 600h 영웅 강화 0단계의 주원인). 둘 다 기본 꺼짐(기준선 불변).
+   claims=1 — 매일: 일일 미션 버튼 보상 합(DAILY_QUESTS 정본에서 파생 — noBtn 제외) · 7일 출석 표 순환(ATTEND_DAYS 정본 give).
+              guild=1 과 함께면 길드 레이드 기본 보상 2회(회색 10~30·길드코인 20~50 — game.js enterGuildRaid reward 와 동기) · 약탈 1회
+              (길드코인 round(40~140×0.3)·골드 min(3천만, 200만~1,200만) raw·회색 5~15 — game.js 약탈 reward 와 동기). 모달 클로저 안이라 값을 복제했다.
+   spend=scroll|hammer — 길드코인 200 → 영웅 소환서 X20(scroll) / 600 → 전설 망치 X20(hammer) · 회색코인 900 → 영웅 기록서 1권(GRAYSHOP 정본 give). */
+const CLAIMS_ON = process.argv.slice(3).some(a=>a==='claims=1');
+const SPEND = (()=>{ for(const a of process.argv.slice(3)){ const m=/^spend=(scroll|hammer)$/.exec(a||''); if(m) return m[1]; } return ''; })();
+const claimTally={ dice:0, attend:0, gray:0, coin:0, gold:0, raids:0, plunders:0, spentScroll:0, spentHammer:0, spentRecord:0 };
 const GUILD_CAL = (()=>{ for(const a of process.argv.slice(3)){ const m=/^guildcal=([\d.]+)$/.exec(a||''); if(m) return Number(m[1]); } return 0.23; })();
 const guildTally={ curve:[], kills:0, rec:0, coin:0, dice:0, cycKills:{} };
 const OFFCAP_ARG = (()=>{ for(const a of process.argv.slice(3)){ const m=/^offcap=(\d+)$/.exec(a||''); if(m) return Number(m[1]); } return null; })();
@@ -347,6 +356,23 @@ function dailyStep(){
   const day=Math.floor(simSec/86400);
   if(day===dailyStep._day) return; dailyStep._day=day;
   const cp=myCP(); let acts='';   // ★ v5.245: 일일 콘텐츠 수행을 액션 이벤트로 반환
+  /* v5.380 claims=1 — 위 CLAIMS_ON 주석. 난수는 게임의 ri(시뮬 전역 시드 스트림)를 쓴다 — 옵션을 켜면 궤적이 갈리는 것은 정상. */
+  if(CLAIMS_ON){
+    const dq=ev('DAILY_QUESTS').filter(q=>!q.noBtn).reduce((a,q)=>a+(q.rw||0),0); S.dice=(S.dice||0)+dq; claimTally.dice+=dq;
+    const AD=ev('ATTEND_DAYS'); AD[day%AD.length][2](); claimTally.attend++;
+    if(GUILD_ON){ const ri=ev('ri');
+      for(let k=0;k<2;k++){ const g=ri(10,30), c=ri(20,50); S.gray=(S.gray||0)+g; S.guildCoin=(S.guildCoin||0)+c; claimTally.gray+=g; claimTally.coin+=c; claimTally.raids++; }
+      { const tok=Math.max(1, Math.round(ri(40,140)*0.3)), gd=Math.min(30000000, Math.round(ri(2000000,12000000))), g2=ri(5,15);
+        S.guildCoin=(S.guildCoin||0)+tok; ev('addGold')(gd, true); S.gray=(S.gray||0)+g2; claimTally.coin+=tok; claimTally.gold+=gd; claimTally.gray+=g2; claimTally.plunders++; }
+    }
+  }
+  /* v5.380 spend= — 코인 소비(위 SPEND 주석). 상점 정본 give 를 부른다. */
+  if(SPEND){
+    const GS=ev('GUILDSHOP'), it=GS.find(x=>x.t===(SPEND==='scroll'?'영웅 소환서 X20':'전설 망치 X20'));
+    if(it){ let n=0; while((S.guildCoin||0)>=it.cost && n<50){ S.guildCoin-=it.cost; it.give(); n++; } if(SPEND==='scroll') claimTally.spentScroll+=n; else claimTally.spentHammer+=n; }
+    const rec=ev('GRAYSHOP').find(x=>x.t==='영웅 기록서 1권');
+    if(rec){ let n=0; while((S.gray||0)>=rec.cost && n<20){ S.gray-=rec.cost; rec.give(); n++; } claimTally.spentRecord+=n; }
+  }
   /* ★ 2026-09-25(#2 2단계): 투기장 — 주가 바뀌면 순위 초기화(ARENA_RANK_RESET) 후 N판. 순위 갱신식은 arenaResult 정본 그대로
      (승: round(순위×0.94)−ri(1,5)−연승 / 패: round(순위×1.03)+ri(1,4)). S.arenaWeek 를 현재 주차로 둬 게임의 주차 가드(arenaGoldBuffPct)를 그대로 탄다. */
   if(ARENA_N>0){
@@ -805,6 +831,11 @@ const funTimes=[]; let funGapNow=0, funGapMax=0, funGapAt=0;
    ★ v5.304: '시련' 분리(8종) — 잔불(v5.294)·용광로(v5.300)·축제 의뢰(v5.297)가
    전부 '일일콘텐츠'에 묶여 콘텐츠 확장 시리즈의 재미 기여가 보이지 않았다. */
 const funKinds={ '제작':0, '강화':0, '합성':0, '상급재료':0, '세트':0, '일일콘텐츠':0, '시련':0, '각성·결정':0 };
+/* ★ v5.380(5차 발견 ceiling): '성장 결정' 지표 — 상태를 바꾸는 선택만 센다(제작·장착 · 강화/위험 강화 도전 · 각성·✦ · 영웅 강화 · 영웅 합성 · 세트 변화 · 탑 신기록).
+   결정가호 상시 구매 · 상한 재료 재활용 합성 · 강화용 소환서 자동 구매 · 소탕 · 주사위 교환 같은 자동 소비는 뺀다.
+   기존 funKinds(아래 '[재미 지표]')는 did 문자열 정규식이라 그것까지 행동으로 세어 포화 뒤(80~100일)를 약 12회/일로 보고했다(실제 결정 0.5~0.7회/일,
+   '강화용 소환서'가 /강화/ 에 걸림 · 결정가호가 '각성·결정' 칸). funKinds 는 과거 기록과의 연속성 때문에 그대로 둔다 — 판단은 이 지표로. */
+const decTimes=[]; let decN=0, decTowerRec=0;
 while(simSec < MAX_HOURS*3600 && windows<51200){   // ★ v5.257: 창 상한 51200(=25600h 측정 가능)
   // ① 사냥터 선택(합리적 플레이)
   const idx=pickHuntIdx();
@@ -904,15 +935,21 @@ while(simSec < MAX_HOURS*3600 && windows<51200){   // ★ v5.257: 창 상한 512
   /* ★ 세트 효과 계측 (v5.228): heroPower 의 setm(=setDamageMul)이 정본 공식에 이미 들어
      있지만 시뮬이 그리디 제작(부위별 최고 등급)이라 세트가 '자연 형성'되는지 실측한 적이
      없었다. 배율이 변할 때마다 이벤트로 남긴다 — 세트 통합 곡선의 근거 데이터. */
+  let setChg=false;
   {
     const setm=ev('setDamageMul')();
-    if(Math.abs(setm-lastSetm)>1e-9){
+    if(Math.abs(setm-lastSetm)>1e-9){ setChg=true;
       const act=ev('activeSets')().filter(x=>x.c>=3).map(x=>`${x.n} ${x.c}`).join(', ')||'없음';
       events.push({t:+(simSec/3600).toFixed(2), cp, what:`세트 ×${setm.toFixed(3)} (${act})`});
       lastSetm=setm;
       did+=' 세트';   // v5.244: 세트 변화도 액션 이벤트로 집계
     }
   }
+  /* v5.380 성장 결정 집계(위 decTimes 주석) — 창 안의 결정 개수. 탑은 기록이 오른 창만(첫 기록 제외 — 초기화 값). */
+  { let dec=0;
+    if(crafts>0) dec+=crafts; if(ups>0) dec++; if(rk.ups>0) dec++; if(awakenUps>0) dec++; if(enhUps>0) dec++; if(fusedName) dec++; if(setChg) dec++;
+    const tr=ev('S')._tower||0; if(tr>decTowerRec){ if(decTowerRec>0) dec++; decTowerRec=tr; }
+    if(dec>0){ decN+=dec; decTimes.push(+(simSec/3600).toFixed(2)); } }
   /* ★ v5.244 재미 집계 — did 가 비어 있으면 '액션 없는 창'. 최장 공백은 어느 시점에서
      생기는지(funGapAt)까지 남긴다 — 썰렁한 구간의 정체를 다음 개선의 표적으로 삼는다. */
   if(did.trim()){ funTimes.push(+(simSec/3600).toFixed(2)); funGapNow=0;
@@ -975,6 +1012,13 @@ log('\n[등급 도달] ', Object.entries(gradeReached).map(([g,h])=>`${g}:${h}h`
   const kinds=Object.entries(funKinds).filter(([,n])=>n>0).sort((a,b)=>b[1]-a[1]);
   const ksum=kinds.reduce((a,[,n])=>a+n,0)||1;
   log('[재미 지표] 행동 종류 분포 — '+kinds.map(([k,n])=>`${k} ${n}창(${Math.round(n/ksum*100)}%)`).join(' · ')+` · ${kinds.length}/8종`);
+  /* v5.380: 성장 결정 밀도(자동 소비 제외) — 일 구간(0~7·7~30·30~100·100일+)별 결정 수/접속일. 판단은 이 줄로(감시 규칙 후보 ≥1/접속일은 기준값 확정 전 관찰용). */
+  { const dbins=[[0,7],[7,30],[30,100],[100,Infinity]];
+    const actDayFrac = CASUAL ? (ACTIVE_WINDOWS_PER_DAY/48) : 1;   // 캐주얼은 하루 중 접속 창 비율(하루 8시간 = 1/3)
+    const seg=dbins.map(([a,b])=>{ const h0=a*24, h1=Math.min(b*24,totalH); if(h1<=h0) return null;
+      const n=decTimes.filter(t=>t>=h0&&t<h1).length, days=(h1-h0)/24;
+      return `${a}~${b===Infinity?'':b}일 결정 창 ${(n/days).toFixed(2)}/접속일`; }).filter(Boolean).join(' · ');
+    log(`[재미 지표] 성장 결정(자동 소비 제외, v5.380) — 결정 ${decN}건 · 결정 있는 창 ${decTimes.length} · ${seg}${CASUAL?` (캐주얼: 접속일 = 달력일, 접속 창 비율 ${actDayFrac.toFixed(2)})`:''}`); }
 }const GORDER=['N','R','E','L'];
 let walls=[];
 for(let i=1;i<events.length;i++){
@@ -1013,6 +1057,7 @@ log(`\n총 시뮬: ${(simSec/3600).toFixed(1)}h · 창 ${windows}회 · 최종 C
     const ck=Object.values(guildTally.cycKills), z=ck.filter(n=>n===0).length, one=ck.filter(n=>n===1).length, many=ck.filter(n=>n>1).length;
     log(`[진단] 길드 토벌(#14, cal ${GUILD_CAL}): ${[3,7,14,30,60,100].map(pick).filter(Boolean).join(' · ')} · 처치 ${guildTally.kills} · 주기 ${ck.length}개(0처치 ${z}·1처치 ${one}·2+처치 ${many}) · 기록서 +${guildTally.rec} · 길드코인 +${guildTally.coin} · 주사위 +${guildTally.dice}`); }
   if(ORDERS_ON) log(`[진단] 대장간 주문(#3): 해금 ${orderTally.unlockH===null?'없음':orderTally.unlockH+'h'} · ${orderTally.days}일 · 납품 ${orderTally.delivered}건 · 주문 제작 ${orderTally.crafts}회(골드 ${(orderTally.goldSpent/1e6).toFixed(0)}M) · 전설 망치 +${orderTally.hammers} · 주사위 +${orderTally.dice} · 골드 +${(orderTally.gold/1e6).toFixed(0)}M`);
+  if(CLAIMS_ON||SPEND) log(`[진단] 수령·소비(claims=${CLAIMS_ON?1:0}, spend=${SPEND||'-'}): 일일 미션 주사위 +${claimTally.dice} · 출석 ${claimTally.attend}일 · 레이드 기본 ${claimTally.raids}회 · 약탈 ${claimTally.plunders}회(골드 +${(claimTally.gold/1e6).toFixed(0)}M) · 회색 +${claimTally.gray} · 길드코인 +${claimTally.coin} · 소비: 소환서 X20 ${claimTally.spentScroll}회 · 전설 망치 X20 ${claimTally.spentHammer}회 · 기록서 ${claimTally.spentRecord}권 · 잔여 길드코인 ${ev('S').guildCoin||0} · 회색 ${ev('S').gray||0} · 재료 열쇠 ${ev('S').tickMat||0}`);
   if(BENCHSET) log(`[진단] 벤치 세트(benchset=1): 제작·장착 ${benchTally.made} · 실패 ${benchTally.fail} · 첫 장착 ${benchTally.first??'-'}h · 세트 배율 ×${ev('setDamageMul')().toFixed(3)} · 발동(6+) ${ev('activeSets')().filter(x=>x.c>=6).map(x=>x.n+' '+x.c).join(', ')||'없음'}`);
   if(ARENA_N>0) log(`[진단] 투기장(#2 측정): 주당 ${ARENA_N}판·승률 ${ARENA_WIN<0?`실전투 ${arenaTally.wins}/${arenaTally.fights}=${arenaTally.fights?(arenaTally.wins/arenaTally.fights*100).toFixed(1):0}%`:ARENA_WIN} · ${arenaTally.weeks}주 평균 순위 ${arenaTally.weeks?Math.round(arenaTally.rankSum/arenaTally.weeks):0}위 · 평균 버프 +${arenaTally.weeks?Math.round(arenaTally.buffSum/arenaTally.weeks):0}%`);
   log(`[진단] 영웅 강화(#12): 총 ${enhTally.ups}단계 ·`, ev('ownedHeroes')().map(h=>`${h.name.slice(0,5)}+${ev('heroEnhLv')(h.hero_id)}`).join(' · '));
