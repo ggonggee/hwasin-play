@@ -532,23 +532,28 @@ const SET_PIECES = {
 const SET_OF={}; Object.entries(SET_PIECES).forEach(([n,l])=>l.forEach(x=>{ SET_OF[x]=n; }));
 function setOfItem(nm){ return SET_OF[nm]||null; }
 function setTierMul(t){ return t ? ((1+(t.dmg||0)/100)*(1/(1-Math.min(0.7,(t.def||0)/100)))) : 1; }   // setDamageMul 의 단일 세트 식
-function setProgLine(nm){
+/* it(선택) = 지금 보고 있는 장비 개체. wearing 은 이름 기준(세트 집계 규칙과 같다)이라, 같은 이름의 다른 사본이 착용 중이면 이 개체가 미착용이어도 참이 된다 —
+   v5.374(리뷰): 그때 '착용 중'이라 쓰면 바로 아래 [장착] 버튼과 모순돼 보였다 → '같은 조각 착용 중(입어도 +0)'. 대장간·제작 팝업은 레시피 이름이라 it 없이 부른다. */
+function setProgLine(nm, it){
   const sn=setOfItem(nm); if(!sn || typeof S==='undefined' || !S) return '';
   const s=setByName(sn); if(!s) return '';
   const c=setPieceCount(sn), max=(SET_PIECES[sn]||[]).length, wearing=(S.equips||[]).some(e=>e && e.equipped && e.slot===nm);
   const nx=s.tiers.find(t=>t.k>c) || s.tiers[s.tiers.length-1];
-  return `세트 <b>${sn}</b> ${c}/${max}${wearing?' · 착용 중':` → 착용 시 ${Math.min(max,c+1)}`} · ${nx.k}세트 ×${setTierMul(nx).toFixed(2)}`;
+  const wTxt = wearing ? ((it && !it.equipped) ? ' · 같은 조각 착용 중(이 장비를 입어도 진행 +0)' : ' · 착용 중') : ` → 착용 시 ${Math.min(max,c+1)}`;
+  return `세트 <b>${sn}</b> ${c}/${max}${wTxt} · ${nx.k}세트 ×${setTierMul(nx).toFixed(2)}`;
 }
 /* 장착 가정 계산 — equipItem 을 실제로 돌려 전후 전투력·세트 단계를 잰 뒤 **원상 복원**(equipItem 은 S.equips 를 새 배열로 바꾸고 e 만 바꾼다).
    heroPower·totalCP·setTierOf 는 순수 함수. ⚠ 복원(finally)을 빼지 마라 — 확인창만 열어도 장비가 파괴된다. */
+/* v5.374(리뷰): m0/m1 = 계정 전체 세트 배율(setDamageMul — 활성 세트를 합친 뒤 한 번 결합) 전후. 확인창의 세트 줄에 세트별 단독 ×값을 쓰면
+   다른 세트가 함께 켜져 있을 때(특히 방어 합계 70% 상한) 실제 변화와 크게 어긋났다(응시+광란+강철맹세: 실제 −15.8% 인데 단독값은 −46.2%). */
 function equipPreview(e, hid){
   const eq0=S.equips, st={ q:e.equipped, h:e.heroId }, pre=SETS.map(s=>({ s, k:setTierOf(s) }));
-  const L0=heroEntry(hid), p0=L0?heroPower(L0):0, t0=totalCP(); let p1=p0, t1=t0, broke=[], gain=[];
-  try{ equipItem(e, hid); const L1=heroEntry(hid); p1=L1?heroPower(L1):0; t1=totalCP();
+  const L0=heroEntry(hid), p0=L0?heroPower(L0):0, t0=totalCP(), m0=setDamageMul(); let p1=p0, t1=t0, m1=m0, broke=[], gain=[];
+  try{ equipItem(e, hid); const L1=heroEntry(hid); p1=L1?heroPower(L1):0; t1=totalCP(); m1=setDamageMul();
     broke=pre.filter(x=>setTierOf(x.s)<x.k).map(x=>({ s:x.s, from:x.k, to:setTierOf(x.s) }));
     gain=pre.filter(x=>setTierOf(x.s)>x.k).map(x=>({ s:x.s, from:x.k, to:setTierOf(x.s) })); }
   finally { S.equips=eq0; e.equipped=st.q; e.heroId=st.h; }
-  return { p0, p1, t0, t1, broke, gain };
+  return { p0, p1, t0, t1, m0, m1, broke, gain };
 }
 function setPieceCount(name){
   const list = SET_PIECES[name];
@@ -5369,6 +5374,9 @@ function tutTarget(){
   // 3) 최상위 팝업(확인창·결과·하위 화면) — 그 안의 주 버튼, 튜토리얼 경로가 아닌 하위 화면이면 ✕
   const ovl=tutTopOverlay();
   if(ovl){
+    /* v5.374(리뷰): 손해 확인창(safeNo — 장착하면 총 전투력이 내려감)은 금색 1개 규칙상 [취소]가 주 버튼이다. ovlText('장착')·TUT_PRIMARY_TEXT 텍스트 매칭보다
+       먼저 본다 — 안 그러면 손가락은 [장착], 금색은 [취소]로 서로 반대 버튼을 가리킨다. tutPrimaryIn 의 매칭 순서는 전역으로 바꾸지 마라(다른 확인창 흐름이 모두 바뀐다). */
+    if(ovl.dataset && ovl.dataset.safeNo){ const g=[...ovl.querySelectorAll('.btn.gold')].find(tutVisible); return g||null; }
     /* 단계가 콕 집은 버튼(강화/장착 등)이 이 팝업에 있으면 그것부터 — 장비 상세엔 [장착]·[강화]가 함께 있다. */
     if(st.ovlText){ const want=[...ovl.querySelectorAll('button, .btn')].filter(tutVisible)
                       .find(b=>st.ovlText.test((b.textContent||'').trim())); if(want) return want; }
@@ -9329,7 +9337,7 @@ function pwBodyHTML(){
     `<span class="pn-bar"><i style="width:${pct}%"></i></span><span class="pn-pct">${pct}%</span></div>`+
     `<div class="pw-cur"><span>${eImg("🪙",2)} <b>${fmt(S.gold)}</b></span><span>${eImg("💎",2)} <b>${fmt(S.ruby)}</b></span></div>`+
     `<div class="pw-batline"><span class="pw-bat">🔋 100%</span></div>`+
-    (_pwSnap ? `<div class="pw-sess">절전 ${mmss(Math.round((Date.now()-_pwSnap.t)/1000))} · 처치 +${fmt(Math.max(0,((S.stats&&S.stats.kills)|0)-_pwSnap.kills))}</div>` : '')+   // K4(4차): 이번 절전 경과·처치
+    (_pwSnap ? `<div class="pw-sess">절전 ${mmss(Math.max(0, Math.round((Date.now()-_pwSnap.t)/1000)))} · 처치 +${fmt(Math.max(0,((S.stats&&S.stats.kills)|0)-_pwSnap.kills))}</div>` : '')+   // K4(4차): 이번 절전 경과·처치
     `<div class="pw-clock">${clock}</div>`+
     `<div class="pw-grid">${grid}</div>`+
     `<div class="pw-two">`+
@@ -9431,9 +9439,12 @@ function endPowerSave(){
   sfx('tap');
   /* K4(4차): 절전 요약 — 토스트(6초)와 [시스템] 기록. growthBurst 는 쓰지 않는다(#modal-root 안이라 모달이 닫힌 홈에선 보이지 않는다). */
   try{ const s=_pwSnap; _pwSnap=null; if(s){ const sec=Math.round((Date.now()-s.t)/1000);
-    if(sec>=10){ const g=Math.max(0,(S.gold||0)-s.gold), k=Math.max(0,((S.stats&&S.stats.kills)|0)-s.kills), dm=GORDER.map((gr,i)=>[gr, matGradeTotal(gr)-s.mats[i]]).filter(x=>x[1]>0);
-      const msg=`절전 ${sec>=60?Math.floor(sec/60)+'분 ':''}${sec%60}초 — 처치 +${fmt(k)} · 골드 +${fmt(g)}${dm.length?' · 재료 '+dm.map(([gr,n])=>GRADES[gr].name+' +'+fmt(n)).join(' '):''}`;
-      toast(msg, 6000); sysLog(msg); } } }catch(e){}
+    /* v5.374(리뷰): 골드·재료는 순변화를 부호와 함께 — 절전 중에도 결과 팝업의 [다시 제작] 등으로 쓸 수 있어 줄 수 있다. 종전 Math.max(0,…)는 순손실을 '+0'으로 감췄다.
+       처치는 단조 증가라 0 클램프 그대로. */
+    if(sec>=10){ const g=(S.gold||0)-s.gold, k=Math.max(0,((S.stats&&S.stats.kills)|0)-s.kills), dm=GORDER.map((gr,i)=>[gr, matGradeTotal(gr)-s.mats[i]]).filter(x=>x[1]!==0);
+      const sg=n=>(n<0?'−':'+')+fmt(Math.abs(n));
+      const msg=`절전 ${sec>=60?Math.floor(sec/60)+'분 ':''}${sec%60}초 — 처치 +${fmt(k)} · 골드 ${sg(g)}${dm.length?' · 재료 '+dm.map(([gr,n])=>GRADES[gr].name+' '+sg(n)).join(' '):''}`;
+      toast(msg, 6000); sysLog(msg); } } }catch(e){ if(typeof console!=='undefined' && console.error) console.error('절전 요약 실패:', e); }   // v5.374: try 유지(해제 뒤처리는 끝났다) · 흔적은 남긴다
 }
 
 // ★ B9/G-126: 미수령 1건 이상이면 상단에 [모두 받기] 노출
@@ -9628,6 +9639,7 @@ function showConfirmDialog(opt){
   const yes=el('button','btn'+(opt.safeNo?'':' gold'),opt.yes||'확인'); yes.onclick=()=>{ close(); if(opt.onYes) opt.onYes(); };
   const no=el('button','btn'+(opt.safeNo?' gold':''),opt.no||'취소'); no.onclick=close;
   row.append(yes,no); pop.appendChild(row);
+  if(opt.safeNo) ov.dataset.safeNo='1';   // v5.374: 튜토리얼 손가락이 금색 [취소]를 짚게(tutTarget)
   ov.appendChild(pop); ov.onclick=ev=>{ if(ev.target===ov) close(); };
   root.appendChild(ov);
 }
@@ -9641,8 +9653,9 @@ function itemDetail(e, heroId){ _itemDetailHeroId=heroId||null;
   const sc=slotSchema(e.slot);
   const opts=sc.stats.map(k=>statLine(k,e.enh,G.mult)).filter(Boolean);
   const card=el('div','item-card grade-'+e.grade); card.style.setProperty('--gc',G.color);
+  const _sp=setProgLine(e.slot, e);   // v5.374: 한 번만 계산 · 이 개체를 넘겨 미착용 사본이면 '같은 조각 착용 중'
   card.innerHTML=`<div class="ic-head"><div class="ic-ico grade-${e.grade}" style="--gc:${G.color}">${equipImg(e.slot,2)}</div>
-    <div><div style="color:${G.color};font-weight:800">${G.name} ${e.slot} +${e.enh}</div><div class="small mut">부위: ${sc.part}${e.equipped?' · 장착 중':''}</div>${setProgLine(e.slot)?`<div class="small set-prog">${setProgLine(e.slot)}</div>`:''}</div></div>`
+    <div><div style="color:${G.color};font-weight:800">${G.name} ${e.slot} +${e.enh}</div><div class="small mut">부위: ${sc.part}${e.equipped?' · 장착 중':''}</div>${_sp?`<div class="small set-prog">${_sp}</div>`:''}</div></div>`
     + opts.map(o=>`<div class="ic-opt opt-row"><span>${o.n}</span><span class="v">${o.v}</span></div>`).join('')
     + (sc.special?`<div class="ic-opt opt-sp">${sc.special}</div>`:'');
   b.appendChild(card);
@@ -9676,10 +9689,14 @@ function itemDetail(e, heroId){ _itemDetailHeroId=heroId||null;
     let _pvMsg='장착 하시겠습니까?', _pvLoss=false;
     try{ const pv=equipPreview(e, _itemDetailHeroId); const L=heroEntry(_itemDetailHeroId);
       _pvLoss = pv.t1 < pv.t0;
-      _pvMsg = `<div>${L?L.name+' ':''}${cpDeltaLine(pv.p0, pv.p1)}</div><div class="small mut">총 전투력 ${fmt(pv.t0)} → ${fmt(pv.t1)}</div>`
-        + pv.broke.map(x=>`<div class="small" style="color:var(--bad)">⚠ ${x.s.n} ${x.from}세트 해제 ×${setTierMul(x.s.tiers.find(t=>t.k===x.from)).toFixed(2)} → ×${setTierMul(x.s.tiers.find(t=>t.k===x.to)).toFixed(2)}</div>`).join('')
-        + pv.gain.map(x=>`<div class="small" style="color:var(--ok)">✦ ${x.s.n} ${x.to}세트 발동 ×${setTierMul(x.s.tiers.find(t=>t.k===x.to)).toFixed(2)}</div>`).join('')
-        + `<div style="margin-top:4px">${_pvLoss?'<b style="color:var(--bad)">전투력이 내려갑니다.</b> ':''}장착 하시겠습니까?</div>`; }catch(_){}
+      /* v5.374(리뷰): ① 손해 판정은 총 전투력이다(세트는 보유 영웅 전원에 곱해진다) — 총 줄에도 증감률·빨강을 보여 판정 근거가 보이게, 영웅 줄과 방향이 갈리면 이유를 붙인다.
+         ② 세트 줄은 이름·단계만 두고, 배율은 실제 합산값(m0→m1) 한 줄로 — 세트별 단독 ×값은 다른 세트가 함께 켜져 있으면 실제 변화와 어긋난다. */
+      _pvMsg = `<div>${L?L.name+' ':''}${cpDeltaLine(pv.p0, pv.p1)}</div><div class="small">총 ${cpDeltaLine(pv.t0, pv.t1)}</div>`
+        + pv.broke.map(x=>`<div class="small" style="color:var(--bad)">⚠ ${x.s.n} ${x.from}세트 해제${x.to?` (→ ${x.to}세트)`:''}</div>`).join('')
+        + pv.gain.map(x=>`<div class="small" style="color:var(--ok)">✦ ${x.s.n} ${x.to}세트 발동</div>`).join('')
+        + ((pv.broke.length||pv.gain.length) ? `<div class="small mut">세트 배율(전 영웅 공통) ×${pv.m0.toFixed(2)} → ×${pv.m1.toFixed(2)}</div>` : '')
+        + `<div style="margin-top:4px">${_pvLoss?`<b style="color:var(--bad)">총 전투력이 내려갑니다${(pv.p1>=pv.p0 && pv.broke.length)?' — 이 영웅은 오르지만 세트 해제가 보유 영웅 전원에게 적용됩니다':''}.</b> `:''}장착 하시겠습니까?</div>`; }
+    catch(err){ _pvLoss=false; if(typeof console!=='undefined' && console.error) console.error('equipPreview 실패:', e&&e.slot, err); }   // v5.374: 흔적 없이 삼키지 않는다(기본 문구·금색 [장착]으로 진행)
     showConfirmDialog({ title:'장착', warn:'*새 장비를 걸치면 같은 부위의 낡은 장비는 사라집니다.*', msg:_pvMsg, yes:'장착', no:'취소', safeNo:_pvLoss,
       onYes:()=>{
         /* ★ v5.148: 세트 효과 달성/해제 감지 — 착용 전후로 각 세트의 활성 임계 단계(달성한

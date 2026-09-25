@@ -3479,6 +3479,12 @@ step('4차 K4 — 시스템 기록 보존 · 절전 세션 요약', ()=>{
   ev('endPowerSave')();
   const last=String((log.children[log.children.length-1]||{})._html||'');
   if(!/절전 .*처치 \+12 .*일반 \+5/.test(last)) errs.push('절전 요약 문구 '+last.slice(0,120));
+  /* v5.374(리뷰): 절전 중 골드가 줄었으면 '+0' 이 아니라 순감소를 부호와 함께 */
+  const g0=S.gold; S.gold=Math.max(5000, g0);
+  ev('startPowerSave')(); ev('_pwSnap.t-=15000'); S.gold-=1234; ev('endPowerSave')();
+  const last2=String((log.children[log.children.length-1]||{})._html||'');
+  if(!/골드 −1,234/.test(last2)) errs.push('절전 요약 순감소 표기 '+last2.slice(0,120));
+  S.gold=g0;
   S.mats['흑염석']=mk;
   S.stats.kills=k0;
   if(!/'보유 재화'/.test(js)) errs.push("정산 '보유 재화' 라벨");
@@ -3498,6 +3504,16 @@ step('4차 K2 — 세트 역인덱스 · 장착 가정 계산 복원 · 세트 �
   if(JSON.stringify(S.equips)!==before || S.equips!==arrRef || helm.equipped!==false || helm.heroId!==undefined) errs.push('가정 계산 뒤 장비가 원상 복원되지 않음');
   if(!pv.broke.some(x=>x.s.n==='응시' && x.from===6)) errs.push('응시 6세트 해제를 못 잡음 '+JSON.stringify(pv.broke.map(x=>x.s.n)));
   if(!(pv.p1<pv.p0)) errs.push(`세트가 깨지는데 전투력 감소 아님 ${pv.p0}→${pv.p1}`);
+  /* v5.374(리뷰): 세트 줄은 계정 합산 배율(setDamageMul) 전후 — 단독 ×값이 아니라 */
+  if(!(typeof pv.m0==='number' && Math.abs(pv.m0-ev('setDamageMul')())<1e-9 && pv.m1<pv.m0)) errs.push(`합산 세트 배율 전후 m0=${pv.m0} m1=${pv.m1}`);
+  if(!/세트 배율\(전 영웅 공통\) ×\$\{pv\.m0\.toFixed\(2\)\} → ×\$\{pv\.m1\.toFixed\(2\)\}/.test(js)) errs.push('확인창이 합산 세트 배율을 쓰지 않음');
+  // 미착용 사본: 같은 이름 조각이 착용 중이면 '같은 조각 착용 중(… +0)', 착용한 개체는 '착용 중'
+  const worn=S.equips.find(e=>e.equipped && e.slot===SP['응시'][0]), dup={ grade:'E', slot:SP['응시'][0], enh:0, equipped:false };
+  const spl=ev('setProgLine');
+  if(!/같은 조각 착용 중/.test(spl(dup.slot, dup)) || /같은 조각/.test(spl(worn.slot, worn)) || !/착용 중/.test(spl(worn.slot, worn))) errs.push('미착용 사본 세트 문구 '+spl(dup.slot,dup));
+  // 손해 확인창: 튜토리얼 손가락은 금색 [취소] · 무로깅 catch 없음
+  if(!/if\(opt\.safeNo\) ov\.dataset\.safeNo='1'/.test(js) || !/if\(ovl\.dataset && ovl\.dataset\.safeNo\)/.test(js)) errs.push('손해 확인창 손가락 배선');
+  if(/장착 하시겠습니까\?<\/div>`; \}catch\(_\)\{\}/.test(js) || /sysLog\(msg\); \} \} \}catch\(e\)\{\}/.test(js)) errs.push('무로깅 catch 잔존');
   if(!/safeNo:_pvLoss/.test(js) || !/opt\.safeNo\?' gold':''/.test(js)) errs.push('손해 시 [취소] 금색 배선 없음');
   if(!/\(\$\{p>=0\?'\+':''\}\$\{p\.toFixed\(1\)\}%\)/.test(js)) errs.push('cpDeltaLine 음수 부호');
   S.equips=keep;
