@@ -558,6 +558,28 @@ function equipPreview(e, hid){
   finally { S.equips=eq0; e.equipped=st.q; e.heroId=st.h; }
   return { p0, p1, t0, t1, m0, m1, broke, gain };
 }
+/* v5.377(5차 발견 roster): 편성을 바꾸면 홈·탑 단독 출격(party()[0])이 바뀐다. 장비는 영웅 귀속이라 옮겨지지 않는다 —
+   실측: 장비 10점을 입은 리더 대신 N 영웅을 [배치]하면 출격 전투력 −93%, 그 사냥터에서 전멸해 최하급으로 후퇴(3시드 3/3). 종전엔 확인·수치가 0 이었다.
+   가정 계산: 편성(S.formations[key]·S.formActive·S.formation 미러)을 잠시 바꿔 party()[0] 를 재고 finally 로 원상 복원(equipPreview 와 같은 원칙 — 복원을 빼면 확인창만 열어도 편성이 바뀐다). */
+function homeLeadPreview(key, nextForm){
+  if(!S.formations) S.formations={};
+  const had=Object.prototype.hasOwnProperty.call(S.formations,key), f0=S.formations[key], a0=S.formActive, m0=S.formation;
+  const L0=party()[0]||null, p0=L0?heroPower(L0):0; let L1=L0, p1=p0;
+  try{ S.formations[key]=nextForm; S.formActive=key; S.formation=Object.assign({},nextForm); L1=party()[0]||null; p1=L1?heroPower(L1):0; }
+  finally { if(had) S.formations[key]=f0; else delete S.formations[key]; S.formActive=a0; S.formation=m0; }
+  const n=(L0 && L1 && L0.hero_id!==L1.hero_id) ? (S.equips||[]).filter(e=>e && e.equipped && e.heroId===L0.hero_id).length : 0;
+  return { from:L0, to:L1, p0, p1, n };
+}
+/* 홈 출격이 10% 넘게 약해지는 편성 변경만 묻는다(금색 [취소] — safeNo). 튜토리얼 중(STEP8 편성)·PVP 진영은 묻지 않는다 — 튜토리얼 손가락이 [취소]를 짚어 단계가 되돌려진다. */
+function confirmHomeLead(key, nextForm, apply){
+  if(key==='pvp' || !S.seenTutorial){ apply(); return; }
+  let pv=null; try{ pv=homeLeadPreview(key, nextForm); }catch(err){ if(typeof console!=='undefined' && console.error) console.error('homeLeadPreview 실패:', err); }
+  if(!pv || !pv.from || !pv.to || pv.from.hero_id===pv.to.hero_id || !(pv.p1 < pv.p0*0.9)){ apply(); return; }
+  showConfirmDialog({ title:'홈 출격 영웅 교체', safeNo:true, yes:'교체', no:'취소', onYes:apply,
+    msg:`<div>홈·탑 단독 출격 <b>${pv.from.name}</b> → <b>${pv.to.name}</b></div><div>${cpDeltaLine(pv.p0, pv.p1)}</div>`
+      + (pv.n ? `<div class="small mut">장비 ${pv.n}개는 ${pv.from.name} 착용 중 — 영웅 귀속이라 옮겨지지 않습니다</div>` : '')
+      + `<div style="margin-top:4px"><b style="color:var(--bad)">출격 전투력이 내려갑니다.</b> 지금 사냥터에서 전멸하면 최하급으로 후퇴합니다. 바꾸시겠습니까?</div>` });
+}
 function setPieceCount(name){
   const list = SET_PIECES[name];
   if(!list || !S || !Array.isArray(S.equips)) return 0;
@@ -4774,6 +4796,12 @@ function addGold(n, raw){
 }
 /* 골드 보유 상한(GOLD_CAP)에 잘리지 않고 줄 수 있는 '기준 금액'(addGold 에 넘길 값 — raw 가 아니면 관문 배율을 곱하기 전). 대가를 받고 주는 곳(환전·수령)의 판정용. */
 function goldRoomBase(n, raw){ const room=Math.max(0, GOLD_CAP-(S.gold||0)), mul=raw?1:Math.max(1e-9, addGoldMul()); return Math.max(0, Math.min(n, Math.floor(room/mul))); }
+/* v5.377(5차 발견 presentation): 오프라인 골드 수령 예고액 = 실제 지급 — 카드는 배율 전 S.offlinePending 을, 수령(addGold)은 관문 배율(투기장 순위·칭호·가호·축제·길드)을
+   곱한 값을 줘서 카드 283.3만 · 실제 +311.6만(×1.10)이었다('표시 = 적용' 위반). 수령 버튼과 같은 식(goldRoomBase → addGold)으로 계산한다 — 렌더에서 지급하지 않는다. */
+function offlineClaimPreview(){
+  const want=S.offlinePending||0, give=goldRoomBase(want,false), mul=addGoldMul();
+  return { want, give, mul, got:Math.floor(give*mul), wait:Math.max(0, want-give) };
+}
 // ★ B7/G-100: '제작 시간 -50%' 구독 버프 배율 (상점 버프탭에서 구매, 30일)
 //   ★ F2: 칭호의 '제작 시간 -X%' 도 같은 관문에서 곱한다(제작 시작 시점의 endAt 산출에 사용).
 function craftTimeMul(){ return ((S && S.buffs && S.buffs.craftUntil > Date.now()) ? 0.5 : 1) * titleCraftTimeMul(); }
@@ -5861,16 +5889,25 @@ function wipeRemedies(lead){
       const gap=next.k-cnt; if(gap>2) continue;
       const missAll=(SET_PIECES[s.n]||[]).filter(nm=>!wornNames.has(nm)); if(missAll.length<gap) continue;
       for(const miss of combos(missAll, gap)){
-        const eq0=S.equips; let v=base;
+        const eq0=S.equips; let v=base, reached=0;
         try{ S.equips=eq0.slice();
           for(const nm of miss){ const loc=forgeLocate(nm); const f={ grade:(loc&&loc.grade)||'N', slot:nm, enh:0, equipped:false, _qa:1 }; S.equips.push(f); equipItem(f, lead.hero_id); }
-          v=heroPower(lead); }
+          v=heroPower(lead); reached=setTierOf(s); }
         finally { S.equips=eq0; }
+        /* v5.377(5차 검증 발견): 빠진 조각끼리 같은 부위(예: 작열의 결정 대검·결정 도끼 = 둘 다 무기)면 한 영웅에게 둘 다 입힐 수 없다 — 두 번째가 첫 번째를 파괴해
+           실제로는 그 단계에 닿지 않는데 '작열 8세트 +22.5%'로 적혔다(+22.5% 는 무기 한 점의 효과일 뿐). 가정 장착 뒤 실제 도달 단계로 거른다. */
+        if(reached < next.k) continue;
         if(!best || v-base > best.d) best={ s, next, miss, d:v-base };
       }
     }
     if(best) out.push({ ic:'🔗', t:`${best.s.n} ${best.next.k}세트 — ${best.miss.join('·')} 제작·착용`, d:best.d, p:pct(best.d), cost:`대장간 · ${best.miss.length}조각`, can:true,
       go:()=>{ closeModal(); openModal('forge', best.miss[0]); } }); }
+  /* ⑤ 홈 출격 교체(v5.377 — 5차 발견 roster): 장비를 입은 강한 영웅이 벤치에 있는데 약한 영웅이 출격 중이면(편성 [배치] 함정) 종전 패널은 그 약한 영웅에게
+     새 장비 제작·레벨업을 권했다. 보유 영웅 중 전투력 최대가 지금 출격보다 강하면 그를 출격시키는 수단 — 전투력 차이로 정렬되니 크면 맨 위에 온다. */
+  { const alt=ownedHeroes().filter(h=>h.hero_id!==lead.hero_id).map(h=>({ h, v:heroPower(h) })).sort((a,b)=>b.v-a.v)[0];
+    if(alt && alt.v>base) out.push({ ic:'👑', t:`홈 출격을 ${alt.h.name}(으)로 교체`, d:alt.v-base, p:pct(alt.v-base), cost:'편성', can:true,
+      go:()=>{ const k=S.formActive||'1'; if(!S.formations) S.formations={}; S.formations[k]={ 0:alt.h.hero_id }; S.formation={ 0:alt.h.hero_id };
+        Battle.refreshParty(); closeModal(); toast(`${alt.h.name} 홈 출격`); refreshHUD(); save(); } }); }
   return out.filter(r=>r.d>0).sort((a,b)=>b.d-a.d).slice(0,3);
 }
 function showWipeAdvice(tier){
@@ -6808,6 +6845,8 @@ const MODALS = {
     const form=(S.formations&&S.formations[activeKey])||{};
     const slotCap=3;   /* ★ v5.86: PVP도 3슬롯 (3v3 통일) */
     const inForm=hid=>Object.keys(form).some(k=>form[k]===hid);
+    /* v5.377(5차 roster): 편성이 비면 9장 모두 [배치]라 누가 실제로 홈에 나가 있는지 표시가 없었다 — 홈·탑 단독 출격(party()[0])에 '출격' 배지 · 보유 영웅 전투력 */
+    const leadId=((party()[0])||{}).hero_id;
     HERO_ROSTER.forEach(r=>{
       const e=heroEntry(r.hero_id); const G=GRADES[r.grade];
       const need=heroFuseNeed(r.hero_id), sh=heroShardAvail(r.hero_id);   // ★ B7/F1: 전용 + 직업 공용
@@ -6818,8 +6857,9 @@ const MODALS = {
       const xpPct=e.own?clamp((st.exp||0)/expNeed(e.level)*100,0,100):0;
       card.innerHTML=`<div class="hc-grade" style="color:${G.color}">${G.name}</div>
         <div class="hc-art" style="${e.own?'':'filter:grayscale(1);opacity:.35'}">${heroPortrait(r.hero_id,3)}</div>
-        <div class="hc-name">${r.name}</div>
+        <div class="hc-name">${r.name}${(e.own && r.hero_id===leadId)?'<span class="hc-lead" title="홈 사냥·시련의 탑 단독 출격">출격</span>':''}</div>
         <div class="hc-job">${e.job.name}${e.own?` · Lv${e.level}`:''}</div>
+        ${e.own?`<div class="hc-cp">전투력 ${fmt(heroPower(e))}</div>`:''}
         ${e.own?`<div class="hc-xp" title="다음 레벨까지 ${fmt(expNeed(e.level)-(st.exp||0))}"><i style="width:${xpPct}%"></i></div>`:''}
         <div class="hc-shard ${e.own?'':(sh>=need?'ok':'lack')}">🔥 ${e.own?'보유':`${fmt(sh)}/${fmt(need)}`}</div>`;
       // [합성] — 우상단
@@ -6851,22 +6891,21 @@ const MODALS = {
       if(!e.own) sb.disabled=true;
       sb.onclick=ev=>{ ev.stopPropagation();
         if(!e.own) return;
-        if(on){ Object.keys(form).forEach(k=>{ if(form[k]===r.hero_id) delete form[k]; });
-          S.formation=Object.assign({},form); toast(`${r.name} 배치 해제`); }
-        else {
-          /* 홈에서 이미 배치된 영웅이 있으면 자동 해제 후 교체 */
-          if(isHome){
-            Object.keys(form).forEach(k=>{ if(form[k]) delete form[k]; });
-          }
-          let slot=-1; for(let i=0;i<homeSlotCap;i++){ if(!form[i]){ slot=i; break; } }
-          if(slot<0){ toast(`진영이 가득 찼습니다.`); return; }
-          form[slot]=r.hero_id; S.formation=Object.assign({},form);
-          toast(isHome ? `${r.name} 배치 — 홈 필드에 출전` : `${r.name} 배치 · ${['전방','측면','후방','예비'][slot]}`);
-        }
         /* ★ v5.113: tutEvent('form') → tutFormDone(). tutEvent 는 goal 과 무관하게
            base=cnt()-goal 로 단계를 통째로 즉시 충족시켜, STEP8 이 goal 2(편성+투기장)가 된 뒤
            편성 저장 한 번에 투기장을 건너뛰고 STEP9 로 점프했다. 이제 '편성' 한 칸만 인정한다. */
-        S.formations[activeKey]=form; Battle.refreshParty(); tutFormDone(); openModal('hero'); refreshHUD(); };
+        const commit=()=>{ S.formations[activeKey]=form; Battle.refreshParty(); tutFormDone(); openModal('hero'); refreshHUD(); };
+        if(on){ Object.keys(form).forEach(k=>{ if(form[k]===r.hero_id) delete form[k]; });
+          S.formation=Object.assign({},form); toast(`${r.name} 배치 해제`); commit(); return; }
+        /* 홈에서 이미 배치된 영웅이 있으면 자동 해제 후 교체 — v5.377: 새 편성을 먼저 만들어 출격 전투력 손해를 확인(confirmHomeLead)한 뒤에만 반영 */
+        const next=Object.assign({}, form);
+        if(isHome) Object.keys(next).forEach(k=>{ delete next[k]; });
+        let slot=-1; for(let i=0;i<homeSlotCap;i++){ if(!next[i]){ slot=i; break; } }
+        if(slot<0){ toast(`진영이 가득 찼습니다.`); return; }
+        next[slot]=r.hero_id;
+        const apply=()=>{ Object.keys(form).forEach(k=>{ delete form[k]; }); Object.assign(form, next); S.formation=Object.assign({},form);
+          toast(isHome ? `${r.name} 배치 — 홈 필드에 출전` : `${r.name} 배치 · ${['전방','측면','후방','예비'][slot]}`); commit(); };
+        if(isHome) confirmHomeLead(activeKey, next, apply); else apply(); };
       act.append(eq,sb); card.appendChild(act);
       card.onclick=()=> e.own ? heroDetail(r.hero_id) : toast(`${r.name} 미보유 · 조각 ${fmt(sh)}/${fmt(need)}`);
       grid.appendChild(card);
@@ -6891,7 +6930,9 @@ const MODALS = {
     MODALS.formation._tab = tab;
     let draft = Object.assign({}, (S.formations&&S.formations[tab])||{});
     let dirty = false;
-    const POS=['전방','측면','후방','예비'];
+    /* v5.377(5차 roster): 일반 진영의 슬롯 이름 '전방/측면/후방'은 실제 역할과 달랐다 — 0번 칸이 홈 사냥·시련의 탑 단독 출격이고, 1·2번은 던전에 함께 나간다
+       (전투 배치상으로는 1번이 가장 앞). PVP 진영은 투기장 배치 이름을 그대로 쓴다. */
+    const POS = tab==='pvp' ? ['전방','측면','후방','예비'] : ['출격(홈·탑)','던전 동행','던전 동행'];
     const wrap=el('div');
     const tabrow=el('div','tabrow');
     TABS.forEach(([k,label])=>{ const t=el('div','tab'+(k===tab?' on':''),label);
@@ -6922,7 +6963,7 @@ const MODALS = {
         const used=Object.keys(draft).some(k=>draft[k]===h.hero_id);
         const r=el('div','form-hero'+(used?' used':'')); r.style.setProperty('--gc',GRADES[h.grade].color);
         r.innerHTML=`<span class="fh-ic">${jobIcon(h.job.id)}</span><span class="fh-n">${h.name}</span>
-          <span class="fh-g" style="color:${GRADES[h.grade].color}">${GRADES[h.grade].name}</span>`;
+          <span class="fh-g" style="color:${GRADES[h.grade].color}">${GRADES[h.grade].name}</span><span class="fh-cp">${fmt(heroPower(h))}</span>`;   // v5.377: 누가 강한지 보이게(목록은 보유 순서라 N 영웅이 맨 위)
         r.onclick=()=>{
           if(used){ Object.keys(draft).forEach(k=>{ if(draft[k]===h.hero_id) delete draft[k]; }); dirty=true; paint(); return; }
           let slot=-1; for(let i=0;i<cap;i++){ if(!draft[i]){ slot=i; break; } }
@@ -6937,10 +6978,14 @@ const MODALS = {
     const row=el('div','btnrow'); row.style.marginTop='10px';
     const use=el('button','btn gold wide','저장 / 사용');
     use.onclick=()=>{
-      S.formations[tab]=Object.assign({},draft);
-      if(tab!=='pvp'){ S.formActive=tab; S.formation=Object.assign({},draft); }   // 레거시 미러(투기장·구코드 호환)
-      dirty=false; Battle.refreshParty(); sfx('tap');
-      toast(`${TABS.find(t=>t[0]===tab)[1]} 저장 완료`); tutFormDone(); refreshHUD(); openModal('formation');   // ★ v5.113: 위 주석 참조
+      const doSave=()=>{
+        S.formations[tab]=Object.assign({},draft);
+        if(tab!=='pvp'){ S.formActive=tab; S.formation=Object.assign({},draft); }   // 레거시 미러(투기장·구코드 호환)
+        dirty=false; Battle.refreshParty(); sfx('tap');
+        toast(`${TABS.find(t=>t[0]===tab)[1]} 저장 완료`); tutFormDone(); refreshHUD(); openModal('formation');   // ★ v5.113: 위 주석 참조
+      };
+      /* v5.377: 던전용 3명을 목록 위에서부터 고르면 첫 영웅(대개 N)이 0번 칸 = 홈 출격이 된다 — 홈 출격이 10% 넘게 약해지면 먼저 묻는다(튜토리얼·PVP 제외) */
+      confirmHomeLead(tab, Object.assign({},draft), doSave);
     };
     const back=el('button','btn wide','◀ 영웅');
     back.onclick=()=>{ if(dirty) toast('저장하지 않은 편성은 반영되지 않습니다.'); openModal('hero'); };
@@ -8116,7 +8161,11 @@ const MODALS = {
        효과 문구만으론 '받는 피해 40% 감소'가 얼마나 강한지 체감이 안 돼 빌드 연구가
        정보가 있는 소수의 몫이었다. 배율은 단계별 단독 기여이며 여러 세트는 합산된다
        (dmg 합산 후 방어 환산 곱) — 헤더에 이 규칙을 명시해 최적해 강제가 아닌
-       '비교 가능한 정보'로만 제공한다. */
+       '비교 가능한 정보'로만 제공한다.
+       ⚠ v5.377(5차 발견 ceiling): 위 ×5.33 은 '리더 10칸만으로' 낼 수 있는 최대다. setPieceCount 는 착용자(heroId)를 가리지 않고 계정 전체로 세므로,
+       벤치 영웅들에게 나눠 입히면 9세트 전부 발동 = 피해 합 300% · 방어 190%→상한 70% = ×(1+3)/(1−0.7) = **×13.33** 이 된다(실측: 캐주얼 100일 세이브에
+       벤치 46조각(+0) → 리더 115만→672만(×5.83) · 탑 33→44~46 Wave). 시뮬(balance-sim)은 리더 전용 착용이라 이 경로를 보지 않는다.
+       유지·노출(A) 과 상한/출전 3인만 집계(B — 이미 쌓은 이용자 감소라 U1 예외 → 대표 결재) 중 방향은 아직 정하지 않았다(HANDOFF v5.377). */
     b.appendChild(el('div','hint','장비 세트 9종. 8종은 <b>6세트</b> 단일 임계값이며, ‘작열’ 1종만 <b>3 → 6 → 8세트</b> 3단계로 누적됩니다.<br><span class="mut">×N = 그 단계의 전투력 환산 기여(공격% × 방어[유효 체력] 환산). 여러 세트는 서로 합산됩니다. \'전투 적용\' 줄(쿨타임 감소 등)은 실제 전투에 적용되지만 전투력 숫자에는 들어가지 않습니다(쿨타임 감소는 세트끼리 더해 최대 '+SET_CDR_CAP+'%). 흐린 줄은 발동 조건(치명타 100% 초과·즉사)이 이 게임에 없어 적용되지 않습니다.</span>'));
     /* ★ v5.7: 무엇을 모아야 하는지 보이게 한다 — 구성품과 보유 진행도.
        종전 카드는 효과 문구만 있어서 "그래서 뭘 모으라는 거지"에 답이 없었다. */
@@ -8407,9 +8456,12 @@ const MODALS = {
     b.appendChild(g);
     // ⑤ 2분할 카드 — 1분당 획득 골드 / 오프라인 골드 (누적 시간 mm:ss)
     const offSec=Math.min(OFFLINE_CAP_H*3600, Math.floor((S.offlinePending||0)/OFFLINE_GPM*60));   /* ★ v5.196: 정본 비율로 환산 */
+    const ocp=offlineClaimPreview();   // v5.377: 예고액 = 수령 시 실제 증가분(관문 배율 포함)
     const two=el('div'); two.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin:10px 0';
     two.innerHTML=`<div class="gframe" style="padding:10px;text-align:center"><div class="small mut">1분당 획득 골드</div><div style="font-size:15px;font-weight:800;color:var(--gold)">${fmt(rate)} G</div></div>
-      <div class="gframe" style="padding:10px;text-align:center"><div class="small mut">오프라인 골드 ${offSec>=3600 ? `${Math.floor(offSec/3600)}시간 ${String(Math.floor(offSec%3600/60)).padStart(2,'0')}분` : mmss(offSec)}</div><div style="font-size:15px;font-weight:800;color:var(--gold)">${fmt(S.offlinePending||0)} G</div>
+      <div class="gframe" style="padding:10px;text-align:center"><div class="small mut">오프라인 골드 ${offSec>=3600 ? `${Math.floor(offSec/3600)}시간 ${String(Math.floor(offSec%3600/60)).padStart(2,'0')}분` : mmss(offSec)}</div><div style="font-size:15px;font-weight:800;color:var(--gold)">${fmt(ocp.want>0?ocp.got:0)} G</div>
+      ${(ocp.want>0 && ocp.mul>1.001)?`<div class="small mut" style="margin-top:2px">골드 효과 ×${ocp.mul.toFixed(2)} 포함</div>`:''}
+      ${ocp.wait>0?`<div class="small" style="margin-top:2px;color:var(--bad)">보유 상한 — ${fmt(ocp.wait)} 대기</div>`:''}
       <div class="small mut" style="margin-top:2px">인게임 방치의 ${Math.round(OFFLINE_GPM/18885*100)}% · 최대 ${OFFLINE_CAP_H}시간</div></div>`;
     b.appendChild(two);
     if(S.offlinePending>0){
@@ -9380,9 +9432,10 @@ function pwBodyHTML(){
     `<div class="pw-two">`+
       `<div class="pw-card"><div class="pw-cv">${fmt(rate)} G</div><div class="pw-ct">1분당 획득 골드</div></div>`+
       /* K8: 종전 '오프라인 골드 0 G · mm:ss'(의미 없는 카운트다운 — 창을 켜 두면 오프라인 골드는 쌓이지 않는다) → 대기 금액이 있으면 그 값, 없으면 떠났을 때 받는 것 안내 */
+      /* v5.377: 두 금액 모두 수령 때 곱해지는 관문 배율(addGoldMul)을 반영 — 정산 화면 카드와 같은 기준(offlineClaimPreview). 1분당은 지금 배율 기준 '약' */
       ((S.offlinePending||0)>0
-        ? `<div class="pw-card"><div class="pw-cv">${fmt(S.offlinePending)} G</div><div class="pw-ct">오프라인 골드 · 수령 대기</div></div>`
-        : `<div class="pw-card"><div class="pw-cv">${fmt(OFFLINE_GPM)} G</div><div class="pw-ct">자리를 비우면 1분당 · 최대 ${OFFLINE_CAP_H}시간</div></div>`)+
+        ? `<div class="pw-card"><div class="pw-cv">${fmt(offlineClaimPreview().got)} G</div><div class="pw-ct">오프라인 골드 · 수령 대기</div></div>`
+        : `<div class="pw-card"><div class="pw-cv">약 ${fmt(Math.floor(OFFLINE_GPM*addGoldMul()))} G</div><div class="pw-ct">자리를 비우면 1분당 · 최대 ${OFFLINE_CAP_H}시간</div></div>`)+
     `</div>`;
 }
 /* 12칸 자원 그리드 정본 — settle(정산 상세)과 공유한다.
@@ -9795,16 +9848,21 @@ function enhBurst(e, e0, destroyed){
   const val=k=>d ? (d.base+k*d.per)*gm : 0;
   const f=v=>d && d.dec ? v.toFixed(d.dec) : fmt(Math.round(v));
   const u=(d&&d.unit)||'';
-  let kind, title, line='';
+  let kind, title, line='', line2='', big=false;
   if(destroyed){ kind='destroy'; title='장비 파괴'; line=`${GRADES[e.grade].name} ${e.slot} +${e0} 이(가) 부서졌습니다`; }
   else if(e.enh>e0){ const a=val(e0), b=val(e.enh);
     kind = e.enh%5===0 ? 'up eb-mile' : 'up'; title=`+${e.enh} 강화 성공`;
-    if(d) line=`${d.n} ${f(a)}${u} → <b>${f(b)}${u}</b> <span class="eb-pct">(+${a>0?((b-a)/a*100).toFixed(1):'—'}%)</span>`; }
+    if(d) line=`${d.n} ${f(a)}${u} → <b>${f(b)}${u}</b> <span class="eb-pct">(+${a>0?((b-a)/a*100).toFixed(1):'—'}%)</span>`;
+    /* v5.377(5차 presentation): +20·+25 는 부위당 1회뿐인 가장 희소한 강화 순간인데 +5 와 같은 1.4초 카드였다(L 제작은 매번 2.2초 전면 연출 — 희소성 역전).
+       +20 = 위험 구간 졸업, +25 = 최대 강화. 장비 그림과 함께 2.2초. 효과음은 그대로(+5 마다 legendary 는 v5.352·v5.364 결정). */
+    if(e.enh>=25){ kind='up eb-mile eb-max'; title='+25 극한 완성'; big=true;
+      if(d && val(0)>0) line2=`MAX · +0 대비 ${d.n} ×${(val(25)/val(0)).toFixed(2)}`; else line2='MAX · 최대 강화'; }
+    else if(e.enh===20){ kind='up eb-mile eb-grad'; title='+20 달성'; big=true; line2='이제부터 극한의 벼림(+21~25) — 실패해도 단계 유지'; } }
   else if(e.enh<e0){ kind='down'; title=`단계 하락 +${e0} → +${e.enh}`; if(d) line=`${d.n} ${f(val(e0))}${u} → ${f(val(e.enh))}${u}`; }
   else { kind='keep'; title='강화 실패 · 단계 유지'; }
-  const b=el('div','enh-burst eb-'+kind, `<div class="eb-card">${kind.indexOf('up')===0?'<div class="eb-rays"></div>':''}<div class="eb-t">${title}</div>${line?`<div class="eb-l">${line}</div>`:''}</div>`);
+  const b=el('div','enh-burst eb-'+kind, `<div class="eb-card">${kind.indexOf('up')===0?'<div class="eb-rays"></div>':''}${big?`<div class="eb-ico">${equipImg(e.slot,3)}</div>`:''}<div class="eb-t">${title}</div>${line?`<div class="eb-l">${line}</div>`:''}${line2?`<div class="eb-l eb-l2">${line2}</div>`:''}</div>`);
   root.appendChild(b);
-  setTimeout(()=>{ try{ b.remove(); }catch(_){} }, 1400);
+  setTimeout(()=>{ try{ b.remove(); }catch(_){} }, big?2200:1400);
 }
 /* ★ 2026-09-25: 성장 달성 연출 공용판 — enhBurst 와 같은 카드(.enh-burst)를 각성·결정 등 다른 성장 순간에도 쓴다.
    kind: 'up' | 'mile'(5단계마다 이정표). 줄(lines)은 HTML — 호출부가 숫자만 넣는다. */
@@ -9820,6 +9878,15 @@ function cpDeltaLine(cp0, cp1){ const p=cp0>0?((cp1-cp0)/cp0*100):0; return `전
 function openEnhance(e){
   const b=subBody('강화');   // ★ v5.1 착용창 위 오버레이
   b.appendChild(el('div','center',`<div class="ei" style="font-size:52px">${equipImg(e.slot,2.5)}</div><div class="big" style="color:${GRADES[e.grade].color}">${GRADES[e.grade].name} ${e.slot} +${e.enh}</div>`));
+  /* v5.377(5차 presentation): +25(최대)에서도 '성공 확률 30% · 비용 2000만 · 극한 구간 · 보호 토글'이 그대로 보였다(거짓 정보 — [강화]만 비활성).
+     후반엔 장비창 [강화] 단축이 착용 첫 칸(대개 +25)을 열어 매번 이 화면을 봤다. 영웅 강화의 '최대 강화입니다'와 같은 MAX 판으로. */
+  if((e.enh||0)>=25){
+    const sc=slotSchema(e.slot), key=sc&&sc.stats&&sc.stats[0], d=key&&STAT_DEF[key], gm=(GRADES[e.grade]||GRADES.N).mult;
+    const v=k=>d ? (d.base+k*d.per)*gm : 0;
+    b.appendChild(el('div','enh-max',`<div class="em-t">MAX · 최대 강화 +25 달성</div><div class="em-d">더 강화할 수 없습니다${(d && v(0)>0)?` · +0 대비 ${d.n} ×${(v(25)/v(0)).toFixed(2)}`:''}</div>`));
+    const back=el('button','btn sm','◀ 인벤토리'); back.style.marginTop='8px'; back.onclick=()=>openModal('inventory'); b.appendChild(back);
+    return;
+  }
   /* ★ v5.236: +21~25 '극한의 벼림' 구간 추가(자체 설계) — 1600h 시뮬에서 800h 시점
      위험강화 평균 +18.2·+20 도달 1부위로 상한 소진이 확인됐고, 그 뒤로 골드 18억+가
      쌓이기만 했다(싱크 부족). 성공 30% · 골드 2천만 · 강화석 5개.

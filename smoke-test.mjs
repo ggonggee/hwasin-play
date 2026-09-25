@@ -691,6 +691,18 @@ step('오프라인 정산 수령 — 지급·소진·즉시 저장', ()=>{
     if(S.gold<=g0) errs.push('수령 후 골드 미증가(지급 안 됨)');
     if(S.offlinePending!==0) errs.push('offlinePending 미소진: '+S.offlinePending);
     if(ev('globalThis.__osN')!==1) errs.push('수령 즉시 save 미호출(v5.307 회귀): '+ev('globalThis.__osN'));
+    /* v5.377(5차 presentation): 카드 예고액 = 실제 증가분 — 관문 배율 ×1.1 을 걸어 카드 금액과 수령 뒤 증가분이 같은 표기인지 */
+    ev('globalThis.__oAGM=addGoldMul; addGoldMul=function(){ return 1.1; };');
+    try{
+      S.offlinePending=2833000; const g1=S.gold;
+      const b2=new Node2('div'); ev('MODALS').settle.render(b2);
+      const shown=(String(collectText(b2)).match(/오프라인 골드[^<]*<\/div><div[^>]*>([^<]+) G</)||[])[1];
+      const all2=[]; (function walk(n){ (n.children||[]).forEach(c=>{ all2.push(c); walk(c); }); })(b2);
+      all2.find(c=>String(c._text||c._html||'')==='수령').onclick();
+      const got=ev('fmt')(S.gold-g1);
+      if(shown!==got) errs.push(`오프라인 카드 예고액 ${shown} ≠ 실제 증가 ${got}`);
+      if(!/골드 효과 ×1\.10 포함/.test(collectText(b2))) errs.push('배율 포함 표기 없음');
+    } finally { ev('addGoldMul=globalThis.__oAGM'); }
   } finally {
     ev('toast=globalThis.__oOS');
     ev('save=globalThis.__oOSv');
@@ -2152,8 +2164,20 @@ step('극한의 벼림 +21~25 — 실패해도 유지, +25 상한', ()=>{
     if(S.stones!==80) errs.push('강화석 '+S.stones+'(기대 80 — v5.238 극한 20개/시도)');
   }
   gear.enh=25; ev('openEnhance')(gear);
-  const btn2=findBtnByText(ev("$('#modal-root')") || ev("$('#modalBody')"),'강화');
+  const btn2=findBtnByText(ev("$('#modal-root')") || ev("$('#modalBody')"),'강화', true);
   if(btn2&&!btn2.disabled) errs.push('+25에서 버튼 활성(상한 봉쇄 실패)');
+  /* v5.377(5차 presentation): +25 는 확률·비용·보호 토글 대신 MAX 판(종전: '성공 확률 30% · 비용 2000만'이 그대로 보였다) · +20/+25 달성 연출 등급 */
+  { const root=ev("$('#modal-root')"), sub=root.children[root.children.length-1], t25=collectText(sub);
+    if(!/MAX · 최대 강화 \+25 달성/.test(t25) || /성공 확률/.test(t25) || /파괴 보호/.test(t25)) errs.push('+25 강화 화면이 MAX 판이 아님');
+    ev('enhBurst')(gear, 24);
+    const eb=root.children.filter(c=>c.classList&&c.classList.contains('enh-burst')).pop();
+    if(!eb || !eb.classList.contains('eb-max') || !/\+25 극한 완성/.test(collectText(eb))) errs.push('+25 달성 연출 등급');
+    gear.enh=20; ev('enhBurst')(gear, 19);
+    const eb2=root.children.filter(c=>c.classList&&c.classList.contains('enh-burst')).pop();
+    if(!eb2 || !eb2.classList.contains('eb-grad')) errs.push('+20 달성 연출 등급');
+    gear.enh=10; ev('enhBurst')(gear, 9);
+    const eb3=root.children.filter(c=>c.classList&&c.classList.contains('enh-burst')).pop();
+    if(!eb3 || eb3.classList.contains('eb-grad') || eb3.classList.contains('eb-max') || !eb3.classList.contains('eb-mile')) errs.push('+10 은 종전 이정표 연출이어야'); }
   S.equips=keep.eq; S.gold=keep.gold; S.stones=keep.stones;
   if(errs.length) throw new Error(errs.join(' | '));
 });
@@ -3210,6 +3234,45 @@ step('전멸 분석 패널 — 가정 계산 무부작용·렌더', ()=>{
     if(JSON.stringify(S.equips)!==snap2 || S.equips!==ref2 || ev('heroPower')(lead)!==cp2) errs.push('세트 완성 가정 계산 뒤 장비가 원상 복원되지 않음');
     if(S.gold!==g0) errs.push('세트 완성 계산이 골드를 바꿈'); }
   S.equips=keepEq;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
+/* ★ v5.377(5차 발견 roster): 약한 영웅을 [배치]하면 홈·탑 단독 출격이 바뀌는데(장비는 영웅 귀속) 확인·수치가 0 이었다 → 가정 계산(원상 복원)·손해면 확인창(튜토리얼 제외)
+   · 전멸 분석 '홈 출격 교체' 수단 · 세트 완성 수단은 가정 장착 뒤 실제 도달 단계로 거른다(같은 부위 조각 둘 = 한 영웅에게 불가). */
+step('5차 roster — 홈 출격 교체 확인·전멸 수단 · 세트 완성 실제 도달', ()=>{
+  const errs=[], S=ev('S'), SP=ev('SET_PIECES');
+  const own=ev('ownedHeroes')(); if(own.length<2) throw new Error('보유 영웅 2명 미만 — 픽스처 불가');
+  const keep={ eq:S.equips, f:S.formations, fa:S.formActive, fm:S.formation, st:S.seenTutorial };
+  ctx.__cdOrig=ev('showConfirmDialog');
+  const A=own[0], B=own[1];
+  try{
+    S.equips=['투구','상의','하의','신발','방패','견갑','각반','완갑','망토','단검'].map(p=>({ grade:'L', slot:'결정 '+p, enh:10, equipped:true, heroId:A.hero_id }));
+    S.formations={ '1':{ 0:A.hero_id } }; S.formActive='1'; S.formation={ 0:A.hero_id };
+    const before=JSON.stringify([S.formations, S.formActive, S.formation]);
+    const pv=ev('homeLeadPreview')('1', { 0:B.hero_id });
+    if(JSON.stringify([S.formations, S.formActive, S.formation])!==before) errs.push('가정 계산 뒤 편성이 원상 복원되지 않음');
+    if(!(pv.from && pv.to && pv.from.hero_id===A.hero_id && pv.to.hero_id===B.hero_id && pv.p1<pv.p0*0.9 && pv.n===10)) errs.push('출격 가정 '+JSON.stringify({ f:pv.from&&pv.from.hero_id, t:pv.to&&pv.to.hero_id, p0:pv.p0, p1:pv.p1, n:pv.n }));
+    let asked=null, applied=0; ctx.__cdHook=o=>{ asked=o; };
+    ev('showConfirmDialog = function(o){ __cdHook(o); }');
+    S.seenTutorial=true; ev('confirmHomeLead')('1', { 0:B.hero_id }, ()=>applied++);
+    if(!asked || applied!==0 || !asked.safeNo) errs.push('손해 편성인데 확인창 없음 또는 즉시 적용');
+    asked=null; ev('confirmHomeLead')('1', { 0:A.hero_id }, ()=>applied++);
+    if(asked || applied!==1) errs.push('손해 없는 편성인데 확인창');
+    S.seenTutorial=false; asked=null; ev('confirmHomeLead')('1', { 0:B.hero_id }, ()=>applied++);
+    if(asked || applied!==2) errs.push('튜토리얼 중에 확인창(손가락이 [취소]를 짚어 STEP8 이 되돌려진다)');
+    S.seenTutorial=true;
+    // 전멸 분석: 약한 B 가 출격이면 첫 수단 = 장비를 입은 A 로 출격 교체
+    S.formations={ '1':{ 0:B.hero_id } }; S.formation={ 0:B.hero_id };
+    const lead=ev('party')()[0]; if(!lead || lead.hero_id!==B.hero_id) errs.push('픽스처: B 가 출격이 아님');
+    const rs=ev('wipeRemedies')(lead);
+    if(!rs.length || !/홈 출격을 .*교체/.test(rs[0].t)) errs.push('첫 수단이 출격 교체가 아님 '+JSON.stringify(rs.map(r=>r.t)));
+    // 세트 완성: 작열 6(A 착용 — 단검 포함) · 맨몸 리더 B → 빠진 대검·도끼는 둘 다 무기라 한 영웅에게 8 불가 → '작열 8세트' 수단이 나오면 거짓
+    S.equips=SP['작열'].slice(0,6).map(nm=>({ grade:'L', slot:nm, enh:0, equipped:true, heroId:A.hero_id }));
+    const rs2=ev('wipeRemedies')(ev('party')()[0]);
+    if(rs2.some(r=>/작열 8세트/.test(r.t))) errs.push('도달 불가 작열 8세트 수단 '+JSON.stringify(rs2.map(r=>r.t)));
+  } finally {
+    ev('showConfirmDialog = __cdOrig');
+    S.equips=keep.eq; S.formations=keep.f; S.formActive=keep.fa; S.formation=keep.fm; S.seenTutorial=keep.st;
+  }
   if(errs.length) throw new Error(errs.join(' | '));
 });
 /* ★ 2026-09-24 회귀: 다중 창 세이브 덮어쓰기. 두 창이 세이브 하나를 번갈아 써서 새 창의 진행이 옛 창의

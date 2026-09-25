@@ -938,6 +938,10 @@ body{
 .herocard .hc-art{ font-size:32px; line-height:1.15; }
 .herocard .hc-name{ font-size:var(--fs-sm); font-weight:700; color:var(--txt-hi); line-height:1.25; letter-spacing:-.03em; }
 .herocard .hc-job{ font-size:var(--fs-xs); color:var(--txt-dim); margin-top:1px; }
+/* v5.377: 홈·탑 단독 출격 배지 · 보유 영웅 전투력(누가 실제로 나가 있고 누가 강한지) */
+.herocard .hc-lead{ display:inline-block; margin-left:4px; padding:0 4px; border-radius:4px; background:#c9a04a; color:#1a1208;
+  font-size:10px; font-weight:800; vertical-align:1px; white-space:nowrap; }
+.herocard .hc-cp{ font-size:var(--fs-xs); color:#e8c66a; margin-top:1px; white-space:nowrap; }
 .herocard .hc-shard{ font-size:var(--fs-xs); font-weight:700; color:#cdbf9f; margin-top:3px; }
 /* ★ v5.169: 실제 경험치 진행 바 — exp/레벨×250 (onKill 집계). 미보유 영웅은 렌더 자체를 안 한다. */
 .herocard .hc-xp{ height:4px; margin-top:3px; border-radius:2px; background:#0c0906; border:1px solid #241c10; overflow:hidden; }
@@ -961,6 +965,7 @@ body{
 .form-hero .fh-n{ flex:1; min-width:0; font-size:var(--fs-xs); color:var(--txt); letter-spacing:-.04em;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .form-hero .fh-g{ font-size:var(--fs-xs); font-weight:700; }
+.form-hero .fh-cp{ font-size:10px; color:#e8c66a; white-space:nowrap; }   /* v5.377 */
 
 /* --- G-55: 스킬 행 등급 뱃지 --- */
 .pack.skill-row{ position:relative; padding-top:16px; }
@@ -1699,6 +1704,19 @@ body.fx-noflash .boss-banner .bb-vig{ opacity:.35; animation:none; }
 .enh-burst.eb-destroy .eb-t{ color:#ff5a3c; letter-spacing:.2em; }
 .enh-burst.eb-keep .eb-card{ border-color:#5c5448; box-shadow:0 8px 30px rgba(0,0,0,.6); }
 .enh-burst.eb-keep .eb-t{ color:#cdbd9f; font-size:18px; }
+/* v5.377: +20 달성(eb-grad)·+25 극한 완성(eb-max) — 부위당 1회뿐인 순간이라 2.2초·장비 그림·큰 광선(game.js enhBurst 타이머와 같은 길이) */
+.enh-burst.eb-grad .eb-card, .enh-burst.eb-max .eb-card{ animation-duration:2.2s; padding:16px 20px 14px; }
+.enh-burst.eb-grad .eb-rays, .enh-burst.eb-max .eb-rays{ width:420px; height:420px; margin:-210px 0 0 -210px; animation-duration:2.2s; }
+.enh-burst .eb-ico{ position:relative; margin:-2px auto 4px; line-height:0; filter:drop-shadow(0 0 10px rgba(255,211,106,.7)); }
+.enh-burst .eb-l2{ color:#f0cd82; font-weight:700; }
+.enh-burst.eb-max .eb-card{ border-color:#ffe27a; box-shadow:0 8px 30px rgba(0,0,0,.6), 0 0 60px rgba(255,226,122,.85); }
+.enh-burst.eb-max .eb-t{ font-size:28px; color:#fff1b0; }
+.enh-burst.eb-max .eb-rays{ background:repeating-conic-gradient(from 0deg, rgba(255,236,150,.45) 0deg 6deg, transparent 6deg 24deg); }
+/* v5.377: +25 강화 화면 MAX 판(openEnhance) — 확률·비용·보호 토글 대신 */
+.enh-max{ margin:10px 0 4px; padding:12px 10px; border-radius:10px; text-align:center; word-break:keep-all;
+  background:radial-gradient(120% 140% at 50% 0%, rgba(80,56,14,.9), rgba(20,12,4,.9)); border:1px solid #ffd36a; box-shadow:0 0 18px rgba(255,211,106,.35); }
+.enh-max .em-t{ font-size:18px; font-weight:900; color:#ffe27a; letter-spacing:.04em; }
+.enh-max .em-d{ margin-top:4px; font-size:var(--fs-sm); color:#e8dcc2; }
 @keyframes ebShake{ 0%,100%{ translate:0 0; } 20%{ translate:-7px 0; } 40%{ translate:6px 0; } 60%{ translate:-4px 0; } 80%{ translate:3px 0; } }
 
 /* ★ 2026-09-25: 우두머리 등장 경고 배너 (game.js bossBanner) — 1.4초 타임라인:
