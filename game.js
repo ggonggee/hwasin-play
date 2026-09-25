@@ -506,6 +506,29 @@ const SET_PIECES = {
   '작열':   ['결정 견갑','결정 각반','결정 완갑','결정 망토','결정 벨트',
              '결정 단검','결정 대검','결정 도끼'],
 };
+/* ★ 2026-09-25(4차 발견 K2): 세트는 중반 최대 레버(응시 2조각만 채워도 리더 +68% 실측)인데 결정 지점(대장간·제작 팝업·장비 상세)에 소속 표시가 0 이었다.
+   SET_PIECES 에서 파생한 역인덱스(단일 출처) + 진행 한 줄. */
+const SET_OF={}; Object.entries(SET_PIECES).forEach(([n,l])=>l.forEach(x=>{ SET_OF[x]=n; }));
+function setOfItem(nm){ return SET_OF[nm]||null; }
+function setTierMul(t){ return t ? ((1+(t.dmg||0)/100)*(1/(1-Math.min(0.7,(t.def||0)/100)))) : 1; }   // setDamageMul 의 단일 세트 식
+function setProgLine(nm){
+  const sn=setOfItem(nm); if(!sn || typeof S==='undefined' || !S) return '';
+  const s=setByName(sn); if(!s) return '';
+  const c=setPieceCount(sn), max=(SET_PIECES[sn]||[]).length, wearing=(S.equips||[]).some(e=>e && e.equipped && e.slot===nm);
+  const nx=s.tiers.find(t=>t.k>c) || s.tiers[s.tiers.length-1];
+  return `세트 <b>${sn}</b> ${c}/${max}${wearing?' · 착용 중':` → 착용 시 ${Math.min(max,c+1)}`} · ${nx.k}세트 ×${setTierMul(nx).toFixed(2)}`;
+}
+/* 장착 가정 계산 — equipItem 을 실제로 돌려 전후 전투력·세트 단계를 잰 뒤 **원상 복원**(equipItem 은 S.equips 를 새 배열로 바꾸고 e 만 바꾼다).
+   heroPower·totalCP·setTierOf 는 순수 함수. ⚠ 복원(finally)을 빼지 마라 — 확인창만 열어도 장비가 파괴된다. */
+function equipPreview(e, hid){
+  const eq0=S.equips, st={ q:e.equipped, h:e.heroId }, pre=SETS.map(s=>({ s, k:setTierOf(s) }));
+  const L0=heroEntry(hid), p0=L0?heroPower(L0):0, t0=totalCP(); let p1=p0, t1=t0, broke=[], gain=[];
+  try{ equipItem(e, hid); const L1=heroEntry(hid); p1=L1?heroPower(L1):0; t1=totalCP();
+    broke=pre.filter(x=>setTierOf(x.s)<x.k).map(x=>({ s:x.s, from:x.k, to:setTierOf(x.s) }));
+    gain=pre.filter(x=>setTierOf(x.s)>x.k).map(x=>({ s:x.s, from:x.k, to:setTierOf(x.s) })); }
+  finally { S.equips=eq0; e.equipped=st.q; e.heroId=st.h; }
+  return { p0, p1, t0, t1, broke, gain };
+}
 function setPieceCount(name){
   const list = SET_PIECES[name];
   if(!list || !S || !Array.isArray(S.equips)) return 0;
@@ -1426,6 +1449,11 @@ const ATTEND_DAYS = [
 ];
 /* ★ B9/G-134: 공지 — 제목 밴드 + 양피지 서술형 본문 (목록 → 상세 2단) */
 const NOTICES = [
+  /* ★ v5.368: 4차 발견 K2 — 세트를 결정 지점에서 보이게. */
+  { cat:'[개선]', ic:'🛡️', t:'장착 전에 전투력 변화와 세트 해제를 미리 보여 드립니다', d:'2026-09-25',
+    body:'군주들에게 알립니다.<br><br>'+
+      '· <b>장착 확인</b> — 장비를 장착하기 전에 출격 영웅·총 전투력이 어떻게 바뀌는지, 어떤 세트가 풀리거나 새로 발동하는지 확인창에 표시됩니다. 전투력이 내려가는 교체라면 [취소]가 먼저 강조됩니다(같은 부위의 기존 장비는 장착하면 사라집니다).<br>'+
+      '· <b>세트 소속</b> — 대장간·제작 창·장비 상세에 그 장비가 속한 세트와 진행(예: 응시 4/6 → 착용 시 5/6 · 6세트 ×1.86)이 표시됩니다.' },
   /* ★ v5.367: 4차 발견 4A — 표시 = 적용 정정(이용자 유리 적용 1건 포함: 귀걸이·팔찌·인장 치명). */
   { cat:'[수정]', ic:'📋', t:'표시와 실제가 다르던 곳을 바로잡았습니다', d:'2026-09-25',
     body:'군주들에게 알립니다.<br><br>'+
@@ -6464,6 +6492,7 @@ const MODALS = {
         const prev=el('div','forge-preview grade-'+cur); prev.style.setProperty('--gc',G.color);
         prev.innerHTML=`${equipImg(item.n,2.5)}<div class="tag-common">공용</div>`; side.appendChild(prev);
         const nm=el('div','center small',item.n); nm.style.color=G.color; side.appendChild(nm);
+        { const sp=setProgLine(item.n); if(sp) side.appendChild(el('div','center small set-prog',sp)); }   // K2(4차): 세트 소속·진행
         side.appendChild(matChips(item.recipe));                                  // G-20: 재료 chip 2~5개 가변
         const info=el('div','small mut'); info.style.lineHeight='1.55';
         /* ★ 2차 UI 정리: 우측 패널 포맷은 "제작시간 : / 필요 골드 : / 제작 확률 :" 콜론 라벨.
@@ -6548,6 +6577,7 @@ const MODALS = {
     b.appendChild(el('div','b2-big',equipImg(c.item.n,3)));
     const nm=el('div','b2-name',`${G.name} ${c.item.n}`); nm.style.color=G.color; b.appendChild(nm);
     b.appendChild(el('div','b2-flavor',itemFlavor(c.item.n)));
+    { const sp=setProgLine(c.item.n); if(sp) b.appendChild(el('div','center small set-prog',sp)); }   // K2(4차)
     const matn=el('div','mat-need');
     c.item.recipe.forEach(r=>{ const have=matAvail(r.k), lack=have<r.need;
       const chip=el('div','mat-chip'+(lack?' lack':'')); chip.title=r.k;
@@ -8178,7 +8208,7 @@ const MODALS = {
     const claimHint=weeklyClaimable()||monthlyClaimable();
     b.innerHTML=`<div class="hint" style="line-height:1.8">
     <b style="color:#f0cd82">■ 내 장기 목표 진행</b> <span class="mut small">(실시간)</span><br>
-    · 세트: ${act.length? act.slice(0,3).map(x=>`${x.n} ${x.c}/${(SET_PIECES[x.n]||[]).length}`).join(' · ') : '3조각부터 발동'}${next?` — 다음: <b style="color:var(--g-legend)">${next.n} ${next.k}세트</b> (${next.gap}조각 남음)`:''} · 현재 배율 <b>×${setDamageMul().toFixed(2)}</b><span class="mut small">(세트효과 도감에서 조합별 기여 비교)</span><br>
+    · 세트: ${act.length? act.slice(0,3).map(x=>`${x.n} ${x.c}/${(SET_PIECES[x.n]||[]).length}`).join(' · ') : '대부분 6조각부터 발동(작열만 3조각)'}${next?` — 다음: <b style="color:var(--g-legend)">${next.n} ${next.k}세트</b> (${next.gap}조각 남음)`:''} · 현재 배율 <b>×${setDamageMul().toFixed(2)}</b><span class="mut small">(세트효과 도감에서 조합별 기여 비교)</span><br>
     · 강화: 홈 출격 영웅 평균 <b>+${enhAvg}</b> / 목표 +25 (+11부터 망치 필수)<br>
     · 각성: <b>+${S.awaken||0}</b> / 50${(S.awaken||0)>=12?` · 기록서 ${S.records||0}권 보유`:''}${awakenMaxed?' · 완료 🎉':''}<br>
     · 시련의 탑: 최고 <b>${S._tower||0} Wave</b> (일 1회 도전·소탕)<br>
@@ -9483,8 +9513,9 @@ function showConfirmDialog(opt){
   if(opt.warn) pop.appendChild(el('div','b2-warnline',opt.warn));
   pop.appendChild(el('div','center',opt.msg||''));
   const row=el('div','btnrow'); row.style.marginTop='10px';
-  const yes=el('button','btn gold',opt.yes||'확인'); yes.onclick=()=>{ close(); if(opt.onYes) opt.onYes(); };
-  const no=el('button','btn',opt.no||'취소'); no.onclick=close;
+  /* opt.safeNo(4차 K2): 손해가 나는 결정이면 [취소]를 금색 주 버튼으로(금색 1개 규칙) — 예: 장착하면 전투력이 내려갈 때 */
+  const yes=el('button','btn'+(opt.safeNo?'':' gold'),opt.yes||'확인'); yes.onclick=()=>{ close(); if(opt.onYes) opt.onYes(); };
+  const no=el('button','btn'+(opt.safeNo?' gold':''),opt.no||'취소'); no.onclick=close;
   row.append(yes,no); pop.appendChild(row);
   ov.appendChild(pop); ov.onclick=ev=>{ if(ev.target===ov) close(); };
   root.appendChild(ov);
@@ -9500,7 +9531,7 @@ function itemDetail(e, heroId){ _itemDetailHeroId=heroId||null;
   const opts=sc.stats.map(k=>statLine(k,e.enh,G.mult)).filter(Boolean);
   const card=el('div','item-card grade-'+e.grade); card.style.setProperty('--gc',G.color);
   card.innerHTML=`<div class="ic-head"><div class="ic-ico grade-${e.grade}" style="--gc:${G.color}">${equipImg(e.slot,2)}</div>
-    <div><div style="color:${G.color};font-weight:800">${G.name} ${e.slot} +${e.enh}</div><div class="small mut">부위: ${sc.part}${e.equipped?' · 장착 중':''}</div></div></div>`
+    <div><div style="color:${G.color};font-weight:800">${G.name} ${e.slot} +${e.enh}</div><div class="small mut">부위: ${sc.part}${e.equipped?' · 장착 중':''}</div>${setProgLine(e.slot)?`<div class="small set-prog">${setProgLine(e.slot)}</div>`:''}</div></div>`
     + opts.map(o=>`<div class="ic-opt opt-row"><span>${o.n}</span><span class="v">${o.v}</span></div>`).join('')
     + (sc.special?`<div class="ic-opt opt-sp">${sc.special}</div>`:'');
   b.appendChild(card);
@@ -9529,7 +9560,16 @@ function itemDetail(e, heroId){ _itemDetailHeroId=heroId||null;
       itemDetail(e, p0.hero_id);
       return;
     }
-    showConfirmDialog({ title:'장착', warn:'*새 장비를 걸치면 같은 부위의 낡은 장비는 사라집니다.*', msg:'장착 하시겠습니까?', yes:'장착', no:'취소',
+    /* K2(4차): 되돌릴 수 없는 교체(기존 장비 파괴)인데 확인창에 수치가 0 이었다 — 실측: 응시 6세트 상태에서 L 투구 +0 을 끼면 리더 −46%·세트 해제, 토스트로만 사후 통보.
+       가정 계산(equipPreview — 원상 복원)으로 출격 영웅·총 전투력 전후와 깨지는/채워지는 세트를 미리. 손해면 [취소]가 금색(safeNo — 금색 1개 규칙). */
+    let _pvMsg='장착 하시겠습니까?', _pvLoss=false;
+    try{ const pv=equipPreview(e, _itemDetailHeroId); const L=heroEntry(_itemDetailHeroId);
+      _pvLoss = pv.t1 < pv.t0;
+      _pvMsg = `<div>${L?L.name+' ':''}${cpDeltaLine(pv.p0, pv.p1)}</div><div class="small mut">총 전투력 ${fmt(pv.t0)} → ${fmt(pv.t1)}</div>`
+        + pv.broke.map(x=>`<div class="small" style="color:var(--bad)">⚠ ${x.s.n} ${x.from}세트 해제 ×${setTierMul(x.s.tiers.find(t=>t.k===x.from)).toFixed(2)} → ×${setTierMul(x.s.tiers.find(t=>t.k===x.to)).toFixed(2)}</div>`).join('')
+        + pv.gain.map(x=>`<div class="small" style="color:var(--ok)">✦ ${x.s.n} ${x.to}세트 발동 ×${setTierMul(x.s.tiers.find(t=>t.k===x.to)).toFixed(2)}</div>`).join('')
+        + `<div style="margin-top:4px">${_pvLoss?'<b style="color:var(--bad)">전투력이 내려갑니다.</b> ':''}장착 하시겠습니까?</div>`; }catch(_){}
+    showConfirmDialog({ title:'장착', warn:'*새 장비를 걸치면 같은 부위의 낡은 장비는 사라집니다.*', msg:_pvMsg, yes:'장착', no:'취소', safeNo:_pvLoss,
       onYes:()=>{
         /* ★ v5.148: 세트 효과 달성/해제 감지 — 착용 전후로 각 세트의 활성 임계 단계(달성한
            최고 k)를 비교한다. 새로 넘어선 세트는 축하 토스트+sfx, 깨진 세트는 장착 토스트에
@@ -9611,7 +9651,7 @@ function growthBurst(title, lines, kind){
   root.appendChild(b);
   setTimeout(()=>{ try{ b.remove(); }catch(_){} }, 1400);
 }
-function cpDeltaLine(cp0, cp1){ const p=cp0>0?((cp1-cp0)/cp0*100):0; return `전투력 ${fmt(cp0)} → <b>${fmt(cp1)}</b> <span class="eb-pct">(+${p.toFixed(1)}%)</span>`; }
+function cpDeltaLine(cp0, cp1){ const p=cp0>0?((cp1-cp0)/cp0*100):0; return `전투력 ${fmt(cp0)} → <b>${fmt(cp1)}</b> <span class="eb-pct"${p<0?' style="color:var(--bad)"':''}>(${p>=0?'+':''}${p.toFixed(1)}%)</span>`; }   // 4차 K2: 음수는 '(+-46.9%)'로 찍혔다
 function openEnhance(e){
   const b=subBody('강화');   // ★ v5.1 착용창 위 오버레이
   b.appendChild(el('div','center',`<div class="ei" style="font-size:52px">${equipImg(e.slot,2.5)}</div><div class="big" style="color:${GRADES[e.grade].color}">${GRADES[e.grade].name} ${e.slot} +${e.enh}</div>`));

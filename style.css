@@ -791,6 +791,8 @@ body{
 .setcard .sc-tier{ margin-top:7px; }
 .setcard .sc-k{ font-size:var(--fs-sm); font-weight:800; color:#ffd97a; }
 .setcard .sc-fx{ font-size:var(--fs-sm); line-height:1.55; color:var(--txt-dim); }
+.set-prog{ color:#f0cd82; line-height:1.4; word-break:keep-all; margin-top:2px; }   /* 4차 K2: 세트 소속·진행 한 줄(대장간·제작 팝업·장비 상세) */
+.set-prog b{ color:var(--g-epic,#b98bff); }
 .setcard .sc-fx.off{ opacity:.45; text-decoration:line-through; text-decoration-color:rgba(255,255,255,.25); }   /* 4차: 전투 미적용 줄(준비 중) */
 .setcard .sc-fx .sc-soon{ text-decoration:none; display:inline-block; font-size:var(--fs-xs); color:#c9b487; }
 

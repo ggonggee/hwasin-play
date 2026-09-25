@@ -3415,6 +3415,25 @@ step('D7 · 전투 중 refreshParty(UI 갱신) → 쿨·기여도 보존 · 결�
   if(errs.length) throw new Error(errs.join(' | '));
   console.log(`     전투 중 갱신 3회 = 끝까지 관람 = ${base.hash}`);
 });
+/* ★ 2026-09-25(4차 발견 K2): 세트 결정 지점 — 역인덱스 1:1 · 장착 가정 계산은 원상 복원 · 응시 6세트에 L 투구를 끼면 해제·손해를 미리 보여 준다. */
+step('4차 K2 — 세트 역인덱스 · 장착 가정 계산 복원 · 세트 해제 경고', ()=>{
+  const errs=[], S=ev('S'), SP=ev('SET_PIECES'), so=ev('setOfItem');
+  Object.entries(SP).forEach(([n,l])=>l.forEach(x=>{ if(so(x)!==n) errs.push(`${x} → ${so(x)} (기대 ${n})`); }));
+  const all=Object.values(SP).flat(); if(new Set(all).size!==all.length) errs.push('한 아이템이 두 세트에 속함');
+  const keep=S.equips.slice(); const lead=ev('party')()[0], hid=lead.hero_id;
+  S.equips=S.equips.filter(e=>!(e.equipped && (!e.heroId||e.heroId===hid)));
+  SP['응시'].forEach(nm=>S.equips.push({ grade:'E', slot:nm, enh:0, equipped:true, heroId:hid }));
+  const helm={ grade:'L', slot:'결정 투구', enh:0, equipped:false }; S.equips.push(helm);
+  const before=JSON.stringify(S.equips), arrRef=S.equips;
+  const pv=ev('equipPreview')(helm, hid);
+  if(JSON.stringify(S.equips)!==before || S.equips!==arrRef || helm.equipped!==false || helm.heroId!==undefined) errs.push('가정 계산 뒤 장비가 원상 복원되지 않음');
+  if(!pv.broke.some(x=>x.s.n==='응시' && x.from===6)) errs.push('응시 6세트 해제를 못 잡음 '+JSON.stringify(pv.broke.map(x=>x.s.n)));
+  if(!(pv.p1<pv.p0)) errs.push(`세트가 깨지는데 전투력 감소 아님 ${pv.p0}→${pv.p1}`);
+  if(!/safeNo:_pvLoss/.test(js) || !/opt\.safeNo\?' gold':''/.test(js)) errs.push('손해 시 [취소] 금색 배선 없음');
+  if(!/\(\$\{p>=0\?'\+':''\}\$\{p\.toFixed\(1\)\}%\)/.test(js)) errs.push('cpDeltaLine 음수 부호');
+  S.equips=keep;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ 2026-09-25(4차 발견 4A 묶음): 표시 = 적용 — 세트 효과 live 줄 · 장신구 치명 · 스탯/스킬 탭 · 절전 경험치 · '/마리' 골드 · race 결과음 · 업적 사다리. */
 step('4차 4A — 세트 live·장신구 치명·스탯/스킬 탭·절전 경험치·/마리 골드·결과음·업적', ()=>{
   const errs=[], S=ev('S'), SETS=ev('SETS'), live=ev('setLiveFx');
