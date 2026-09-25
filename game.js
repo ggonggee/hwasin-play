@@ -431,23 +431,23 @@ function itemFlavor(name){
      구조: tiers = [{ k:필요 세트 수, fx:[효과 줄...] }] — 카드는 이 배열을 위에서 아래로 그대로 출력한다.
    ※ 카드 순서도 도감 스크롤 순서(잔불→월하→질풍→작열→응시→광란→그늘칼→주술→강철맹세)에 맞췄다. */
 const SETS = [
-  { n:'잔불',   tiers:[ { k:6, dmg:30, fx:['입히는 피해량 30% 증가'] } ] },
-  { n:'월하',   tiers:[ { k:6, def:30, fx:['받는 물리 피해량 30% 감소'] } ] },
-  { n:'질풍',   tiers:[ { k:6, def:30, fx:['받는 마법 피해량 30% 감소'] } ] },
+  { n:'잔불',   tiers:[ { k:6, dmg:30, live:[0], fx:['입히는 피해량 30% 증가'] } ] },
+  { n:'월하',   tiers:[ { k:6, def:30, live:[0], fx:['받는 물리 피해량 30% 감소'] } ] },
+  { n:'질풍',   tiers:[ { k:6, def:30, live:[0], fx:['받는 마법 피해량 30% 감소'] } ] },
   /* 유일한 3단계 누적 세트 (다른 세트는 전부 단일 임계값이다) */
   { n:'작열',   multi:true, tiers:[
-      { k:3, def:30, dmg:30, fx:['입히는 피해량 30% 증가','받는 물리 피해량 30% 감소','받는 마법 피해량 30% 감소'] },
-      { k:6, dmg:60, fx:['입히는 피해량 60% 증가','모든 스킬 쿨타임 15% 감소','(3세트의 효과 포함, 피해량만 30% ⇒ 60%)'] },
-      { k:8, dmg:60, fx:['모든 스킬 쿨타임 35% 감소','초당 몬스터 소환 마릿수 증가'] } ] },
-  { n:'응시',   tiers:[ { k:6, def:30, dmg:30, fx:['체력 50% 이상 적 일반 공격 시 70% 데미지 증가','보스 일반 공격 시 50% 추가 피해',
+      { k:3, def:30, dmg:30, live:[0,1,2], fx:['입히는 피해량 30% 증가','받는 물리 피해량 30% 감소','받는 마법 피해량 30% 감소'] },
+      { k:6, dmg:60, live:[0,2], fx:['입히는 피해량 60% 증가','모든 스킬 쿨타임 15% 감소','(3세트의 효과 포함, 피해량만 30% ⇒ 60%)'] },
+      { k:8, dmg:60, live:[1], fx:['모든 스킬 쿨타임 35% 감소','초당 몬스터 소환 마릿수 증가'] } ] },
+  { n:'응시',   tiers:[ { k:6, def:30, dmg:30, live:[2,3,4], fx:['체력 50% 이상 적 일반 공격 시 70% 데미지 증가','보스 일반 공격 시 50% 추가 피해',
                                    '받는 마법 피해량 30% 감소','받는 물리 피해량 30% 감소','입히는 피해량 30% 증가'] } ] },
-  { n:'광란',   tiers:[ { k:6, def:30, dmg:30, fx:['일반 공격 4회마다 다음 데미지 무효화','모든 스킬 쿨타임 20% 감소',
+  { n:'광란',   tiers:[ { k:6, def:30, dmg:30, live:[2,3], fx:['일반 공격 4회마다 다음 데미지 무효화','모든 스킬 쿨타임 20% 감소',
                                    '받는 물리 피해·마법 피해 30% 감소','입히는 피해량 30% 증가'] } ] },
-  { n:'그늘칼', tiers:[ { k:6, dmg:60, fx:['크리티컬 확률이 100%를 넘는 경우, 일반·스킬 공격 시 넘는 초과분(%)만큼 추가 타격',
+  { n:'그늘칼', tiers:[ { k:6, dmg:60, live:[3], fx:['크리티컬 확률이 100%를 넘는 경우, 일반·스킬 공격 시 넘는 초과분(%)만큼 추가 타격',
                                    '즉사 실패 시 50% 추가 타격','모든 스킬 쿨타임 20% 감소','입히는 피해량 60% 증가'] } ] },
-  { n:'주술',   tiers:[ { k:6, dmg:60, fx:['전설 스킬 사용 시 모든 스킬 중 한 개가 무작위로 추가 발동',
+  { n:'주술',   tiers:[ { k:6, dmg:60, live:[2], fx:['전설 스킬 사용 시 모든 스킬 중 한 개가 무작위로 추가 발동',
                                    '모든 스킬 쿨타임 20% 감소','입히는 피해량 60% 증가'] } ] },
-  { n:'강철맹세', tiers:[ { k:6, def:40, dmg:30, fx:['받는 치명타 데미지 40% 감소','받는 물리 피해·마법 피해 40% 감소',
+  { n:'강철맹세', tiers:[ { k:6, def:40, dmg:30, live:[1,3], fx:['받는 치명타 데미지 40% 감소','받는 물리 피해·마법 피해 40% 감소',
                                    '모든 스킬 쿨타임 20% 감소','입히는 피해량 30% 증가'] } ] },
 ];
 function setByName(n){ return SETS.find(s=>s.n===n)||null; }
@@ -476,7 +476,11 @@ function setDamageMul(){
 // 지금 활성화된 세트 요약 — 도감·전투력 툴팁용
 function activeSets(){ return SETS.map(st=>({ n:st.n, c:setPieceCount(st.n) })).filter(x=>x.c>0); }
 /* 도감 등 좁은 카드용 1줄 요약 — 최상위 임계 단계의 첫 줄만 노출 */
-function setFxSummary(s){ const t=s.tiers[s.tiers.length-1]; return `${t.k}세트: ${t.fx[0]}`; }
+/* ★ 4차 발견(표시 = 적용): tier.live = 전투에 실제로 적용되는 줄 인덱스. 쿨타임 감소·광란 무효화·응시 조건부·그늘칼·주술 추가 발동·강철맹세 받는 치명타는
+   미구현(v5.6 이 범위에서 뺐고 이후 구현 안 됨) — 요약·발동 카드는 live 줄을 앞세우고, 세트 효과 화면은 나머지를 '준비 중'으로 흐리게. 문구는 실측 기반이라 지우지 않는다.
+   작열 8 '소환 마릿수 증가'는 칭호 lava(titleSpawnBonus) 경유로 적용 — live. */
+function setLiveFx(t){ return (t && t.live ? t.live.map(i=>t.fx[i]).filter(Boolean) : []); }
+function setFxSummary(s){ const t=s.tiers[s.tiers.length-1], L=setLiveFx(t); return `${t.k}세트: ${L[0]||t.fx[0]}`; }
 /* ★ v5.7: 세트별 구성 아이템 확정 — 자체 설계.
    세트 도감은 카드마다 아이콘 6칸(작열만 더 많음)을 보여주지만 구성품 명칭까지는 알 수 없어
    **자체 결정**으로 확정한다.
@@ -1344,7 +1348,7 @@ function setTierOf(st){ const c=setPieceCount(st.n); let b=0; st.tiers.forEach(t
 function notifySetGain(pre, cp0){
   pre.forEach(x=>{ const now=setTierOf(x.s); if(now>x.k){
     const t=x.s.tiers.find(tt=>tt.k===now); sfx('legendary'); sysLog(`${x.s.n} ${now}세트 효과 발동`);
-    try{ growthBurst(`${x.s.n} ${now}세트 발동`, [cpDeltaLine(cp0, totalCP()), ((t&&t.fx)||[]).slice(0,2).join(' · ')], now>=6?'mile':'up'); }
+    try{ growthBurst(`${x.s.n} ${now}세트 발동`, [cpDeltaLine(cp0, totalCP()), setLiveFx(t).slice(0,2).join(' · ')], now>=6?'mile':'up'); }
     catch(_){ toast(`🎉 <b style="color:var(--g-legend)">${x.s.n} ${now}세트</b> 효과 발동!`); } } });
 }
 function titleOwned(t){
@@ -1422,6 +1426,13 @@ const ATTEND_DAYS = [
 ];
 /* ★ B9/G-134: 공지 — 제목 밴드 + 양피지 서술형 본문 (목록 → 상세 2단) */
 const NOTICES = [
+  /* ★ v5.367: 4차 발견 4A — 표시 = 적용 정정(이용자 유리 적용 1건 포함: 귀걸이·팔찌·인장 치명). */
+  { cat:'[수정]', ic:'📋', t:'표시와 실제가 다르던 곳을 바로잡았습니다', d:'2026-09-25',
+    body:'군주들에게 알립니다.<br><br>'+
+      '· <b>치명타</b> — 귀걸이·팔찌·인장의 치명타 확률·피해가 전투에 반영되지 않던 오류를 고쳤습니다(반지와 같은 규칙, 상한 동일). 영웅 스탯 탭의 치명타율·치명타 피해가 이제 실제 전투 값으로 표시됩니다.<br>'+
+      '· <b>스킬</b> — 스킬 탭의 \"등급에 따라 해금\" 표시는 사실과 달랐습니다. 모든 영웅이 4스킬을 모두 자동으로 사용합니다. 설명도 실제 범위·위력으로 바꿨습니다.<br>'+
+      '· <b>세트 효과</b> — 스킬 쿨타임 감소 등 아직 전투에 적용되지 않는 줄은 세트 효과 화면에 흐리게 \"준비 중\"으로 표시하고, 도감 요약·발동 알림은 실제로 적용되는 효과를 먼저 보여 드립니다. 세트 배율(×N)은 종전과 같습니다.<br>'+
+      '· <b>기타</b> — 절전 화면 경험치 바가 실제 경험치를 보여 줍니다. 몬스터 화면의 \"마리당 골드\"를 실제 기대값으로 고쳤습니다. 길잡이 배너가 사냥터 이름·연속 처치 글자를 가리지 않습니다. 시련의 탑·월드보스 결과음이 항상 패배음이던 것을 고쳤고(신기록이면 전용 음), 골드 레벨업에 소리가 납니다.' },
   /* ★ v5.366: 리뷰(v5.363~365) — 자동 연전 중 제작 결과가 끝없이 밀리던 것(v5.364 회귀) 등. */
   { cat:'[수정]', ic:'⚒️', t:'투기장 자동 연전 중 제작이 끝나면 연전을 멈추고 결과를 보여 드립니다', d:'2026-09-25',
     body:'군주들에게 알립니다.<br><br>'+
@@ -2933,7 +2944,7 @@ const Battle = (()=>{
     let add=0;
     (S.equips||[]).forEach(e=>{ if(!e||!e.equipped) return;
       if(e.heroId && hid && e.heroId!==hid) return;
-      if(slotSchema(e.slot).part!=='반지') return;
+      const pt=slotSchema(e.slot).part; if(pt!=='반지' && pt!=='장신구') return;   // 4차 발견: 귀걸이·팔찌·인장(part '장신구')이 빠져 있었다 — 주석 의도('반지·귀걸이·팔찌·인장')대로. 상한은 그대로
       add += GRADES[e.grade].mult*(1+(e.enh||0)*0.12)*0.01; });
     return 0.22 + Math.min(0.08, add);
   }
@@ -2943,7 +2954,7 @@ const Battle = (()=>{
     let add=0;
     (S.equips||[]).forEach(e=>{ if(!e||!e.equipped) return;
       if(e.heroId && hid && e.heroId!==hid) return;
-      if(slotSchema(e.slot).part!=='반지') return;
+      const pt=slotSchema(e.slot).part; if(pt!=='반지' && pt!=='장신구') return;   // 4차: 위와 같은 이유
       add += GRADES[e.grade].mult*(1+(e.enh||0)*0.12)*0.04; });
     return 1.8 + Math.min(0.8, add);
   }
@@ -3783,7 +3794,7 @@ const Battle = (()=>{
        던전·보스는 그대로 (단일 타겟이라 과급 없음).
        ★ v5.40: mobs.length 대신 S.mobCount(설정 마릿수) 사용 —
        onKill 시점엔 이미 죽은 몹이 빠져 있어 1/N 분배가 비일관적이었음. */
-    const aoeGoldDiv = isHuntSolo() ? Math.max(1, (S.mobCount||30)) : 1;
+    const aoeGoldDiv = isHuntSolo() ? Math.max(1, (S.mobCount||30)) : 1;   // ⚠ 몬스터 화면 '/마리' 표시(huntGoldPerKill)와 같은 식 — 바꾸면 거기도
     /* ★ M1: 골드·재료 드랍량은 보상 RNG — cosmetic 지대에서 전역 rnd/ri/Math.random 유지 */
     cosmetic(()=>{
       addGold(Math.max(1, Math.round(((boss?8:1)*t.gold + ri(0,Math.round(t.gold*0.4))) / aoeGoldDiv))); drop(mx, my, 'gold');
@@ -4130,8 +4141,9 @@ const Battle = (()=>{
       /* ★ 2026-09-25(워크플로 #16): 좌상단 'WAVE N'(캔버스 10,16)은 G-14 이후 시계(#timepod)에 완전히 가려졌고, 우상단 사냥터 라벨은 10px·N등급 색(#8a9a6a)이라
          청록 바닥에서 거의 안 읽혔다. 한 줄로 합쳐 12px 굵게 + 외곽선, N등급은 밝은 색. (우두머리는 5웨이브마다 — WAVE 가 예고 단서다) */
       const lab=td.n+' · '+GRADES[td.drop].name+' 재료 · WAVE '+wave;
-      ctx.font="bold 12px 'Malgun Gothic'"; ctx.textAlign='right'; ctx.lineWidth=3; ctx.strokeStyle='rgba(0,0,0,.6)'; ctx.strokeText(lab, W-8, 16);
-      ctx.fillStyle = td.drop==='N' ? '#d8d0bc' : td.c; ctx.fillText(lab, W-8, 16);
+      const ly=16+_gbhPx;   // K5(4차): 길잡이 배너 아래로
+      ctx.font="bold 12px 'Malgun Gothic'"; ctx.textAlign='right'; ctx.lineWidth=3; ctx.strokeStyle='rgba(0,0,0,.6)'; ctx.strokeText(lab, W-8, ly);
+      ctx.fillStyle = td.drop==='N' ? '#d8d0bc' : td.c; ctx.fillText(lab, W-8, ly);
     }
     /* ★ v5.165: 킬 콤보 표시 — 광역 스킬로 몹이 몰리며 쓸려나가는 순간(1.5초 내 연달아 처치)을
        눈에 띄게 만든다. 5콤보부터 표시, 콤보당 글자가 커지고 10/20에서 색이 오른다.
@@ -4140,7 +4152,7 @@ const Battle = (()=>{
       const pop = comboPop>0 ? 1+(comboPop/0.22)*0.35 : 1;
       const size = Math.min(26, 15+combo*0.35);
       ctx.save();
-      ctx.translate(W/2, mode==='dungeon' ? Math.max(84, H*0.22) : Math.max(46, H*0.11)); ctx.scale(pop,pop);   // ★ 2026-09-25(#14): 던전은 부제(y34)·보스 바(y42~52) 아래로
+      ctx.translate(W/2, mode==='dungeon' ? Math.max(84, H*0.22) : Math.max(46, H*0.11)+_gbhPx); ctx.scale(pop,pop);   // K5(4차): 홈은 배너 아래로   // ★ 2026-09-25(#14): 던전은 부제(y34)·보스 바(y42~52) 아래로
       ctx.globalAlpha = clamp(comboT/0.5, 0, 1)*0.95;
       ctx.fillStyle = combo>=20?'#c05ad0':combo>=10?'#ffd36a':'#f0a24a';
       ctx.font=`bold ${size.toFixed(0)}px 'Malgun Gothic'`; ctx.textAlign='center';
@@ -4559,6 +4571,8 @@ const Battle = (()=>{
            setPartySource:(fn)=>{ partySrc = (typeof fn==='function') ? fn : null; layoutHeroes(); },
            /* ★ v5.32: 스킬 쿨타임 UI 업데이트용 노출. */
            skillCDs:()=>(heroes[0]&&heroes[0].skillCD)||[0,0,0,0],
+           /* 4차 발견: 영웅 스탯 탭이 실제 전투 값을 보여 주게(읽기 전용·난수 없음) — 종전 탭은 등급·레벨 공식(치명 5%)으로 실제(22%+)와 달랐다 */
+           critInfo:(hid)=>({ rate:heroCritRate(hid), mul:heroCritMul(hid), speed:heroSpeedMul(hid) }),
            /* ★ 홈 1인 서바이벌 검증용 노출 (스모크 테스트에서 사용). 내부 상태 변경 아님. */
            isHuntSolo:()=>isHuntSolo(), heroCount:()=>heroes.length,  // ★ B6/G-81
            /* ★ v5.117: 투기장 헤더가 벽시계로 따로 세면 백그라운드 탭 등에서 전투 내부 시간과
@@ -5554,9 +5568,13 @@ function guideGoldShort(){
   return Math.max(0, Math.ceil(need - S.gold));
 }
 /* ★ 2026-09-25: 배너가 보이면 좌·우 HUD 열을 배너 높이만큼 내린다(style.css --gbh) — 배너가 시계·축제·절전 토글을 덮던 결함(#7). */
+/* 4차 발견 K5: 캔버스 상단 글자(사냥터·등급 재료·WAVE 라벨, 'N 연속 처치!')도 배너 높이만큼 내린다 — DOM HUD 만 내려서 캔버스 글자가 길잡이 진행 내내 배너 밑에 있었다.
+   그리기 전용 숫자 캐시(매 프레임 DOM 을 읽지 않게). S 에 넣지 않는다. 전투 중엔 배너가 숨어 0. */
+let _gbhPx=0;
 function syncGuideOffset(){
   const sw=$('#stage-wrap'), bn=$('#guide-banner'); if(!sw || !bn || !sw.style || !sw.style.setProperty) return;
   const h = bn.classList.contains('hidden') ? 0 : (bn.offsetHeight||0);
+  _gbhPx = h>0 ? h+4 : 0;
   const v = h>0 ? (h+4)+'px' : '0px';
   if(sw._gbh!==v){ sw._gbh=v; sw.style.setProperty('--gbh', v); }
 }
@@ -7821,7 +7839,7 @@ const MODALS = {
                reward 에서 Math.max 갱신되므로 판정은 전투 전 캡처값(_wbPrev)과 비교. */
             if(dmg>_wbPrev && _wbPrev>0){
               bx.appendChild(el('div','center',`<div style="color:var(--g-legend);font-weight:800;font-size:14px">🗡️ 최고 데미지 경신! (${fmt(_wbPrev)} → ${fmt(dmg)})</div>`));
-              sfx('legendary');
+              _dgResultSfx='legendary';   // 4차: 결과음 한 번(showDungeonResult) — 종전 직접 재생은 패배음과 겹치고 [즉시 결과]에선 빠졌다
             }
           } });
       }, { title:'월드보스 · 재의 용', sub:`입장권 1개 차감 · 오늘 ${left}/1회`, yesFirst:true });
@@ -7900,7 +7918,7 @@ const MODALS = {
             bx.appendChild(el('div','center big',`도달 ${reach} Wave`));
             if(prev!==undefined && reach>prev){
               bx.appendChild(el('div','center',`<div style="color:var(--g-legend);font-weight:800;font-size:15px">🏅 신기록! (종전 ${prev} Wave)</div>`));
-              sfx('legendary');
+              _dgResultSfx='legendary';   // 4차: 위와 같은 이유
             }
           } });
       }, { title:'불꽃의 탑', sub:`입장권 1개 차감 · 오늘 ${left}/1회`, yesFirst:true });
@@ -7946,7 +7964,7 @@ const MODALS = {
        정보가 있는 소수의 몫이었다. 배율은 단계별 단독 기여이며 여러 세트는 합산된다
        (dmg 합산 후 방어 환산 곱) — 헤더에 이 규칙을 명시해 최적해 강제가 아닌
        '비교 가능한 정보'로만 제공한다. */
-    b.appendChild(el('div','hint','장비 세트 9종. 8종은 <b>6세트</b> 단일 임계값이며, ‘작열’ 1종만 <b>3 → 6 → 8세트</b> 3단계로 누적됩니다.<br><span class="mut">×N = 그 단계의 전투력 환산 기여(공격% × 방어[유효 체력] 환산 · setDamageMul 정본 공식). 여러 세트는 서로 합산됩니다.</span>'));
+    b.appendChild(el('div','hint','장비 세트 9종. 8종은 <b>6세트</b> 단일 임계값이며, ‘작열’ 1종만 <b>3 → 6 → 8세트</b> 3단계로 누적됩니다.<br><span class="mut">×N = 그 단계의 전투력 환산 기여(공격% × 방어[유효 체력] 환산 · setDamageMul 정본 공식). 여러 세트는 서로 합산됩니다. 흐린 줄(준비 중)은 아직 전투에 적용되지 않습니다.</span>'));
     /* ★ v5.7: 무엇을 모아야 하는지 보이게 한다 — 구성품과 보유 진행도.
        종전 카드는 효과 문구만 있어서 "그래서 뭘 모으라는 거지"에 답이 없었다. */
     SETS.forEach(s=>{
@@ -7960,7 +7978,7 @@ const MODALS = {
         /* v5.298: 단계별 단독 전투력 배율 — setDamageMul 의 단일 세트 계산과 동일 공식 */
         const mul=((1+(t.dmg||0)/100) * (1/(1-Math.min(0.7,(t.def||0)/100)))).toFixed(2);
         h+=`<div class="sc-tier${hit?' hit':''}"><div class="sc-k">${t.k}세트${hit?' ✓':''} <span style="color:#f0cd82">×${mul}</span></div>`+
-           t.fx.map(x=>`<div class="sc-fx">${x}</div>`).join('')+`</div>`;
+           t.fx.map((x,i)=>(t.live && t.live.indexOf(i)<0) ? `<div class="sc-fx off">${x} <span class="sc-soon">(준비 중 — ×${mul} 미포함)</span></div>` : `<div class="sc-fx">${x}</div>`).join('')+`</div>`;
       });
       h+=`<div class="sc-pieces">`+list.map(nm=>{
         const has=(S.equips||[]).some(e=>e&&e.slot===nm);
@@ -8352,16 +8370,17 @@ const MODALS = {
            6개 축만 있었다. 이 세션에서 합성 승계(v5.184)·각성 심화 30(v5.193)·분해(v5.187)가
            핵심 축으로 자리 잡았는데 업적에 없었다. 임계값은 실측 곡선 기준(레전더리 제작
            첫 성공 ≈ 6일). 보상 없음(종전 원칙). */
-        [ ['몬스터 처치',S.stats.kills,[100,1000,5000,20000]],
-          ['제작 성공',S.stats.crafts,[10,100,500]],
-          ['소환',S.stats.summons,[20,100,500]],
+        /* 4차 발견(수집): 영원히 못 채우는 칸('영웅 합성 8' — 합성 대상은 N 이 아닌 영웅 4명뿐)과 첫 주에 멈추는 칸이 있었다 → 합성은 로스터에서 파생, 끝을 늘린다(앞 단계 유지·보상 없음). */
+        [ ['몬스터 처치',S.stats.kills,[100,1000,5000,20000,100000,1000000,3000000]],
+          ['제작 성공',S.stats.crafts,[10,100,500,1000]],
+          ['소환',S.stats.summons,[20,100,500,1000]],
           ['투기장 승리',S.stats.arenaWins,[15,50,200]],
-          ['재료 합성',S.stats.synths||0,[10,100,500]],
+          ['재료 합성',S.stats.synths||0,[10,100,500,2000,5000,10000]],
           ['보스 도전',S.stats.bossChallenges||0,[10,50,200]],
-          ['영웅 합성',S.stats.fuses||0,[1,4,8]],
+          ['영웅 합성',S.stats.fuses||0,[1,2,HERO_ROSTER.filter(r=>r.grade!=='N').length]],
           ['각성 단계',S.awaken||0,[3,12,50]],
           ['장비 분해',S.stats.salvages||0,[10,100,1000]],
-          ['레전더리 제작',S.stats.legendCrafts||0,[1,5,9]],
+          ['레전더리 제작',S.stats.legendCrafts||0,[1,5,9,20,50]],
         ].forEach(([t,v,ms])=>{
           const done=ms.filter(m=>v>=m).length, next=ms.find(m=>v<m);
           const row=el('div'); row.style.margin='8px 0';
@@ -8729,7 +8748,7 @@ const MODALS = {
     });
     b.appendChild(mcPre);
     if(gi===3){ const bd=el('div','mon-diff','난이도 X1'); b.appendChild(bd); }   // 레전더리 탭 배지
-    b.appendChild(el('div','hint',`선택한 몬스터가 <b>홈 필드에 계속 출현</b>합니다. 홈 출격 <b style="color:#f0d59a">${(party()[0]||ownedHeroes()[0]).name}</b> 전투력 <b style="color:#f0d59a">${fmt(leadCP)}</b> — 권장보다 약하면 전멸합니다. <span class="mut">(총 전투력 ${fmt(totalCPv)} · 홈은 영웅 1명, 던전은 3인 파티)</span>`));
+    b.appendChild(el('div','hint',`선택한 몬스터가 <b>홈 필드에 계속 출현</b>합니다. 홈 출격 <b style="color:#f0d59a">${(party()[0]||ownedHeroes()[0]).name}</b> 전투력 <b style="color:#f0d59a">${fmt(leadCP)}</b> — 권장보다 약하면 반격이 아파지고, 크게 약하면 전멸합니다(전멸 시 최하급으로 후퇴). <span class="mut">(총 전투력 ${fmt(totalCPv)} · 홈은 영웅 1명, 던전은 3인 파티)</span>`));
     { const safe=huntSafeTier(); S.huntHintSeen=Math.max(S.huntHintSeen|0, safe);   // 이 화면을 봤다 → 몬스터 버튼 점 소등(huntUpgradeTier)
       if(safe>(S.huntTier||0)){ const sf=HUNT_TIERS[safe], cu=HUNT_TIERS[S.huntTier||0]||HUNT_TIERS[0];
         const r=el('div','hunt-rec', `<span class="hr-t">추천</span><span class="hr-x">리더로 안정 사냥 가능한 최고 단계 <b style="color:${sf.c}">${sf.n}</b> · 처치 골드 <b>×${(sf.gold/Math.max(1,cu.gold)).toFixed(1)}</b></span>`);   // 글을 한 span 에 — 맨 텍스트 노드는 flex 항목으로 쪼개져 세로로 꺾였다
@@ -8756,7 +8775,7 @@ const MODALS = {
         <div class="mdrops">${dropGrid}</div>
         ${curT&&!cur?`<div class="mon-why">
             <div class="mw"><span class="mwl">여기서만</span> ${matIcon(t.mat)} <b style="color:${GRADES[t.drop].color}">${t.mat}</b>${t.mat2?` · ${matIcon(t.mat2)} <b style="color:${GRADES[t.drop].color}">${t.mat2}</b>`:''}</div>
-            <div class="mw"><span class="mwl">골드</span> <b style="color:${goldMul>=1.5?'var(--ok)':''}">×${goldMul.toFixed(1)}</b> <span class="mut">(${fmt(t.gold)}/마리)</span></div>
+            <div class="mw"><span class="mwl">골드</span> <b style="color:${goldMul>=1.5?'var(--ok)':''}">×${goldMul.toFixed(1)}</b> <span class="mut">(약 ${fmt(huntGoldPerKill(t))}/마리 · 기본)</span></div>
             ${GORDER.indexOf(t.drop)>GORDER.indexOf(base.drop)
               ? `<div class="mw"><span class="mwl">해금</span> <b style="color:${GRADES[t.drop].color}">${GRADES[t.drop].name} 장비</b> 제작 재료</div>`
               : `<div class="mw"><span class="mwl">난이도</span> 레벨 ${t.level} · 체력 ${fmt(t.hp)}</div>`}
@@ -9158,17 +9177,20 @@ function extLinkPanel(b, key){
      · 스와이프 해제의 실제 임계 거리·완료 연출. 잠정 60px. */
 let PW_OVL=null, PW_BAR=null, PW_TIMER=0;
 // 절전 오버레이 본문 — 1초 주기로 다시 그려 골드·시계·카운트다운이 실시간으로 움직인다
+/* 리더 경험치 % — 정산 화면·절전 화면 공용 정본(4차 K8) */
+/* 4차 발견 K9: 홈 사냥 1마리 기대 골드(버프 제외) — onKill 과 같은 식: (골드 + 0~40% 변주 평균 20%) ÷ 설정 마릿수(광역 분배). 종전 표시는 t.gold 원값이라 약 25배 과장. */
+function huntGoldPerKill(t){ return Math.max(1, Math.round((t.gold||0)*1.2/Math.max(1, (S && S.mobCount)||30))); }
+function leadExpPct(p0){ const st=(S && S.heroes && p0 && S.heroes[p0.hero_id])||{}; return p0 ? clamp((st.exp||0)/(((p0.level)||1)*250)*100, 0, 100) : 0; }
 function pwBodyHTML(){
   const clock=$('#clock')?$('#clock').textContent:'--:--';
   // ① 이름 + 레벨 + 경험치바
   let p0=null; try{ p0=(typeof party==='function')?(party()[0]||null):null; }catch(e){}
   const nm = p0 ? p0.job.name : (S.name||'군주');
   const lv = p0 ? p0.level : 1;
-  const pct = clamp(((S.stats&&S.stats.kills)||0)%100, 0, 100);
+  /* 4차 발견 K8: 종전 경험치 바는 '처치 수 % 100'(경험치와 무관한 가짜 값)이었다 — 정산 화면과 같은 정본(leadExpPct: exp / (레벨×250)). */
+  const pct = Math.floor(leadExpPct(p0));
   // ⑤ 1분당 획득 골드 — settle 모달과 같은 산식(마을회관·코스튬·칭호 버프 반영)
   const rate = Math.round(idleGoldPerMin());   // ★ 2026-09-25: 실제 방치 관문과 같은 식
-  // ⚠비전미확인 — 촬영대기: 카운트다운의 의미가 불명이라 '다음 1분 정산까지 남은 시간'으로 표시만 한다(경제 영향 없음).
-  const cd = 60 - (Math.floor(S.playSec||0)%60);
   const cells=pwCells();
   const grid=cells.map(([ic,nm2,v])=>`<div class="pw-cell"><span class="pc-ic">${ic}</span><b>${fmt(v||0)}</b></div>`).join('');
   return `<div class="pw-name"><span class="pn-nm">${nm}</span><span class="pn-lv">${lv}LV</span>`+
@@ -9179,7 +9201,10 @@ function pwBodyHTML(){
     `<div class="pw-grid">${grid}</div>`+
     `<div class="pw-two">`+
       `<div class="pw-card"><div class="pw-cv">${fmt(rate)} G</div><div class="pw-ct">1분당 획득 골드</div></div>`+
-      `<div class="pw-card"><div class="pw-cv">${fmt(S.offlinePending||0)} G</div><div class="pw-ct">오프라인 골드 <b>${mmss(cd)}</b></div></div>`+
+      /* K8: 종전 '오프라인 골드 0 G · mm:ss'(의미 없는 카운트다운 — 창을 켜 두면 오프라인 골드는 쌓이지 않는다) → 대기 금액이 있으면 그 값, 없으면 떠났을 때 받는 것 안내 */
+      ((S.offlinePending||0)>0
+        ? `<div class="pw-card"><div class="pw-cv">${fmt(S.offlinePending)} G</div><div class="pw-ct">오프라인 골드 · 수령 대기</div></div>`
+        : `<div class="pw-card"><div class="pw-cv">${fmt(OFFLINE_GPM)} G</div><div class="pw-ct">자리를 비우면 1분당 · 최대 ${OFFLINE_CAP_H}시간</div></div>`)+
     `</div>`;
 }
 /* 12칸 자원 그리드 정본 — settle(정산 상세)과 공유한다.
@@ -9350,10 +9375,10 @@ function heroDetail(hidOrJob){
       ['마법 공격력',     fmt(Math.round((140+lv*28)*gm*aw))],
       ['방어력',          fmt(Math.round((100+lv*20)*gm*aw))],
       ['마법 저항력',     fmt(Math.round((90+lv*18)*gm*aw))],
-      ['치명타율',        (5+GORDER.indexOf(e.grade)*2.5+lv*0.05).toFixed(1)+'%'],
-      ['치명타 피해',     (150+GORDER.indexOf(e.grade)*15+lv*0.4).toFixed(0)+'%'],
-      ['공격속도',        (1+GORDER.indexOf(e.grade)*0.08+lv*0.004).toFixed(2)],
-      ['이동속도',        (100+GORDER.indexOf(e.grade)*6+lv*0.3).toFixed(0)],
+      /* 4차 발견(표시 = 적용): 아래 3줄은 실제 전투 값(Battle.critInfo — heroCritRate·heroCritMul·heroSpeedMul). 종전엔 등급·레벨 공식이라 치명 5.0% 로 보였는데
+         실제는 22% 기본 + 반지·귀걸이·팔찌·인장 가산(상한 30%)이었다. 공격 주기는 영웅·장비와 무관한 고정값이라 '기본'으로 적는다. */
+      ...(()=>{ const ci=(Battle.critInfo && Battle.critInfo(hid)) || { rate:0.22, mul:1.8, speed:1 };
+        return [['치명타율', (ci.rate*100).toFixed(1)+'%'], ['치명타 피해', Math.round(ci.mul*100)+'%'], ['공격속도', '기본'], ['이동속도', '×'+ci.speed.toFixed(2)]]; })(),
     ];
     rows.forEach(([k,v])=>body.appendChild(el('div','kv',`<span>${k}</span><b>${v}</b>`)));
     /* #4 ③(2차): 살 수 있으면 금색 — 같은 화면의 강화 버튼과 같은 규칙(종전 회색이라 비활성처럼 보였다). ⚠ 영웅 버튼 점·길잡이 안내는 넣지 마라:
@@ -9366,19 +9391,20 @@ function heroDetail(hidOrJob){
     lb.onclick=()=>{ const lvNow=st.level||1, c=lvNow*80000; if(S.gold<c){ toast('골드 부족'); return; }
       const p0=heroPower(heroResolve(hid)); S.gold-=c; st.level=lvNow+1; const p1=heroPower(heroResolve(hid));
       Battle.refreshParty(); heroDetail(hid); refreshHUD(); save();   /* ★ v5.309: 레벨업 확정 즉시 저장 */
+      sfx(st.level%10===0?'awaken':'craft');   // 4차 발견: 무음이었다(v5.364 전엔 궁극기 재발동 부작용으로 우연히 소리가 났다). 10레벨 이정표는 awaken — legendary 는 희소 사건 전용
       try{ growthBurst(`${e.name} Lv${st.level}`, [cpDeltaLine(p0,p1)], st.level%10===0?'mile':'up'); }catch(_){ toast(`${e.name} Lv${st.level} · ${cpDeltaLine(p0,p1)}`); } };
     body.appendChild(lb);
   }
   else if(_heroTab==='스킬'){
-    body.appendChild(el('div','small','<b>스킬</b> <span class="mut">(영웅 등급에 따라 해금)</span>'));
-    const unlocked=GORDER.indexOf(e.grade)+1;
+    /* 4차 발견(표시 = 적용): 종전 탭은 '(영웅 등급에 따라 해금)'·🔒 로 N 영웅은 1스킬만 쓰는 것처럼 보였지만, 전투는 등급과 무관하게 4스킬을 모두 쓴다
+       (v5.216 — 해금 로직은 결정론을 깨서 유보, 표기를 동작에 맞추기로 했는데 이 탭이 빠졌다). 설명도 실제 동작(범위·배율)으로. SKILLS 의 화상·둔화 등 문구는 미구현이라 노출하지 않는다. */
+    body.appendChild(el('div','small','<b>스킬</b> <span class="mut">(모든 영웅이 4스킬을 자동 사용)</span>'));
+    const REAL=['주변 적 광역 · 위력 ×1.5','가장 강한 적 1체 · 위력 ×4','넓은 범위 광역 · 위력 ×5','화면 전체 · 위력 ×8'];
     SKILLS[j.id].forEach(([nm,desc,cd],i)=>{
-      const on=i<unlocked; const sg=GORDER[i]; const SG=GRADES[sg];
-      const row=el('div','pack skill-row'); row.style.opacity=on?'1':'.45';
-      row.innerHTML=`<div class="sk-badge" style="color:${SG.color};border-color:${SG.color}">${SG.name}</div>
-        <div class="pic">${on?'✨':'🔒'}</div>
+      const row=el('div','pack skill-row');
+      row.innerHTML=`<div class="pic">✨</div>
         <div class="info"><div class="t">${nm} ${i===3?'<span class="small lgd">궁극</span>':''}</div>
-        <div class="d">${on?desc:SG.name+' 등급 영웅에서 해금'} · <b>쿨타임 ${cd}초</b></div></div>`;
+        <div class="d">${REAL[i]||''} · <b>쿨타임 ${cd}초</b></div></div>`;
       body.appendChild(row);
     });
   }
@@ -10433,7 +10459,9 @@ function showDungeonResult(cfg, win, stats){
   const _w0 = walletSnap();
   if(rewarded && cfg.reward) cfg.reward(stats||{});
   const _gains = rewarded ? walletDiff(_w0, walletSnap()) : [];
-  _dgResultSfx = win?'win':'fail'; sfx(_dgResultSfx);   // 즉시 결과(무음 구간)면 버튼 핸들러가 이 값으로 한 번 재생한다
+  /* 4차 발견(효과음): race 던전(탑·월드보스·길드 레이드)은 매일 하는 '기록 도전'인데 결과가 항상 패배음(fail)이었다 → 보상을 받는 race 결과는 claim.
+     소리는 resultExtra 뒤에 한 번만 — 신기록(탑·월드보스)은 resultExtra 가 _dgResultSfx 를 'legendary' 로 바꾼다(즉시 결과 경로도 같은 값을 재생). */
+  _dgResultSfx = win?'win':(rewarded?'claim':'fail');   // 즉시 결과(무음 구간)면 버튼 핸들러가 이 값으로 한 번 재생한다
   if(win || cfg.race){ (S.dgSeen && typeof S.dgSeen==='object' ? S.dgSeen : (S.dgSeen={}))[dgFamily(cfg.name)]=1; }   // [즉시 결과] 노출 조건(dgSkipOK)
   setModalTitle(cfg.name); const b=$('#modalBody'); b.innerHTML='';
   // ★ v4.8: race 던전(탑·월드보스·길드레이드) 결과창 제목은 3곳 모두 '결과' 로 통일한다('전투 종료' 는 쓰지 않는다)
@@ -10442,7 +10470,8 @@ function showDungeonResult(cfg, win, stats){
      3초 자동 퇴장(G-80 결정)은 그대로 — 움직임만 더한다. */
   b.appendChild(el('div','result-card rc-anim '+(win?'rc-win':'rc-lose'),`<div class="rc-icon">${win?'<div class="rc-rays"></div>':''}${win?eImg("🎉",2):(cfg.race?'🐉':'💥')}</div><div class="rc-title ${win?'win':'lose'}">${title}</div>
     <div class="small mut">${rewarded?(cfg.rewardText||'보상 획득'):'부대가 전멸했습니다. 더 강해진 후 재도전하세요.'}${stats&&stats.dmg?` · 누적 데미지 ${fmt(stats.dmg)}`:''}</div>`));
-  if(cfg.resultExtra) cfg.resultExtra(b, win, stats||{});
+  if(cfg.resultExtra){ try{ cfg.resultExtra(b, win, stats||{}); }catch(e){} }
+  sfx(_dgResultSfx);
   // ★ 2026-09-25(워크플로 2차 #8): 보상이 전부 보유 상한에 막혀 0 이면 이유를 적는다 — 종전엔 '도전 성공! … X15' 만 있고 칩이 없어 버그처럼 보였다.
   if(rewarded && !_gains.length && cfg.capNote && cfg.capNote()) b.appendChild(el('div','center small warn','재료 보유 상한 도달 — 이번 보상은 받지 못했습니다 (인벤토리에서 제작·합성으로 소비하세요)'));
   // ★ v4.5.1: 실제 획득물 칩 — 예고 문구가 아니라 이번 판에 실제로 늘어난 것만 보여준다.

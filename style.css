@@ -791,6 +791,8 @@ body{
 .setcard .sc-tier{ margin-top:7px; }
 .setcard .sc-k{ font-size:var(--fs-sm); font-weight:800; color:#ffd97a; }
 .setcard .sc-fx{ font-size:var(--fs-sm); line-height:1.55; color:var(--txt-dim); }
+.setcard .sc-fx.off{ opacity:.45; text-decoration:line-through; text-decoration-color:rgba(255,255,255,.25); }   /* 4차: 전투 미적용 줄(준비 중) */
+.setcard .sc-fx .sc-soon{ text-decoration:none; display:inline-block; font-size:var(--fs-xs); color:#c9b487; }
 
 /* 일일 퀘스트 날짜 헤더 + 버튼 없는 진행 텍스트 (G-121 / G-120) */
 .datehead{ margin:8px 0 6px; padding:5px 0; text-align:center; font-size:var(--fs-base); font-weight:700;

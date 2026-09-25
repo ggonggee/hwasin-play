@@ -131,6 +131,9 @@ const ctx=vm.createContext(windowStub);
 vm.runInContext(js+'\n;globalThis.__ev=(src)=>eval(src);\n', ctx, {filename:'game.js'});
 const ev=s=>ctx.__ev(s);
 documentStub._ev.DOMContentLoaded();          // 부트 (빈 저장소 → 신규 세이브)
+/* ★ 4차 K1: 전장 크기 — 게임은 홈 진입·UI 배율 경로에서 Battle.resize() 를 부르는데 시뮬 vm 에선 안 불려 전장이 0×0 이었다(몹이 한 점에 겹침).
+   안전 사냥터에선 영향이 작지만 권장보다 높은 사냥터는 결과가 완전히 달랐다(검증: 30분 전멸 65회 vs 브라우저 0회). 스텁 캔버스 453×548 로 잡는다. */
+ev('Battle.resize()');
 /* ★ v5.242: vm 전역 Math.random도 시드 고정 — Battle.setSeed는 전투 RNG(_battleRng)만
    고정하고, 게임이 직접 굴리는 Math.random(onKill 보상 드랍·제작 성공 p0·합성)은 진짜
    난수였다. 전투는 setSeed(42), 전역은 아래 xorshift(시드 42) — 서로 다른 스트림이지만
@@ -145,11 +148,17 @@ const log=(...a)=>console.log(...a);
    전투 스트림(setSeed)과는 별개 시퀀스 — 두 스트림 모두 결정적이면 전체도 결정적이다. */
 let _s=SEED>>>0;
 function srand(){ _s^=(_s<<13)>>>0; _s^=(_s>>>17); _s^=(_s<<5)>>>0; _s>>>=0; return _s/4294967296; }
+/* ★ 2026-09-25(4차 발견 K1 — 측정 도구 결함): 종전엔 pump(1799.9) 를 한 번만 불렀는데 게임 pumpFrame 은 폭주 방지 가드(1만 스텝 = 500초)가 있어
+   **창마다 500초만 전투하고 약 1,300초가 버려졌다**(v5.182 시뮬 도입 때부터). 창당 킬 ~700 은 실제 30분(~2,500, 브라우저 실측)의 28% 였고,
+   그 위에서 잰 곡선·정체 판단의 시간축이 약 3.6배 늘어나 있었다. → 400초 조각으로 나눠 펌프한다(게임 가드는 그대로 둔다).
+   ⚠ 창 길이·가드를 바꾸면 아래 잔여 검사가 즉시 실패한다 — 다시 잘리지 않게. */
 function battleWindow(simSec){
   // 실전투 창: 고정 스텝(1/20s)으로 simSec 초 만큼 진행. 수입은 곧장 S 에 반영된다.
-  const pump=ev('Battle').pumpFrame;
-  const steps=Math.round(simSec*20);
-  pump(steps/20*0.9999);   // pumpFrame(총dt) — 내부에서 FIXED_DT 로 분할
+  const B=ev('Battle'), pump=B.pumpFrame;
+  const steps=Math.round(simSec*20), total=steps/20*0.9999, n=Math.max(1, Math.ceil(total/400));
+  for(let i=0;i<n;i++) pump(total/n);   // pumpFrame(총dt) — 내부에서 FIXED_DT 로 분할(호출당 가드 500초 미만으로)
+  const r0=B.rngDrawCount(); pump(0);
+  if(B.rngDrawCount()!==r0) throw new Error('battleWindow: 창 끝에 처리 못 한 전투 시간이 남았다 — 창이 잘림(pumpFrame 가드 확인)');
 }
 function myCP(){ return ev('totalCP')(); }
 /* 사냥 대상 선택 v2 — '필요한 재료를 떨구는 안전한 몬스터'를 찾는다(이 게임의 코어 루프).

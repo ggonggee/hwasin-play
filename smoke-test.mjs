@@ -3415,6 +3415,45 @@ step('D7 · 전투 중 refreshParty(UI 갱신) → 쿨·기여도 보존 · 결�
   if(errs.length) throw new Error(errs.join(' | '));
   console.log(`     전투 중 갱신 3회 = 끝까지 관람 = ${base.hash}`);
 });
+/* ★ 2026-09-25(4차 발견 4A 묶음): 표시 = 적용 — 세트 효과 live 줄 · 장신구 치명 · 스탯/스킬 탭 · 절전 경험치 · '/마리' 골드 · race 결과음 · 업적 사다리. */
+step('4차 4A — 세트 live·장신구 치명·스탯/스킬 탭·절전 경험치·/마리 골드·결과음·업적', ()=>{
+  const errs=[], S=ev('S'), SETS=ev('SETS'), live=ev('setLiveFx');
+  SETS.forEach(s=>s.tiers.forEach(t=>{ const L=live(t); if(!L.length) errs.push(s.n+' '+t.k+'세트 live 줄 없음');
+    if(!(typeof t.dmg==='number'||typeof t.def==='number') && !(s.n==='작열' && t.k===8)) errs.push(s.n+' live 인데 dmg/def 없음');
+    L.forEach(x=>{ if(/쿨타임|무효화|일반 공격 시|초과분|즉사|무작위|받는 치명타/.test(x)) errs.push(s.n+' 미구현 효과가 live: '+x); }); }));
+  SETS.forEach(s=>{ const sm=ev('setFxSummary')(s); if(/쿨타임|무효화|초과분|무작위|받는 치명타/.test(sm)) errs.push('도감 요약이 미적용 효과 '+sm); });
+  if(!/setLiveFx\(t\)\.slice\(0,2\)/.test(js)) errs.push('세트 발동 카드가 live 줄을 쓰지 않음');
+  // 장신구(인장) 치명 가산
+  const keep={ eq:S.equips.slice(), st:S.seenTutorial, ht:ev('_heroTab') };
+  const lead=ev('party')()[0];
+  S.equips=S.equips.filter(e=>!(e.equipped && e.heroId===lead.hero_id && /인장|반지|팔찌|귀걸이/.test(e.slot)));
+  const r0=ev('Battle').critInfo(lead.hero_id).rate;
+  S.equips.push({ grade:'L', slot:'결정 인장', enh:10, equipped:true, heroId:lead.hero_id });
+  const r1=ev('Battle').critInfo(lead.hero_id).rate;
+  if(!(r1>r0)) errs.push(`인장 치명 미적용 ${r0}→${r1}`);
+  // 스탯 탭 = 실제 값 · 스킬 탭 가짜 잠금 없음
+  ev("_heroTab='스탯'"); ev('heroDetail')(lead.hero_id);
+  const txt=(n=>{ const f=x=>String(x._html||x._text||'')+(x.children||[]).map(f).join(''); return f(n); })(ev("$('#modal-root')"));
+  if(!txt.includes((r1*100).toFixed(1)+'%')) errs.push('스탯 탭 치명타율이 실제 값이 아님');
+  ev("_heroTab='스킬'"); ev('heroDetail')(lead.hero_id);
+  const txt2=(n=>{ const f=x=>String(x._html||x._text||'')+(x.children||[]).map(f).join(''); return f(n); })(ev("$('#modal-root')"));
+  if(/해금|🔒/.test(txt2.split('모든 영웅이 4스킬')[1]||txt2)) errs.push('스킬 탭에 가짜 잠금');
+  ev('closeSub')(); ev('closeModal')(); S.equips=keep.eq; ctx.__ht=keep.ht; ev('_heroTab=__ht');
+  // 절전 화면 경험치 = exp/(레벨×250) · 카운트다운 없음
+  const st=S.heroes[lead.hero_id]; const ke=st.exp; st.exp=Math.round((st.level||1)*250*0.3); S.stats.kills=77;
+  const pw=ev('pwBodyHTML')(); if(!pw.includes('>30%<') || pw.includes('>77%<')) errs.push('절전 경험치 바가 처치 수 기반');
+  st.exp=ke;
+  if(/kills\)\|\|0\)%100/.test(js)) errs.push('처치 수 % 100 잔재');
+  // '/마리' 골드 = onKill 기대값
+  const hg=ev('huntGoldPerKill'), T0=ev('HUNT_TIERS')[3], mc=S.mobCount; S.mobCount=30;
+  if(hg(T0)!==Math.max(1,Math.round(T0.gold*1.2/30))) errs.push('/마리 골드 식'); S.mobCount=mc;
+  // race 결과음: 보상 race 는 claim · 신기록은 legendary 한 번(직접 재생 없음)
+  if(!/_dgResultSfx = win\?'win':\(rewarded\?'claim':'fail'\)/.test(js) || (js.match(/_dgResultSfx='legendary'/g)||[]).length!==2) errs.push('race 결과음 규칙');
+  // 업적: 영웅 합성 끝 = N 이 아닌 영웅 수
+  if(!/\['영웅 합성',S\.stats\.fuses\|\|0,\[1,2,HERO_ROSTER\.filter\(r=>r\.grade!=='N'\)\.length\]\]/.test(js)) errs.push('영웅 합성 업적이 구조상 불가능한 값');
+  S.seenTutorial=keep.st;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ 2026-09-25(리뷰 v5.363~365): ① 솔로 던전(탑) → 홈 솔로 복귀는 영웅 목록이 같아도 mode 가 바뀌었으니 새로 배치(던전 쿨·위치가 새지 않게)
    ② 끝난 제작에 [즉시 완성]은 제작서를 빼지 않는다 ③ 투기장 자동 연전은 제작이 끝나 있으면 멈춘다(연전 중엔 판정 프레임이 없다). */
 step('리뷰 v5.363~365 — 탑→홈 새 배치 · 끝난 제작 즉시 완성 차단 · 연전 중 제작 완료', ()=>{
