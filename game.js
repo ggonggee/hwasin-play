@@ -6079,7 +6079,9 @@ const FESTIVALS=[
   { id:'exp',  n:'성장 축제', ic:'📈', fx:'처치 경험치 +20%' },
   { id:'mat',  n:'채굴 축제', ic:'⛏️', fx:'사냥터 재료 드랍률 +20%' },
 ];
-function festival(wk){ const p=(wk||getWeekKey()).split('-W'); return FESTIVALS[(parseInt(p[0])*53+parseInt(p[1]))%FESTIVALS.length]; }   // wk(선택): 지난주 자동 수령이 그 주 테마를 쓰게(v5.378)
+/* wk(선택): 지난주 자동 수령이 그 주 테마를 쓰게(v5.378). v5.380(리뷰): weekOrd 로 파싱 — 형식이 틀린 키(손상·수동 편집 세이브)면 이번 주로 되돌린다.
+   종전 split 파싱은 FESTIVALS[NaN]=undefined → festivalQuest 가 던져 weeklyState 가 키를 영영 못 넘기고 5초 루프의 월간·투기장 정산까지 막혔다. 올바른 키에선 종전 식과 같은 값. */
+function festival(wk){ let o=weekOrd(wk||getWeekKey()); if(o<0) o=weekOrd(getWeekKey()); return FESTIVALS[o%FESTIVALS.length]; }
 function festivalMul(id){ return festival().id===id ? 1.2 : 1; }
 /* #16: 주·월 키 서수 — 'YYYY-Wn' → y*53+n(ISO 주는 1~53이라 해가 바뀌어도 단조), 'YYYY-M' → y*12+m. 파싱 불가는 -1(= 비교 안 함, 종전 동작). */
 function weekOrd(k){ const m=/^(\d+)-W(\d+)$/.exec(k||''); return m ? (+m[1])*53+(+m[2]) : -1; }
@@ -8535,7 +8537,11 @@ const MODALS = {
          저장을 안 한 사례). 지급이 일어난 자리에서 즉시 저장한다. */
       /* U5(2차): 골드 보유 상한 근처면 여유만큼만 주고 나머지는 대기 금액으로 남긴다(종전: 상한에서 잘린 몫이 사라졌다).
          토스트는 실제 증가분 — 종전엔 버프를 곱하기 전 기준 금액을 적어 실제보다 적게 보였다. */
-      btn.onclick=()=>{ const want=S.offlinePending||0, give=goldRoomBase(want,false);
+      btn.onclick=()=>{
+        /* v5.380(리뷰): 예고액은 창을 그릴 때 한 번 잰 값이다 — 창을 연 채 결정 가호 만료·축제·투기장 순위가 바뀌면 옛 예고액과 다른 금액이 지급됐다.
+           배율이 바뀌었으면 지급하지 않고 창을 다시 그린다(지급 공식은 그대로). */
+        if(Math.abs(addGoldMul()-ocp.mul)>1e-9){ toast('골드 효과가 바뀌어 수령액을 다시 계산했습니다'); openModal('settle'); return; }
+        const want=S.offlinePending||0, give=goldRoomBase(want,false);
         if(give<=0){ toast('골드 보유 상한 — 골드를 쓴 뒤 수령하세요(대기 금액은 그대로 남습니다)'); return; }
         const g0=S.gold; addGold(give); const got=S.gold-g0; S.offlinePending=Math.max(0, want-give);
         claimSfx(); toast(`오프라인 골드 +${fmt(got)}`+(S.offlinePending>0?` · 보유 상한으로 ${fmt(S.offlinePending)} 대기`:'')); sysLog(`오프라인 방치 보상 +${fmt(got)}G`);

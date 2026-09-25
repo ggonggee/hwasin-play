@@ -702,7 +702,19 @@ step('오프라인 정산 수령 — 지급·소진·즉시 저장', ()=>{
       const got=ev('fmt')(S.gold-g1);
       if(shown!==got) errs.push(`오프라인 카드 예고액 ${shown} ≠ 실제 증가 ${got}`);
       if(!/골드 효과 ×1\.10 포함/.test(collectText(b2))) errs.push('배율 포함 표기 없음');
+      /* v5.380(리뷰): 창을 연 뒤 배율이 바뀌면(가호 만료 등) 옛 예고액으로 지급하지 않는다 — 지급 0 · 대기 금액 유지 */
+      S.offlinePending=2833000; const g2=S.gold;
+      const b3=new Node2('div'); ev('MODALS').settle.render(b3);
+      ev('addGoldMul=function(){ return 1.0; };');
+      const all3=[]; (function walk(n){ (n.children||[]).forEach(c=>{ all3.push(c); walk(c); }); })(b3);
+      all3.find(c=>String(c._text||c._html||'')==='수령').onclick();
+      if(S.gold!==g2 || S.offlinePending!==2833000) errs.push('배율이 바뀐 뒤 옛 예고액으로 지급됨');
     } finally { ev('addGoldMul=globalThis.__oAGM'); }
+    /* v5.380(리뷰): 형식이 틀린 주간 키에서 festival/weeklyState 가 던지지 않고 이번 주로 넘어간다 */
+    { const kw=JSON.parse(JSON.stringify(S.weekly||{}));
+      for(const bad of ['garbage','2026-W','2026W39']){ S.weekly={ key:bad, base:{ kills:0 }, claimed:{} };
+        try{ ev('weeklyState')(); if(S.weekly.key!==ev('getWeekKey')()) errs.push('손상 키 '+bad+' 에서 롤오버 안 됨'); }catch(e){ errs.push('손상 키 '+bad+' 에서 예외: '+e.message); } }
+      S.weekly=kw; }
   } finally {
     ev('toast=globalThis.__oOS');
     ev('save=globalThis.__oOSv');
