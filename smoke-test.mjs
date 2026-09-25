@@ -3415,6 +3415,42 @@ step('D7 · 전투 중 refreshParty(UI 갱신) → 쿨·기여도 보존 · 결�
   if(errs.length) throw new Error(errs.join(' | '));
   console.log(`     전투 중 갱신 3회 = 끝까지 관람 = ${base.hash}`);
 });
+/* ★ 2026-09-25(리뷰 v5.363~365): ① 솔로 던전(탑) → 홈 솔로 복귀는 영웅 목록이 같아도 mode 가 바뀌었으니 새로 배치(던전 쿨·위치가 새지 않게)
+   ② 끝난 제작에 [즉시 완성]은 제작서를 빼지 않는다 ③ 투기장 자동 연전은 제작이 끝나 있으면 멈춘다(연전 중엔 판정 프레임이 없다). */
+step('리뷰 v5.363~365 — 탑→홈 새 배치 · 끝난 제작 즉시 완성 차단 · 연전 중 제작 완료', ()=>{
+  const errs=[];
+  { const B=freshBattle(); B.setPartySource(null); B.setHunt && B.setHunt();
+    B.startDungeon({ name:'탑검증', foeCP:200, kind:'mobs', count:8, dur:20, soloSurvival:true, onEnd:()=>{} });
+    for(let k=0;k<80 && B.inDungeon();k++) B.pumpFrame(0.05);
+    const inCd=B.skillCDs().some(v=>v>0); if(B.inDungeon()) B.finishNow();
+    B.refreshParty(); const cd=B.skillCDs();
+    if(!inCd) errs.push('전제: 탑 안에서 쿨이 돌지 않음');
+    else if(cd.some(v=>v>0)) errs.push('탑 → 홈 복귀가 던전 쿨을 이어받음 '+JSON.stringify(cd)); }
+  { const S=ev('S'), keep={ craft:S.craft, cs:S.craftScroll };
+    S.craft={ grade:'N', slot:'잿불 단검', cat:'무기', ic:'🗡️', endAt:ev('Date.now()')-1000, p0:1, sec:30, dur:30, gold:0, recipe:[] }; S.craftScroll=100;
+    ev('craftInstantConfirm')();
+    const yes=findBtnByText(ev("$('#modal-root')"),'예',true); if(yes) yes.onclick();
+    if(S.craftScroll!==100) errs.push('끝난 제작에 즉시 완성 제작서 차감 '+S.craftScroll);
+    S.craft=keep.craft; S.craftScroll=keep.cs; }
+  { const src=js.slice(js.indexOf("const craftDue = !!(S.craft && Date.now()>=S.craft.endAt);"), js.indexOf("const craftDue = !!(S.craft && Date.now()>=S.craft.endAt);")+400);
+    if(!/if\(S\.arenaAuto && craftDue\)\{ S\.arenaAuto=false;/.test(src)) errs.push('자동 연전이 제작 완료에 멈추지 않음'); }
+  if(errs.length) throw new Error(errs.join(' | '));
+});
+/* ★ 2026-09-25(리뷰 v5.363~365): D7 은 centerHold(몹 던전)라 영웅이 걷지 않는다 — 걷는 전투(투기장)에서 갱신이 이동 상태(_moving)를 잃으면
+   헛공격으로 시드 난수를 뽑아 결과가 갈렸다(리뷰 실측 400시점 중 7~9곳). 투기장 시나리오에서 1~60프레임 각각 갱신 → 끝까지 관람과 같은 해시. */
+step('D9 · 걷는 전투(투기장) 도중 refreshParty → 결과 해시 동일(1~60프레임 각각)', ()=>{
+  const foes = ev(`HERO_ROSTER.filter(r=>r.grade==='N').slice(0,3).map(r=>({ hid:r.hero_id, job:JOBS.find(j=>j.id===r.class_id)||JOBS[0], grade:r.grade, name:r.name, lvl:5 }))`);
+  const cfg = { name:'M1검증투기장', foeCP:1400, kind:'arena', count:3, dur:60, overtime:true, dmgMul:0.5, foeHeroes:foes };
+  const run=(seed, refreshAt)=>{ const B=freshBattle(); B.setSeed(seed); B.setPartySource(partyFn); let result=null;
+    B.startDungeon(Object.assign({}, cfg, { onEnd:(win,info)=>{ result={ win, dmg:info.dmg, kills:info.kills }; } }));
+    let f=0; while(B.inDungeon() && f<4000){ B.pumpFrame(0.05); f++; if(f===refreshAt) B.refreshParty(); }
+    if(!result) throw new Error('투기장 완주 못 함');
+    return JSON.stringify({ r:result, c:B.rngChecksum(), n:B.rngDrawCount() }); };
+  const errs=[];
+  for(const seed of [0xC0FFEE, 0x5DDE47]){ const base=run(seed, -1);
+    for(let k=1;k<=60;k++){ const x=run(seed, k); if(x!==base){ errs.push(`시드 ${seed.toString(16)} 프레임 ${k}: ${base} → ${x}`); break; } } }
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ 2026-09-25(3차 K6): 직업 특성(받는 피해·회복 배율)이 켜진 전투도 같은 시드면 같은 결과 — 특성이 난수를 새로 뽑지 않는다. */
 step('D8 · 직업 특성 전투 재현성(마법형·전투형 각각 동일 시드 2회 = 같은 해시)', ()=>{
   const errs=[];

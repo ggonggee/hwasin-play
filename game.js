@@ -1422,6 +1422,12 @@ const ATTEND_DAYS = [
 ];
 /* ★ B9/G-134: 공지 — 제목 밴드 + 양피지 서술형 본문 (목록 → 상세 2단) */
 const NOTICES = [
+  /* ★ v5.366: 리뷰(v5.363~365) — 자동 연전 중 제작 결과가 끝없이 밀리던 것(v5.364 회귀) 등. */
+  { cat:'[수정]', ic:'⚒️', t:'투기장 자동 연전 중 제작이 끝나면 연전을 멈추고 결과를 보여 드립니다', d:'2026-09-25',
+    body:'군주들에게 알립니다.<br><br>'+
+      '· 투기장 자동 연전 중에는 제작이 끝나도 결과가 계속 미뤄졌습니다. 이제 제작이 끝나 있으면 그 판의 결과 뒤에 자동 연전을 멈추고 제작 결과를 보여 드립니다(다시 켜면 이어집니다).<br>'+
+      '· 이미 완성된 제작(전투가 끝나길 기다리는 중)에 [즉시 완성]을 누르면 제작서가 빠지던 것을 막았습니다.<br>'+
+      '· 시련의 탑에서 돌아온 뒤 영웅이 탑에서 걸어간 자리에 서 있던 것, 투기장·보스전 도중 조작하면 영웅이 한 번 헛공격하던 것을 고쳤습니다.' },
   /* ★ v5.365: 3차 발견 C묶음(K3·K6·K7) — 약속 이행(직업 특성)·토벌 피해 이월·상한 재료 표시. */
   { cat:'[수정]', ic:'🔮', t:'직업 특성이 실제로 적용됩니다 · 길드 토벌 피해 이월', d:'2026-09-25',
     body:'군주들에게 알립니다.<br><br>'+
@@ -2969,6 +2975,7 @@ const Battle = (()=>{
   /* ★ B6/G-81: 편성 소스 훅 — null 이면 기존과 100% 동일하게 party()(3인)를 쓴다.
      투기장 입장 시에만 arenaParty(4인)로 교체되고, 결과창에서 다시 null 로 되돌린다. */
   let partySrc = null;
+  let _layMode = null;   // 직전 layoutHeroes 가 배치한 mode — 던전→홈 복귀는 영웅 목록이 같아도(솔로 탑 → 홈 솔로) 이어받지 않는다(리뷰 v5.363~365)
   /* ★ 홈 1인 중앙 서바이벌 — 실측:
      - 화면 흐름 판독 라인 33/39/45/73-75 (5회 관찰 전부 일치)
      - UI재현카탈로그 라인 444 "파티 대표 영웅 1명이 십수 마리 해골 무리에 둘러싸여 자동 교전"
@@ -2992,7 +2999,8 @@ const Battle = (()=>{
     /* ★ v5.292: centerHold(일반 몹 던전)도 중앙 배치 — 영웅이 멈춰 서고 몹이 밀려온다 */
     const src = (solo || survSolo) ? [p[0]] : p;
     /* 출전 구성(영웅 목록)이 같을 때만 잇는다 — 던전 → 홈 1인 복귀·편성 변경·리더 교체는 종전대로 새로(던전의 사망·체력을 홈 영웅이 이어받지 않게). */
-    const _prev = (keep && heroes.length && heroes.map(h=>h.hid).join(',')===src.map(h=>h&&h.hero_id).join(',')) ? new Map(heroes.map(h=>[h.hid,h])) : null;
+    /* ⚠ mode 도 같아야 한다 — 솔로 탑([p[0]]) → 홈 솔로([p[0]])는 목록이 같아 종전엔 던전 쿨·누적 피해·**위치**(탑에서 걸어간 자리)가 홈으로 새었다(리뷰 실측: 중앙에서 17px 어긋난 채 고정). */
+    const _prev = (keep && _layMode===mode && heroes.length && heroes.map(h=>h.hid).join(',')===src.map(h=>h&&h.hero_id).join(',')) ? new Map(heroes.map(h=>[h.hid,h])) : null;
     const useCenter = solo || survSolo || !!(dg && dg.centerHold);
     heroes = src.map((h,i)=>{
       /* ★ v5.292: useCenter 배치 — 솔로/탑은 정중앙 1명, centerHold(3인)는 중앙 삼각
@@ -3027,9 +3035,12 @@ const Battle = (()=>{
       heroes.forEach(h=>{ const o=_prev.get(h.hid); if(!o) return;
         h.skillCD=o.skillCD.slice(); h.atkT=o.atkT; h.dmgDone=o.dmgDone; h.hp=o.hp; h.dead=o.dead; h.respT=o.respT; h.lungeT=o.lungeT;
         h.skillAnim=o.skillAnim; h.skillAnimT=o.skillAnimT; h.animFrame=o.animFrame; h.animT=o.animT;
-        h._lockTarget=o._lockTarget; h._lockUntil=o._lockUntil; h._row=o._row;
+        /* 실제로 읽히는 이동·락온 필드 — ⚠ _moving 은 시뮬 상태다(공격 게이트 atkT<=0 && !_moving). 빠지면 걷던 영웅이 갱신 직후 헛공격해 시드 난수를 뽑는다
+           (리뷰 실측: 투기장 갱신 400시점 중 7~9곳에서 결과 해시가 갈림 — smoke D9). _lockTarget/_lockUntil 은 읽는 곳이 없는 옛 필드. */
+        h._row=o._row; h._moving=o._moving; h._lockedRow=o._lockedRow; h._rowLockUntil=o._rowLockUntil; h.dieAnimT=o.dieAnimT;
         if((h.shieldT===undefined)===(o.shieldT===undefined)) h.shieldT=o.shieldT;   // 방패를 새로 끼웠거나 뺐으면 새 값
-        if(samePos){ h.x=o.x; h.y=o.y; h.baseX=o.baseX; h.baseY=o.baseY; } }); }
+        if(samePos){ h.x=o.x; h.y=o.y; h.baseX=o.baseX; h.baseY=o.baseY; h._lastX=o._lastX; h._lastY=o._lastY; } }); }   // resize(keep 2)는 이전 좌표를 옮기지 않는다(순간이동 벡터가 이동 방향으로 읽힌다)
+    _layMode = mode;
     partyCP = Math.max(1, heroes.reduce((a,h)=>a+h.cp,0));
     /* ★ 2026-09-10: 필드에 서는 영웅이 확정되는 유일한 지점이라 여기서 시트를 데운다.
        파티를 바꾸거나 홈↔던전을 오갈 때도 자동으로 따라온다(refreshParty→layoutHeroes). */
@@ -6093,6 +6104,8 @@ function craftStart(grade, catKey, item){
    시간만 건너뛴다 — 실패 확률은 그대로(확정 제작과 다름). */
 function craftInstantConfirm(){
   if(!S.craft) return;
+  /* 리뷰(v5.363~365 실측): 이미 끝난 제작(전투 중이라 판정이 보류된 상태)에 [즉시 완성]을 누르면 제작서 30장이 헛되이 빠졌다 — 막는다. [확정 제작]은 성공 보장이라 그대로. */
+  if(Date.now()>=S.craft.endAt){ toast('이미 완성됐습니다 — 전투가 끝나면 결과가 나옵니다'); return; }
   b2Confirm('즉시 완성',
     `<div class="big">제작을 즉시 완료 하시겠습니까?</div>
      <div class="b2-warnline">*시간만 건너뛸 뿐, 실패할 확률은 그대로입니다*</div>
@@ -6480,7 +6493,7 @@ const MODALS = {
       body.appendChild(el('div','center',`<div class="ei" style="font-size:44px">${equipImg(c.slot||c.item||'',3)}</div><div class="big" style="color:${GRADES[c.grade].color}">${GRADES[c.grade].name} ${c.slot||'장비'} 제작 중</div>`));
       const pb=el('div','pbar'+(done?'':' run')); pb.appendChild(el('i')); pb.firstChild.id='forgeBar';   // run = 진행 중 흐르는 광택(긴 제작에서 바가 멈춘 것처럼 보이던 것)
       pb.firstChild.style.width=(craftProg(c)*100)+'%'; body.appendChild(pb);
-      const lt=el('div','center mut small',done?'제작 완료 · 확정하세요':`남은 시간 ${mmss(left)} · 완성 예정 ${craftEtaTxt(c)}`); lt.id='forgeLeft'; body.appendChild(lt);
+      const lt=el('div','center mut small',done?'제작 완료 · 전투가 끝나면 결과가 나옵니다':`남은 시간 ${mmss(left)} · 완성 예정 ${craftEtaTxt(c)}`); lt.id='forgeLeft'; body.appendChild(lt);
       const row=el('div','btnrow'); row.style.marginTop='12px';
       // G-27: 즉시 완성 확인 팝업
       /* ★ 2차 UI 정리: 버튼 라벨은 "즉시 완성"(띄어쓰기 있음)으로 통일한다.
@@ -10203,7 +10216,12 @@ function arenaResult(win, foeName, foeCP, foeTier){
        팝업(v5.114)과 자리다툼했다(실물: ✕를 여러 번 눌러야 미션 팝업이 떴음).
        결과 화면은 이 콜백(결과 표시 3초 후)보다 먼저 보므로 결과 박탈도 없다. */
     if(!S.seenTutorial){ S.arenaAuto=false; closeModal(); return; }
-    if(S.arenaAuto && S.ticket>0){ S.ticket--; refreshHUD(); arenaFight(); }
+    /* 리뷰(v5.363~365 실측): 자동 연전은 결과 카드 → 곧바로 재입장이라 craftAutoCheck(전투 중·결과 카드 동안 보류 — K2)가 판정할 프레임이 한 번도 없다
+       (입장권 40초 충전으로 연전이 사실상 무한 — 제작이 끝없이 밀렸다). 제작이 끝나 있으면 이번 판에서 연전을 멈추고 홈으로 비운다 → 다음 프레임에 판정·결과.
+       판정을 연전 사이에 끼워 넣지 마라 — arenaFight 의 closeModal 이 제작 결과 팝업을 지운다(K2 가 막은 원래 문제). */
+    const craftDue = !!(S.craft && Date.now()>=S.craft.endAt);
+    if(S.arenaAuto && craftDue){ S.arenaAuto=false; toast('제작 완료 · 자동 연전을 멈췄습니다'); closeModal(); }
+    else if(S.arenaAuto && S.ticket>0){ S.ticket--; refreshHUD(); arenaFight(); }
     else { if(S.arenaAuto) toast('입장권 소진 · 자동 연전 종료'); openModal('arena'); } }, 3000);
 }
 
@@ -10464,7 +10482,7 @@ function tickForge(){
   if(!bar){ openModal('forge'); return; }
   const left=Math.max(0,Math.ceil((S.craft.endAt-Date.now())/1000)), done=left<=0;
   bar.style.width=(craftProg(S.craft)*100)+'%';
-  const lt=document.getElementById('forgeLeft'); if(lt) lt.textContent=done?'제작 완료 · 확정하세요':`남은 시간 ${mmss(left)} · 완성 예정 ${craftEtaTxt(S.craft)}`;
+  const lt=document.getElementById('forgeLeft'); if(lt) lt.textContent=done?'제작 완료 · 전투가 끝나면 결과가 나옵니다':`남은 시간 ${mmss(left)} · 완성 예정 ${craftEtaTxt(S.craft)}`;
   if(done && bar.parentNode && bar.parentNode.classList) bar.parentNode.classList.remove('run');
   const fin=document.getElementById('forgeFin'); if(fin && done && fin.disabled){ fin.disabled=false; fin.classList.add('gold'); }
 }

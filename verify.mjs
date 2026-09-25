@@ -308,7 +308,8 @@ console.log('[I] FORGE_SLOTS act 대상:',JSON.stringify([...new Set(acts)]));
    인라인으로 격자 열을 줄 때는 minmax(0,1fr) 를 써라. */
 {
   const js = fs.readFileSync(D + 'game.js', 'utf8');
-  const hits = [...js.matchAll(/gridTemplateColumns\s*=\s*['"`]repeat\(\d+,\s*1fr\)/g)].map(m => 'game.js:' + (js.slice(0, m.index).split('\n').length));
+  /* 속성 대입(gridTemplateColumns='repeat(4,1fr)')과 cssText 안(grid-template-columns:repeat(4,1fr)) 둘 다(리뷰 v5.363~365 제안) */
+  const hits = [...js.matchAll(/gridTemplateColumns\s*=\s*['"`]repeat\(\d+,\s*1fr\)|grid-template-columns\s*:\s*repeat\(\d+,\s*1fr\)/g)].map(m => 'game.js:' + (js.slice(0, m.index).split('\n').length));
   console.log('\n' + '[M] 인라인 격자 1fr 트랙: ' + (hits.length ? hits.length + '곳 ❌' : '0곳 ✅'));
   hits.forEach(h => fail('[M] 인라인 repeat(n,1fr) — minmax(0,1fr) 또는 .grid.cN 을 써라: ' + h));
 }
