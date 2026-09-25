@@ -1449,6 +1449,12 @@ const ATTEND_DAYS = [
 ];
 /* ★ B9/G-134: 공지 — 제목 밴드 + 양피지 서술형 본문 (목록 → 상세 2단) */
 const NOTICES = [
+  /* ★ v5.371: 4차 발견 K6 — 추천 사냥이 건너뛴 종 때문에 도감이 멈추던 것. */
+  { cat:'[개선]', ic:'📖', t:'도감에서 아직 못 만난 몬스터를 찾아갈 수 있습니다', d:'2026-09-25',
+    body:'군주들에게 알립니다.<br><br>'+
+      '· <b>도감 미조우 카드</b> — 이제 눌러도 됩니다. 그 몬스터가 나오는 사냥터(몬스터 화면의 해당 등급)로 바로 이동하고, 그 몬스터 줄이 강조됩니다.<br>'+
+      '· <b>도감 미기록</b> — 몬스터 화면에서 아직 한 번도 처치하지 않은 몬스터에 \"도감 미기록\" 표시가 붙습니다. 추천 사냥으로 단계를 건너뛰면 만나지 못한 몬스터가 생기는데, 그 몬스터를 처치해야 등급·전종 완성 보상을 받을 수 있습니다.<br>'+
+      '· 도감 화면에 남은 몬스터 수와 전종 완성 보상이 표시되고, 등급 칸(일반·희귀·영웅·레전더리)을 누르면 그 등급의 완성 보상을 알려 드립니다.' },
   /* ★ v5.368: 4차 발견 K2 — 세트를 결정 지점에서 보이게. */
   { cat:'[개선]', ic:'🛡️', t:'장착 전에 전투력 변화와 세트 해제를 미리 보여 드립니다', d:'2026-09-25',
     body:'군주들에게 알립니다.<br><br>'+
@@ -3803,10 +3809,10 @@ const Battle = (()=>{
            기록서10(심화 1스텝) + 전설망치10(보호 1묶음·4천만 상당) + 골드 5천만 + 강화석 200.
            플래그는 S.codexReward.all 재활용(신규 필드 아님). 지급 로직은 함수로 추출해
            smoke가 onKill 없이 직접 검증한다. */
-        const RW={ N:()=>{S.dice=(S.dice||0)+50; return '주사위 X50';},
-                   R:()=>{S.tickHero=(S.tickHero||0)+5; return '영웅 소환권 X5';},
-                   E:()=>{S.records=(S.records||0)+2; return '영웅 기록서 X2';},
-                   L:()=>{S.records=(S.records||0)+5; return '영웅 기록서 X5';} };
+        const RW={ N:()=>{S.dice=(S.dice||0)+50; return CODEX_RW_TXT.N;},   // v5.371: 문구는 CODEX_RW_TXT 한 곳(도감 화면 안내와 공유) — 수량을 바꾸면 거기도
+                   R:()=>{S.tickHero=(S.tickHero||0)+5; return CODEX_RW_TXT.R;},
+                   E:()=>{S.records=(S.records||0)+2; return CODEX_RW_TXT.E;},
+                   L:()=>{S.records=(S.records||0)+5; return CODEX_RW_TXT.L;} };
         if(!S.codexReward[t.drop] && RW[t.drop]){
           S.codexReward[t.drop]=1;
           const what=RW[t.drop]();
@@ -5981,6 +5987,9 @@ function saveSnapshot(){
    수량: 기록서10(심화 1스텝) + 전설망치10(4천만 상당) + 골드 5천만 + 강화석 200.
    전역 함수로 추출한 이유는 smoke 가 onKill·전투 컨텍스트 없이 이 경로만 직접 검증하게
    하기 위해서다. */
+/* v5.371(4차 K6): 도감 보상 문구 정본 — 지급 함수(onKill RW·codexAllReward)가 돌려주는 문구와 도감 화면 안내가 같은 값을 쓴다.
+   표시 전용 상수다(렌더에서 지급 함수를 부르면 안 된다 — 부르는 순간 지급된다). 수량을 바꾸면 지급 코드와 이 문구를 함께 고쳐라. */
+const CODEX_RW_TXT={ N:'주사위 X50', R:'영웅 소환권 X5', E:'영웅 기록서 X2', L:'영웅 기록서 X5', all:'영웅 기록서 X10 · 전설 망치 X10 · 골드 5000만 · 강화석 X200' };
 function codexAllReward(){
   if(!S.codexReward) S.codexReward={};
   if(S.codexReward.all) return false;
@@ -5989,7 +5998,7 @@ function codexAllReward(){
   S.hammers=(S.hammers||0)+10;
   addGold(50000000, true);   // raw — 고정 보상에 칭호·투기장 골드 배율(F2 관문)을 곱하지 않는다
   S.stones=(S.stones||0)+200;
-  const what='영웅 기록서 X10 · 전설 망치 X10 · 골드 5000만 · 강화석 X200';
+  const what=CODEX_RW_TXT.all;
   toast(`🏆🎖️ <b style="color:var(--g-legend)">전종 완성 보상</b> — ${what}`);
   sysLog(`몬스터 도감 전종 완성 보상 — ${what}`);
   sfx('legendary');
@@ -8790,8 +8799,13 @@ const MODALS = {
         go.onclick=()=>{ S.huntTier=safe; Battle.setHunt(); sfx('tap'); toast(`${sf.n} 사냥 — 리더 전투력으로 안정 사냥`); MODALS.monster._tab=Math.max(0,GORDER.indexOf(sf.drop)); openModal('monster'); refreshHUD(); save(); };
         r.appendChild(go); b.appendChild(r); } }
     const g0=GT[gi][0];
+    /* v5.371(4차 K6): 도감에서 누른 몬스터 행을 강조·스크롤(1회 — 탭/마릿수 재렌더 때 다시 튀지 않게 바로 지운다).
+       아직 한 번도 잡지 않은 종엔 '도감 미기록' — 추천 사냥이 건너뛴 종을 찾아갈 단서. */
+    const focN=MODALS.monster._focus; MODALS.monster._focus=null; let focRow=null;
+    const kcM=S.codexKills||{}, bcM=S.codexBossKills||{};
     for(const {t,i} of byG(g0)){
       const cur = (S.huntTier||0)===i;
+      const unseen = ((kcM[t.n]||0)+(bcM[t.n]||0))===0;
       const danger = leadCP < t.cp;   /* ★ v5.185: 홈 전투 주체는 리더 1명 — 리더 기준 위험 판정 */
       const jb = JOBS.find(j=>j.id===t.job) || JOBS[0];
       /* ★ v4.3 (대표 결정 A — 정보로 유도): 지금 사냥 중인 곳보다 '위'인 카드에는
@@ -8800,11 +8814,12 @@ const MODALS = {
       const base = HUNT_TIERS[S.huntTier||0] || HUNT_TIERS[0];
       const goldMul = base.gold ? t.gold/base.gold : 1;
       const row=el('div','pack'); if(cur) row.style.borderColor='var(--g-legend)';
+      if(focN && focN===t.n){ row.classList.add('mon-focus'); focRow=row; }
       // ★ v4.7: 몬스터마다 드랍 아이템 아이콘 그리드를 보여준다(일반3·희귀3·영웅4·레전더리6)
       const dropGrid = (t.drops||[t.mat]).map(k=>
         `<span class="mdrop" title="${k}">${matIcon(k)}</span>`).join('');
       row.innerHTML=`<div class="pic" style="border-color:${t.c}">${t.img?`<img src="assets/monsters/${t.img}.webp" style="width:48px;height:48px;image-rendering:pixelated;object-fit:contain" alt="${t.n}">`:'💀'}</div>
-        <div class="info"><div class="t" style="color:${t.c}">${t.n} ${cur?'<span class="small" style="color:var(--ok)">소환 중</span>':''}</div>
+        <div class="info"><div class="t" style="color:${t.c}">${t.n} ${cur?'<span class="small" style="color:var(--ok)">소환 중</span>':''}${unseen?'<span class="mon-new">도감 미기록</span>':''}</div>
         <div class="d"><b>레벨 : ${t.level}</b> · <span style="color:${jb.color}">${jb.emoji} ${jb.name}</span> · 권장 전투력 <b style="${danger?'color:var(--bad)':'color:var(--ok)'}">${fmt(t.cp)}</b>${danger?' ⚠ 전멸 위험':''}
         <div class="mdrops">${dropGrid}</div>
         ${curT&&!cur?`<div class="mon-why">
@@ -8836,6 +8851,7 @@ const MODALS = {
         closeModal(); refreshHUD(); };
       row.appendChild(btn); b.appendChild(row);
     }
+    if(focRow) setTimeout(()=>{ try{ if(focRow.isConnected) focRow.scrollIntoView({block:'center'}); }catch(e){} }, 0);
     b.appendChild(el('div','hint','파밍 순환: 현재 몬스터로 재료를 모아 장비 제작 → 강해지면 다음 몬스터 선택 → 상위 재료 파밍.'));
   }},
 
@@ -9042,13 +9058,18 @@ const MODALS = {
            진행 중 등급은 n/5, 완성 등급은 ✓(보상 수령 표기). */
         const GORDER5=['N','R','E','L'];
         const gr=row=>HUNT_TIERS.filter(t=>t.drop===row && ((kc[t.n]||0)+(bc[t.n]||0))>0).length;
-        body.appendChild(el('div','hint',`조우 <b style="color:var(--ok)">${disc}</b>/${HUNT_TIERS.length}종 · 홈 사냥에서 처치하면 기록이 채워집니다 <span class="mut">(총 처치 ${fmt(S.stats.kills||0)})</span>`));
+        /* v5.371(4차 K6): 추천 사냥이 리더 전투력 이하 최고 단계로 건너뛰어, 전투력이 한 번에 뛰면 사이의 종을 영영 만나지 않는다
+           (시뮬 5런 전부 16~18/20 에서 멈춤 → 전종 완성 보상 0회). 미조우도 카드를 누르면 그 사냥터로 가게 하고, 남은 보상을 보여 준다. */
+        const miss=HUNT_TIERS.length-disc;
+        body.appendChild(el('div','hint',`조우 <b style="color:var(--ok)">${disc}</b>/${HUNT_TIERS.length}종 · 홈 사냥에서 처치하면 기록이 채워집니다 <span class="mut">(총 처치 ${fmt(S.stats.kills||0)})</span>`
+          + (miss>0 ? `<br>미조우 <b style="color:var(--gold)">${miss}종</b> — 카드를 누르면 그 사냥터로 갑니다${S.codexReward&&S.codexReward.all?'':` · 전종 완성 보상: <span class="mut">${CODEX_RW_TXT.all}</span>`}` : '')));
         const prow=el('div'); prow.style.cssText='display:flex;gap:5px;margin:2px 0 8px;justify-content:center;';
         GORDER5.forEach(row=>{
           const c=gr(row), done=c>=5, paid=S.codexReward&&S.codexReward[row];
           const chip=el('div','mat-chip'+(done?'':' lack'));
           chip.innerHTML=`<div class="mi" style="font-size:11px;color:${GRADES[row].color}">${GRADES[row].name}</div><div class="have${done?'':' lack'}">${done?(paid?'✓ 보상':'✓'):`${c}/5`}</div>`;
-          chip.title=done?(paid?'완성 보상 수령 완료':'완성 보상은 첫 조우 시 자동 지급됩니다'):`${GRADES[row].name} 등급 몬스터 5종 조우 시 보상`;
+          chip.title=done?(paid?'완성 보상 수령 완료':'완성 보상은 첫 조우 시 자동 지급됩니다'):`${GRADES[row].name} 등급 몬스터 5종 조우 시 보상: ${CODEX_RW_TXT[row]}`;
+          chip.style.cursor='pointer'; chip.onclick=()=>{ sfx('tap'); toast(chip.title); };   // v5.371: title 은 폰에서 안 보인다 — 누르면 토스트(표시 전용, 지급 없음)
           prow.appendChild(chip);
         });
         body.appendChild(prow);
@@ -9063,11 +9084,15 @@ const MODALS = {
               <div class="mdrops" style="justify-content:center;margin-top:2px"><span class="mdrop" title="${t.mat}">${matIcon(t.mat)}</span>${t.mat2?`<span class="mdrop" title="${t.mat2}">${matIcon(t.mat2)}</span>`:''}</div>`;
             /* ★ v5.153: 조우한 몬스터 카드 탭 → 몬스터 선택 화면(해당 등급 탭).
                도감이 재료 드랍 참고(v5.145)로 쓰이는 만큼 '이 재료 필요 → 도감 확인 →
-               바로 사냥 변경'의 동선이 한 번에 이어진다. 미조우 카드는 정보가 없어 안 데려간다. */
+               바로 사냥 변경'의 동선이 한 번에 이어진다. v5.371: 그 몬스터 행을 강조(_focus). */
             c.style.cursor='pointer';
-            c.onclick=()=>{ MODALS.monster._tab=GORDER.indexOf(t.drop); openModal('monster'); };
+            c.onclick=()=>{ MODALS.monster._tab=GORDER.indexOf(t.drop); MODALS.monster._focus=t.n; openModal('monster'); };
           } else {
-            c.innerHTML=`<div class="gtag" style="opacity:.55">미조우</div><div class="ei" style="filter:grayscale(1) brightness(.3)">${spr}</div><div class="cn" style="opacity:.55">???</div>`;
+            /* v5.371(4차 K6): 종전엔 '정보가 없어 안 데려간다'였지만 몬스터 선택 화면이 이미 모든 종의 이름·그림을 공개한다 —
+               막을 이유가 없고, 막으면 건너뛴 종을 찾아갈 길이 없어 도감이 영영 멈춘다. 이름은 계속 ???(채우는 재미). */
+            c.innerHTML=`<div class="gtag" style="opacity:.55">미조우</div><div class="ei" style="filter:grayscale(1) brightness(.3)">${spr}</div><div class="cn" style="opacity:.7">???<br><span class="mut" style="font-size:var(--fs-xs)">탭 → 사냥터</span></div>`;
+            c.style.cursor='pointer';
+            c.onclick=()=>{ MODALS.monster._tab=GORDER.indexOf(t.drop); MODALS.monster._focus=t.n; openModal('monster'); };
           }
           g.appendChild(c);
         });

@@ -3417,6 +3417,49 @@ step('D7 · 전투 중 refreshParty(UI 갱신) → 쿨·기여도 보존 · 결�
   if(errs.length) throw new Error(errs.join(' | '));
   console.log(`     전투 중 갱신 3회 = 끝까지 관람 = ${base.hash}`);
 });
+/* ★ v5.371(4차 발견 K6): 추천 사냥이 건너뛴 종 때문에 도감이 16~18/20 에서 멈췄다 — 미조우 카드도 그 사냥터로 데려가고,
+   몬스터 화면엔 '도감 미기록' 태그·누른 행 강조(1회). 보상 문구는 CODEX_RW_TXT 한 곳, 렌더는 지급하지 않는다. */
+step('4차 K6 — 도감 미조우 → 사냥터 · 미기록 태그 · 보상 문구 정본', ()=>{
+  const S=ev('S'), HT=ev('HUNT_TIERS'), M=ev('MODALS'), errs=[];
+  const keep={kc:S.codexKills, bc:S.codexBossKills, tab:M.monster._tab, rw:S.codexReward, dice:S.dice, rec:S.records, th:S.tickHero};
+  S.codexKills={}; S.codexBossKills={}; HT.forEach(t=>{ S.codexKills[t.n]=3; });
+  const miss=HT.find(t=>t.drop==='E'); delete S.codexKills[miss.n];
+  S.codexReward={};
+  const b=new Node2('div'); M.codex.render(b);
+  const tabNode=((b.children[0]||{}).children||[]).find(c=>String(c._text||c._html||'').trim()==='몬스터');
+  if(!tabNode||!tabNode.onclick) errs.push('도감 몬스터 탭 없음'); else tabNode.onclick();
+  const txt=collectText(b);
+  if(!/미조우 <b[^>]*>1종<\/b>/.test(txt)) errs.push('미조우 안내 줄(1종)');
+  if(!txt.includes(ev('CODEX_RW_TXT').all)) errs.push('전종 완성 보상 문구 미표시');
+  if(S.dice!==keep.dice || S.records!==keep.rec || S.tickHero!==keep.th || Object.keys(S.codexReward).length) errs.push('도감 렌더만으로 지급');
+  const all=[]; (function walk(n){ (n.children||[]).forEach(c=>{ all.push(c); walk(c); }); })(b);
+  const chips=all.filter(c=>c.classList&&c.classList.contains('mat-chip')&&c.onclick);
+  if(chips.length!==4) errs.push('등급 칸 클릭 '+chips.length+'개(기대 4)');
+  chips.forEach(c=>c.onclick());
+  if(S.dice!==keep.dice || S.records!==keep.rec || S.tickHero!==keep.th || Object.keys(S.codexReward).length) errs.push('등급 칸 클릭으로 지급');
+  const cards=all.filter(c=>String(c._html||'').includes('탭 → 사냥터'));
+  if(cards.length!==1) errs.push('미조우 카드 수 '+cards.length+'(기대 1)');
+  const card=cards[0];
+  if(!card||!card.onclick) errs.push('미조우 카드 클릭 미연결');
+  else {
+    card.onclick();
+    if(ev('currentModal')!=='monster') errs.push('미조우 카드 → 몬스터 화면 아님: '+ev('currentModal'));
+    if(M.monster._tab!==ev('GORDER').indexOf('E')) errs.push('등급 탭 불일치 '+M.monster._tab);
+    if(M.monster._focus!=null) errs.push('_focus 가 렌더 뒤에도 남음(재렌더 때 다시 튄다)');
+    /* 스텁의 replaceChildren(...childNodes) 는 내용을 옮기지 못한다 — 카드가 세운 것과 같은 _tab/_focus 로 직접 렌더해 본다 */
+    M.monster._focus=miss.n; const mb=new Node2('div'); M.monster.render(mb);
+    if(M.monster._focus!=null) errs.push('_focus 가 렌더 뒤에도 남음');
+    const rows=[]; (function walk(n){ (n.children||[]).forEach(c=>{ rows.push(c); walk(c); }); })(mb);
+    const foc=rows.filter(r=>r.classList&&r.classList.contains('mon-focus'));
+    if(foc.length!==1 || !String(foc[0]._html||'').includes(miss.n)) errs.push('누른 몬스터 행 강조 없음/틀림');
+    const tags=(collectText(mb).match(/class="mon-new"/g)||[]).length;
+    if(tags!==1) errs.push('도감 미기록 태그 '+tags+'개(기대 1)');
+    ev('closeModal')();
+  }
+  if(!/return CODEX_RW_TXT\.N;/.test(js) || !/const what=CODEX_RW_TXT\.all;/.test(js)) errs.push('지급 문구가 정본(CODEX_RW_TXT)을 안 씀');
+  S.codexKills=keep.kc; S.codexBossKills=keep.bc; M.monster._tab=keep.tab; S.codexReward=keep.rw;
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ 2026-09-25(4차 발견 K4): [시스템] 기록이 가짜 채팅에 밀려 사라지지 않는다 · 절전 해제 때 이번 방치 요약. */
 step('4차 K4 — 시스템 기록 보존 · 절전 세션 요약', ()=>{
   const errs=[], S=ev('S'), log=ev("$('#chatLog')");

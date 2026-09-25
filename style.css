@@ -1421,6 +1421,12 @@ body.fx-noflash .hr-art .hr-rays{ display:none; }
 .mon-why .mw{ font-size:var(--fs-sm); line-height:1.45; }
 .mon-why .mwl{ display:inline-block; min-width:44px; font-size:var(--fs-xs); font-weight:700;
   color:#8a7a55; letter-spacing:.02em; }
+/* v5.371(4차 K6): 도감 미기록 태그 · 도감에서 누른 몬스터 행 강조(2회 맥동 후 테두리만 남음) */
+.mon-new{ display:inline-block; margin-left:5px; padding:0 5px; border:1px solid #6b5426; border-radius:4px;
+  font-size:var(--fs-xs); font-weight:700; color:#e8c66a; vertical-align:1px; white-space:nowrap; }
+.pack.mon-focus{ outline:2px solid #e8c66a; outline-offset:-2px; animation:monFocus .9s ease-out 2; }
+@keyframes monFocus{ 0%{ box-shadow:0 0 0 0 rgba(232,198,106,.55); } 100%{ box-shadow:0 0 0 10px rgba(232,198,106,0); } }
+@media (prefers-reduced-motion: reduce){ .pack.mon-focus{ animation:none; } }
 
 /* ── v4.4 투기장 결과 획득량 델타 ── */
 .ar-gain{ margin:2px 0 6px; text-align:center; font-size:var(--fs-base); color:#f0cd82;
