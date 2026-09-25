@@ -795,6 +795,10 @@ body{
 .set-prog b{ color:var(--g-epic,#b98bff); }
 .setcard .sc-fx.off{ opacity:.45; text-decoration:line-through; text-decoration-color:rgba(255,255,255,.25); }   /* 4차: 전투 미적용 줄(준비 중) */
 .setcard .sc-fx .sc-soon{ text-decoration:none; display:inline-block; font-size:var(--fs-xs); color:#c9b487; }
+/* v5.372: 전투에 적용되지만 전투력 숫자(×N)엔 없는 줄 · 표기와 실제 방식이 다른 줄의 보충 설명 */
+.setcard .sc-fx .sc-bfx{ display:inline-block; margin-left:3px; padding:0 4px; border:1px solid #3f5f7a; border-radius:4px;
+  font-size:var(--fs-xs); color:#9fd0ff; white-space:nowrap; }
+.setcard .sc-fx .sc-note{ font-size:var(--fs-xs); color:#a8987a; }
 
 /* 일일 퀘스트 날짜 헤더 + 버튼 없는 진행 텍스트 (G-121 / G-120) */
 .datehead{ margin:8px 0 6px; padding:5px 0; text-align:center; font-size:var(--fs-base); font-weight:700;

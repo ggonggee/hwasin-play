@@ -435,21 +435,42 @@ const SETS = [
   { n:'월하',   tiers:[ { k:6, def:30, live:[0], fx:['받는 물리 피해량 30% 감소'] } ] },
   { n:'질풍',   tiers:[ { k:6, def:30, live:[0], fx:['받는 마법 피해량 30% 감소'] } ] },
   /* 유일한 3단계 누적 세트 (다른 세트는 전부 단일 임계값이다) */
+  /* v5.372(4차 K3 2단계): 전투 효과 — cdr(스킬 쿨 감소 %p) · tags(gaze 응시 일반 공격 · frenzy 광란 무효화 · curse 주술 추가 발동 · iron 강철맹세 받는 치명타)
+     · bfx(전투에 적용되지만 전투력 배율 ×N 에는 없는 줄 인덱스) · note(표기와 실제 방식이 다른 줄의 보충 설명). 적용은 setBattleFx → Battle(layoutHeroes 시점). */
   { n:'작열',   multi:true, tiers:[
       { k:3, def:30, dmg:30, live:[0,1,2], fx:['입히는 피해량 30% 증가','받는 물리 피해량 30% 감소','받는 마법 피해량 30% 감소'] },
-      { k:6, dmg:60, live:[0,2], fx:['입히는 피해량 60% 증가','모든 스킬 쿨타임 15% 감소','(3세트의 효과 포함, 피해량만 30% ⇒ 60%)'] },
-      { k:8, dmg:60, live:[1], fx:['모든 스킬 쿨타임 35% 감소','초당 몬스터 소환 마릿수 증가'] } ] },
-  { n:'응시',   tiers:[ { k:6, def:30, dmg:30, live:[2,3,4], fx:['체력 50% 이상 적 일반 공격 시 70% 데미지 증가','보스 일반 공격 시 50% 추가 피해',
+      { k:6, dmg:60, cdr:15, live:[0,1,2], bfx:[1], fx:['입히는 피해량 60% 증가','모든 스킬 쿨타임 15% 감소','(3세트의 효과 포함, 피해량만 30% ⇒ 60%)'] },
+      { k:8, dmg:60, cdr:35, live:[0,1], bfx:[0], note:{0:'6세트의 15% 를 대체(합산 아님)'}, fx:['모든 스킬 쿨타임 35% 감소','초당 몬스터 소환 마릿수 증가'] } ] },
+  { n:'응시',   tiers:[ { k:6, def:30, dmg:30, tags:['gaze'], live:[0,1,2,3,4], bfx:[0,1], note:{1:'체력 조건과 더해 최대 +120%'}, fx:['체력 50% 이상 적 일반 공격 시 70% 데미지 증가','보스 일반 공격 시 50% 추가 피해',
                                    '받는 마법 피해량 30% 감소','받는 물리 피해량 30% 감소','입히는 피해량 30% 증가'] } ] },
-  { n:'광란',   tiers:[ { k:6, def:30, dmg:30, live:[2,3], fx:['일반 공격 4회마다 다음 데미지 무효화','모든 스킬 쿨타임 20% 감소',
+  { n:'광란',   tiers:[ { k:6, def:30, dmg:30, cdr:20, tags:['frenzy'], live:[0,1,2,3], bfx:[0,1], note:{0:'무효화는 한 번에 1회분까지 쌓임'}, fx:['일반 공격 4회마다 다음 데미지 무효화','모든 스킬 쿨타임 20% 감소',
                                    '받는 물리 피해·마법 피해 30% 감소','입히는 피해량 30% 증가'] } ] },
-  { n:'그늘칼', tiers:[ { k:6, dmg:60, live:[3], fx:['크리티컬 확률이 100%를 넘는 경우, 일반·스킬 공격 시 넘는 초과분(%)만큼 추가 타격',
+  /* 그늘칼 0·1번 줄은 전제 메커니즘이 없다 — 치명타 확률 상한(기본 22% + 장비 최대 +8%p)이라 100% 초과가 없고, 즉사 판정도 없다. 그래서 live 가 아니다. */
+  { n:'그늘칼', tiers:[ { k:6, dmg:60, cdr:20, live:[2,3], bfx:[2], fx:['크리티컬 확률이 100%를 넘는 경우, 일반·스킬 공격 시 넘는 초과분(%)만큼 추가 타격',
                                    '즉사 실패 시 50% 추가 타격','모든 스킬 쿨타임 20% 감소','입히는 피해량 60% 증가'] } ] },
-  { n:'주술',   tiers:[ { k:6, dmg:60, live:[2], fx:['전설 스킬 사용 시 모든 스킬 중 한 개가 무작위로 추가 발동',
+  { n:'주술',   tiers:[ { k:6, dmg:60, cdr:20, tags:['curse'], live:[0,1,2], bfx:[0,1], note:{0:'무작위 대신 1차→2차→3차 순서로 돌아가며(전투 재현성)'}, fx:['전설 스킬 사용 시 모든 스킬 중 한 개가 무작위로 추가 발동',
                                    '모든 스킬 쿨타임 20% 감소','입히는 피해량 60% 증가'] } ] },
-  { n:'강철맹세', tiers:[ { k:6, def:40, dmg:30, live:[1,3], fx:['받는 치명타 데미지 40% 감소','받는 물리 피해·마법 피해 40% 감소',
+  { n:'강철맹세', tiers:[ { k:6, def:40, dmg:30, cdr:20, tags:['iron'], live:[0,1,2,3], bfx:[0,2], note:{0:'치명타를 쓰는 적은 투기장 적 영웅뿐'}, fx:['받는 치명타 데미지 40% 감소','받는 물리 피해·마법 피해 40% 감소',
                                    '모든 스킬 쿨타임 20% 감소','입히는 피해량 30% 증가'] } ] },
 ];
+/* v5.372: 세트 쿨감 합계 상한 — 작열 8(35) + 20 계열 둘이면 75% 가 되어 스킬이 거의 매 공격 나간다. 절반에서 자른다. */
+const SET_CDR_CAP = 50;
+/* v5.372(4차 K3 2단계): 세트 전투 효과 — 장비의 순수 함수(난수·시각 무관). 세트별로 달성한 단계 중 가장 큰 cdr 을 취하고(dmg 처럼 누적 아님) 세트끼리는 더한다.
+   Battle 은 layoutHeroes(= partyCP 를 재는 시점)에서 한 번 읽어 둔다 — 전투 중 매 공격마다 부르면 장비 전수 순회가 시뮬 시간을 크게 늘린다.
+   장비를 바꾸는 경로는 전부 refreshParty 를 부르므로(장착·파괴·제작 자동 장착·시뮬 장착) 캐시가 낡지 않는다.
+   ⚠ 세트가 하나도 없으면 cdMul 은 정확히 1 이고 태그는 전부 false 여야 한다 — 그래야 D1~D9(장비 없는 시나리오) 해시가 그대로다. */
+function setBattleFx(){
+  let cdr=0; const on={};
+  SETS.forEach(st=>{
+    const cnt=setPieceCount(st.n); if(!cnt) return;
+    let c=0;
+    st.tiers.forEach(t=>{ if(cnt<t.k) return;
+      if(typeof t.cdr==='number') c=Math.max(c,t.cdr);
+      (t.tags||[]).forEach(k=>{ on[k]=true; }); });
+    cdr+=c;
+  });
+  return { cdMul: 1-Math.min(SET_CDR_CAP, cdr)/100, gaze:!!on.gaze, frenzy:!!on.frenzy, curse:!!on.curse, iron:!!on.iron };
+}
 function setByName(n){ return SETS.find(s=>s.n===n)||null; }
 /* ★ v5.6: 세트효과를 전투에 실제로 반영한다.
    종전에는 SETS 에 '입히는 피해량 60% 증가' 같은 수치가 다 적혀 있는데도 setPieceCount 의 유일한
@@ -476,8 +497,8 @@ function setDamageMul(){
 // 지금 활성화된 세트 요약 — 도감·전투력 툴팁용
 function activeSets(){ return SETS.map(st=>({ n:st.n, c:setPieceCount(st.n) })).filter(x=>x.c>0); }
 /* 도감 등 좁은 카드용 1줄 요약 — 최상위 임계 단계의 첫 줄만 노출 */
-/* ★ 4차 발견(표시 = 적용): tier.live = 전투에 실제로 적용되는 줄 인덱스. 쿨타임 감소·광란 무효화·응시 조건부·그늘칼·주술 추가 발동·강철맹세 받는 치명타는
-   미구현(v5.6 이 범위에서 뺐고 이후 구현 안 됨) — 요약·발동 카드는 live 줄을 앞세우고, 세트 효과 화면은 나머지를 '준비 중'으로 흐리게. 문구는 실측 기반이라 지우지 않는다.
+/* ★ 4차 발견(표시 = 적용): tier.live = 전투에 실제로 적용되는 줄 인덱스 — 요약·발동 카드는 live 줄을 앞세우고, 세트 효과 화면은 나머지를 흐리게. 문구는 실측 기반이라 지우지 않는다.
+   v5.372(K3 2단계): 쿨감·응시·광란·주술·강철맹세를 구현해 live 로 올렸다(setBattleFx). 남은 비-live 는 그늘칼 0·1번(치명 100% 초과·즉사 — 전제 메커니즘 없음)뿐.
    작열 8 '소환 마릿수 증가'는 칭호 lava(titleSpawnBonus) 경유로 적용 — live. */
 function setLiveFx(t){ return (t && t.live ? t.live.map(i=>t.fx[i]).filter(Boolean) : []); }
 function setFxSummary(s){ const t=s.tiers[s.tiers.length-1], L=setLiveFx(t); return `${t.k}세트: ${L[0]||t.fx[0]}`; }
@@ -1449,6 +1470,16 @@ const ATTEND_DAYS = [
 ];
 /* ★ B9/G-134: 공지 — 제목 밴드 + 양피지 서술형 본문 (목록 → 상세 2단) */
 const NOTICES = [
+  /* ★ v5.372: 4차 발견 K3 2단계 — v5.367 에서 '준비 중'으로 흐리게 했던 세트 효과를 실제 전투에 적용(이용자 유리). */
+  { cat:'[개선]', ic:'⚔️', t:'세트 효과가 전투에 모두 적용됩니다(쿨타임 감소·응시·광란·주술·강철맹세)', d:'2026-09-25',
+    body:'군주들에게 알립니다.<br><br>'+
+      '세트 효과 화면에 흐리게 \"준비 중\"으로 표시했던 효과를 실제 전투에 적용했습니다.<br>'+
+      '· <b>스킬 쿨타임 감소</b> — 작열 6세트 15%·8세트 35%(15% 를 대체), 광란·그늘칼·주술·강철맹세 6세트 20%. 여러 세트는 더하며 최대 50% 입니다.<br>'+
+      '· <b>응시</b> — 일반 공격이 체력 50% 이상인 적에게 +70%, 보스에게 +50%(둘 다면 +120%).<br>'+
+      '· <b>광란</b> — 일반 공격 4회마다 다음에 받는 피해 1회를 무효화합니다(한 번에 1회분).<br>'+
+      '· <b>주술</b> — 전설(궁극) 스킬을 쓰면 1차·2차·3차 스킬 중 하나가 추가로 발동합니다. 전투 재현성을 위해 무작위 대신 순서대로 돌아갑니다.<br>'+
+      '· <b>강철맹세</b> — 받는 치명타 피해 −40%(치명타를 쓰는 적은 투기장 적 영웅입니다).<br>'+
+      '· 전투력 숫자(×N)는 종전과 같습니다 — 이 효과들은 전투력 숫자에는 들어가지 않고 실제 전투에서만 작동합니다. 그늘칼의 \"치명타 100% 초과\"·\"즉사 실패\" 효과는 발동 조건이 없어 흐리게 남습니다.' },
   /* ★ v5.371: 4차 발견 K6 — 추천 사냥이 건너뛴 종 때문에 도감이 멈추던 것. */
   { cat:'[개선]', ic:'📖', t:'도감에서 아직 못 만난 몬스터를 찾아갈 수 있습니다', d:'2026-09-25',
     body:'군주들에게 알립니다.<br><br>'+
@@ -3020,6 +3051,7 @@ const Battle = (()=>{
   /* ★ B6/G-81: 편성 소스 훅 — null 이면 기존과 100% 동일하게 party()(3인)를 쓴다.
      투기장 입장 시에만 arenaParty(4인)로 교체되고, 결과창에서 다시 null 로 되돌린다. */
   let partySrc = null;
+  let setFx = { cdMul:1, gaze:false, frenzy:false, curse:false, iron:false };   // v5.372: 세트 전투 효과 — layoutHeroes 에서 setBattleFx() 로 갱신(partyCP 와 같은 시점)
   let _layMode = null;   // 직전 layoutHeroes 가 배치한 mode — 던전→홈 복귀는 영웅 목록이 같아도(솔로 탑 → 홈 솔로) 이어받지 않는다(리뷰 v5.363~365)
   /* ★ 홈 1인 중앙 서바이벌 — 실측:
      - 화면 흐름 판독 라인 33/39/45/73-75 (5회 관찰 전부 일치)
@@ -3083,10 +3115,12 @@ const Battle = (()=>{
         /* 실제로 읽히는 이동·락온 필드 — ⚠ _moving 은 시뮬 상태다(공격 게이트 atkT<=0 && !_moving). 빠지면 걷던 영웅이 갱신 직후 헛공격해 시드 난수를 뽑는다
            (리뷰 실측: 투기장 갱신 400시점 중 7~9곳에서 결과 해시가 갈림 — smoke D9). _lockTarget/_lockUntil 은 읽는 곳이 없는 옛 필드. */
         h._row=o._row; h._moving=o._moving; h._lockedRow=o._lockedRow; h._rowLockUntil=o._rowLockUntil; h.dieAnimT=o.dieAnimT;
+        h._frz=o._frz; h._nullify=o._nullify; h._curse=o._curse;   // v5.372 세트 전투 상태(광란 누적·무효화 1회분·주술 순번) — 빠지면 갱신 한 번에 무효화가 사라진다
         if((h.shieldT===undefined)===(o.shieldT===undefined)) h.shieldT=o.shieldT;   // 방패를 새로 끼웠거나 뺐으면 새 값
         if(samePos){ h.x=o.x; h.y=o.y; h.baseX=o.baseX; h.baseY=o.baseY; h._lastX=o._lastX; h._lastY=o._lastY; } }); }   // resize(keep 2)는 이전 좌표를 옮기지 않는다(순간이동 벡터가 이동 방향으로 읽힌다)
     _layMode = mode;
     partyCP = Math.max(1, heroes.reduce((a,h)=>a+h.cp,0));
+    setFx = setBattleFx();
     /* ★ 2026-09-10: 필드에 서는 영웅이 확정되는 유일한 지점이라 여기서 시트를 데운다.
        파티를 바꾸거나 홈↔던전을 오갈 때도 자동으로 따라온다(refreshParty→layoutHeroes). */
     warmHeroSheets(heroes.map(h=>h.hid));
@@ -3420,7 +3454,7 @@ const Battle = (()=>{
         const SKILL_ANIMS = MELEE_HEROS.indexOf(h.hid)>=0 ? MELEE_SKILL_ANIMS : RANGED_SKILL_ANIMS;
         if(useSkill>=0){
           const sk = jobSkills[useSkill];
-          h.skillCD[useSkill] = sk[2];
+          h.skillCD[useSkill] = sk[2] * setFx.cdMul;   // v5.372: 세트 쿨감(세트 없으면 ×1 정확 — 종전 값과 같다)
           /* 스킬별 위력/범위/타입 + 애니메이션 */
           if(useSkill===0){ skillMul=1.5; aoeR=95; }                        // 1차: 광역
           else if(useSkill===1){ skillMul=4; aoeR=0; isSingle=true; }       // 2차: 단일 (강한 1체)
@@ -3441,45 +3475,64 @@ const Battle = (()=>{
           }
         }
         const finalDmg = Math.round(dmg * skillMul);
-        if(solo || (dg && dg.soloSurvival)){   /* ★ v5.107: soloSurvival도 홈처럼 AoE 공격 */
-          /* ★ v5.96: 홈 모드에서도 원거리 영웅은 발사체 연출 추가.
-             기존엔 AoE 타격만 있고 발사체 스프라이트가 안 나와서 시각적 연출 부족. */
-          if(h.ranged && mobs.length){
-            const tgt = mobs.reduce((a,b)=> Math.hypot(b.x-h.x,b.y-h.y)<Math.hypot(a.x-h.x,a.y-h.y)?b:a, mobs[0]);
-            fx.push({ type:'bolt', x:h.x+14, y:h.y, tx:tgt.x, ty:tgt.y, t:0, color:h.color, dmg:0, crit:false, target:tgt });
-          }
-          if(isSingle){
-            /* 단일 스킬 — 가장 강한(HP 높은) 몹 1체에 집중 타격 */
-            const tgt = mobs.reduce((a,b)=> b.hp>a.hp?b:a, mobs[0]);
-            /* 단일 스킬은 항상 크리. ★ 2026-09-25: 종전엔 hitMob 이 숫자를 찍은 뒤 여기서 한 번 더 찍어(주황)
-               같은 데미지가 두 겹으로 번져 보였다 — 글자색만 hitMob 에 넘겨 한 번만 찍는다. */
-            hitMob(tgt, finalDmg, true, h.color, '#ff6a3a');
-            spark(tgt.x, tgt.y, '#ff8a3a');
-          } else {
-            let hits=0;
-            mobs.forEach(m=>{ if(Math.hypot(m.x-h.x, m.y-h.y) < aoeR){ hitMob(m, finalDmg, crit, h.color); hits++; } });
-            if(hits===0 && mobs.length){
+        /* v5.372(4차 K3 2단계): 세트 전투 효과. 타격 처리를 strike(피해, 범위, 단일, 크리) 하나로 묶었다 — 주술 추가 발동이 같은 경로를 한 번 더 타게.
+           · 응시(gaze): 일반 공격만, 대상별로 체력 50% 이상 +70% · 보스 +50%(더함) — 맞기 전 체력으로 판정.
+           · 광란(frenzy): 실제로 나간 일반 공격 4회마다 '다음 피해 무효화' 1회분(쌓이지 않음) — 소모는 몹 반격·투기장 적 공격에서.
+           · 주술(curse): 궁극기 직후 1차→2차→3차 순서로 한 스킬을 추가 발동(무작위 대신 순번 — 난수를 새로 뽑으면 전투 재현성이 깨진다, v5.216 선례).
+           ⚠ 세트가 없으면 gz 는 fd 를 그대로 돌려주고 추가 발동·카운터도 없다 — 종전 경로와 호출 순서·난수 추첨이 같아야 한다(D1~D9 해시 불변). */
+        const basic = useSkill<0;
+        const gz = (m, fd)=> (basic && setFx.gaze) ? Math.round(fd*(1 + ((m.hp >= 0.5*(m.hpMax||1)) ? 0.7 : 0) + (m.boss ? 0.5 : 0))) : fd;
+        const strike = (fd, rad, single, cr)=>{
+          if(solo || (dg && dg.soloSurvival)){   /* ★ v5.107: soloSurvival도 홈처럼 AoE 공격 */
+            /* ★ v5.96: 홈 모드에서도 원거리 영웅은 발사체 연출 추가.
+               기존엔 AoE 타격만 있고 발사체 스프라이트가 안 나와서 시각적 연출 부족. */
+            if(h.ranged && mobs.length){
               const tgt = mobs.reduce((a,b)=> Math.hypot(b.x-h.x,b.y-h.y)<Math.hypot(a.x-h.x,a.y-h.y)?b:a, mobs[0]);
-              hitMob(tgt, finalDmg, crit, h.color);
+              fx.push({ type:'bolt', x:h.x+14, y:h.y, tx:tgt.x, ty:tgt.y, t:0, color:h.color, dmg:0, crit:false, target:tgt });
             }
-            fx.push({ type:'aoe', x:h.x, y:h.y, r:aoeR, t:0, color:h.color });
+            if(!mobs.length) return false;
+            if(single){
+              /* 단일 스킬 — 가장 강한(HP 높은) 몹 1체에 집중 타격 */
+              const tgt = mobs.reduce((a,b)=> b.hp>a.hp?b:a, mobs[0]);
+              /* 단일 스킬은 항상 크리. ★ 2026-09-25: 종전엔 hitMob 이 숫자를 찍은 뒤 여기서 한 번 더 찍어(주황)
+                 같은 데미지가 두 겹으로 번져 보였다 — 글자색만 hitMob 에 넘겨 한 번만 찍는다. */
+              hitMob(tgt, gz(tgt,fd), true, h.color, '#ff6a3a');
+              spark(tgt.x, tgt.y, '#ff8a3a');
+            } else {
+              let hits=0;
+              mobs.forEach(m=>{ if(Math.hypot(m.x-h.x, m.y-h.y) < rad){ hitMob(m, gz(m,fd), cr, h.color); hits++; } });
+              if(hits===0 && mobs.length){
+                const tgt = mobs.reduce((a,b)=> Math.hypot(b.x-h.x,b.y-h.y)<Math.hypot(a.x-h.x,a.y-h.y)?b:a, mobs[0]);
+                hitMob(tgt, gz(tgt,fd), cr, h.color);
+              }
+              fx.push({ type:'aoe', x:h.x, y:h.y, r:rad, t:0, color:h.color });
+            }
+            return true;
           }
-        } else {
           /* 파티 콘텐츠(던전/투기장) — 종전대로 단일 타겟 (가장 가까운/왼쪽 몹).
              ★ v5.84: 투기장(kind:'arena')에서는 mobs 대신 foes(적 영웅)를 타겟.
              ★ v5.91: 사거리 게이트 — 사거리 내 적만 타격, 밖이면 이동. */
           const targets = (dg && dg.kind==='arena' && foes.length) ? foes.filter(f=>!f.dead) : mobs;
-          if(targets.length){
-            const target = targets.reduce((a,b)=> Math.hypot(b.x-h.x,b.y-h.y)<Math.hypot(a.x-h.x,a.y-h.y)?b:a, targets[0]);
-            const range = h.ranged ? RANGED_RANGE : MELEE_RANGE;
-            const distToTarget = Math.hypot(target.x-h.x, target.y-h.y);
-            if(distToTarget <= range){
-              /* 사거리 내 — 공격 */
-              if(h.ranged) fx.push({ type:'bolt', x:h.x+14, y:h.y, tx:target.x, ty:target.y, t:0, color:h.color, dmg:finalDmg, crit, target });
-              else { h.lungeT = 0.18; hitMob(target, finalDmg, crit, h.color); }
-            }
-            /* 사거리 밖이면 공격 안 함 (이동 로직이 대상에게 다가감) */
-          }
+          if(!targets.length) return false;
+          const target = targets.reduce((a,b)=> Math.hypot(b.x-h.x,b.y-h.y)<Math.hypot(a.x-h.x,a.y-h.y)?b:a, targets[0]);
+          const range = h.ranged ? RANGED_RANGE : MELEE_RANGE;
+          const distToTarget = Math.hypot(target.x-h.x, target.y-h.y);
+          if(distToTarget > range) return false;   /* 사거리 밖이면 공격 안 함 (이동 로직이 대상에게 다가감) */
+          /* 사거리 내 — 공격 */
+          if(h.ranged) fx.push({ type:'bolt', x:h.x+14, y:h.y, tx:target.x, ty:target.y, t:0, color:h.color, dmg:gz(target,fd), crit:cr, target });
+          else { h.lungeT = 0.18; hitMob(target, gz(target,fd), cr, h.color); }
+          return true;
+        };
+        const landed = strike(finalDmg, aoeR, isSingle, crit);
+        if(basic && landed && setFx.frenzy){
+          h._frz = (h._frz||0) + 1;
+          if(h._frz >= 4){ h._frz = 0; if(!h._nullify){ h._nullify = 1; dmgText(h.x, h.y-34, '무효화 준비', false, '#9fd0ff'); } }
+        }
+        if(isUltimate && setFx.curse){
+          const xi = (h._curse||0) % 3; h._curse = xi + 1;
+          const XS = [[1.5,95,false],[4,0,true],[5,170,false]][xi], xk = jobSkills[xi];
+          fx.push({ type:'skill', x:h.x, y:h.y, t:0, color:h.color, idx:xi, name:(xk?xk[0]:'')+' · 주술', r:XS[1]||50, ult:false });
+          strike(Math.round(dmg*XS[0]), XS[1], XS[2], crit);
         }
       }
       /* ★ v5.91: 자연스러운 이동 시스템 — 홈(solo)은 제외, 던전/투기장에서 활성화.
@@ -3535,8 +3588,12 @@ const Battle = (()=>{
           if(m.atkT<=0){ m.atkT=bRnd(1.1,1.7); const h=bPick(alive);   /* ★ M1: 시드 RNG — 반격 주기·대상 */
             const r=(cpRef+300)/(partyCP+300);
             const hitF=clamp(0.035*Math.pow(r,1.7)*(m.boss?2.2:1), 0.004, 0.6)*foeMul*classFx('dmgTaken');   // K6(3차): 마법형 받는 피해 −10%(PvE 몹·보스 반격만)
+            /* v5.372: 광란 무효화 1회분 소모 — 난수(반격 주기·대상)는 위에서 이미 뽑았다. 무효화해도 추첨 순서는 그대로. */
+            if(h._nullify){ h._nullify=0; dmgText(h.x+10,h.y-14,'무효',false,'#9fd0ff'); }
+            else {
             h.hp-=hitF; spark(h.x+8,h.y,'#e2504a'); dmgText(h.x+10,h.y-14,'-'+Math.max(1,Math.round(hitF*100)),false,'#ff7a6a');
             if(h.hp<=0){ h.hp=0; h.dead=true; h.respT=3; sfx('fail'); }  /* ★ v5.32: 부활 8→3초 */
+            }
           } }
       });
       if(heroes.length && heroes.every(h=>h.dead) && wiped<=0){ if(mode==='dungeon') endDungeon(false); else doWipe(); }
@@ -3660,7 +3717,11 @@ const Battle = (()=>{
                  아군: partyCP*0.08 → 적의 cp로 동일하게. dmgMul(0.5) 적용. */
               const crit = _draw01()<0.22;   /* ★ M1: 시드 RNG */
               const dmgMul = (dg.dmgMul||1)*(dg.otMul||1);   // ★ v5.117: 가중은 양측 동일
-              const dmg = Math.max(1, Math.round(Math.max(10, f.cp*0.08)*(crit?1.8:1)*bRnd(0.85,1.15)*dmgMul));   /* ★ M1: 시드 RNG */
+              const dmg0 = Math.max(1, Math.round(Math.max(10, f.cp*0.08)*(crit?1.8:1)*bRnd(0.85,1.15)*dmgMul));   /* ★ M1: 시드 RNG */
+              /* v5.372: 강철맹세 — 받는 치명타 피해 −40%(치명타를 쓰는 적은 투기장 적 영웅뿐). 광란 무효화 1회분이 있으면 이번 피해를 0 으로.
+                 둘 다 난수를 뽑은 뒤의 순수 계산 — 추첨 순서 불변. 세트가 없으면 dmg0 그대로. */
+              const nul = !!tgt._nullify; if(nul) tgt._nullify = 0;
+              const dmg = nul ? 0 : ((crit && setFx.iron) ? Math.max(1, Math.round(dmg0*0.6)) : dmg0);
               /* 아군 HP(0~1) 감소 — 아군의 cp로 정규화 */
               const hpDmg = dmg / Math.max(1, tgt.cp) * 0.08;
               tgt.hp = Math.max(0, (tgt.hp||1) - hpDmg);
@@ -3671,7 +3732,7 @@ const Battle = (()=>{
               } else {
                 spark(tgt.x+8, tgt.y, '#e2504a');
               }
-              dmgText(tgt.x+10, tgt.y-14, '-'+dmg, crit, '#ff7a6a');
+              if(nul) dmgText(tgt.x+10, tgt.y-14, '무효', false, '#9fd0ff'); else dmgText(tgt.x+10, tgt.y-14, '-'+dmg, crit, '#ff7a6a');
               if(tgt.hp <= 0.15 && !tgt.dead){
                 tgt.dead = true; tgt.respT = 3; tgt.dieAnimT = 0;
               }
@@ -4607,6 +4668,9 @@ const Battle = (()=>{
            skillCDs:()=>(heroes[0]&&heroes[0].skillCD)||[0,0,0,0],
            /* 4차 발견: 영웅 스탯 탭이 실제 전투 값을 보여 주게(읽기 전용·난수 없음) — 종전 탭은 등급·레벨 공식(치명 5%)으로 실제(22%+)와 달랐다 */
            critInfo:(hid)=>({ rate:heroCritRate(hid), mul:heroCritMul(hid), speed:heroSpeedMul(hid) }),
+           /* v5.372: 세트 전투 효과 검증용 노출(읽기 전용 사본) — 지금 전투가 쓰는 캐시 값 · 영웅별 광란 누적·무효화·주술 순번 */
+           setFxNow:()=>Object.assign({}, setFx),
+           setState:()=>heroes.map(h=>({ hid:h.hid, frz:h._frz||0, nul:h._nullify||0, curse:h._curse||0, cd:h.skillCD.slice() })),
            /* ★ 홈 1인 서바이벌 검증용 노출 (스모크 테스트에서 사용). 내부 상태 변경 아님. */
            isHuntSolo:()=>isHuntSolo(), heroCount:()=>heroes.length,  // ★ B6/G-81
            /* ★ v5.117: 투기장 헤더가 벽시계로 따로 세면 백그라운드 탭 등에서 전투 내부 시간과
@@ -8008,7 +8072,7 @@ const MODALS = {
        정보가 있는 소수의 몫이었다. 배율은 단계별 단독 기여이며 여러 세트는 합산된다
        (dmg 합산 후 방어 환산 곱) — 헤더에 이 규칙을 명시해 최적해 강제가 아닌
        '비교 가능한 정보'로만 제공한다. */
-    b.appendChild(el('div','hint','장비 세트 9종. 8종은 <b>6세트</b> 단일 임계값이며, ‘작열’ 1종만 <b>3 → 6 → 8세트</b> 3단계로 누적됩니다.<br><span class="mut">×N = 그 단계의 전투력 환산 기여(공격% × 방어[유효 체력] 환산 · setDamageMul 정본 공식). 여러 세트는 서로 합산됩니다. 흐린 줄(준비 중)은 아직 전투에 적용되지 않습니다.</span>'));
+    b.appendChild(el('div','hint','장비 세트 9종. 8종은 <b>6세트</b> 단일 임계값이며, ‘작열’ 1종만 <b>3 → 6 → 8세트</b> 3단계로 누적됩니다.<br><span class="mut">×N = 그 단계의 전투력 환산 기여(공격% × 방어[유효 체력] 환산). 여러 세트는 서로 합산됩니다. \'전투 적용\' 줄(쿨타임 감소 등)은 실제 전투에 적용되지만 전투력 숫자에는 들어가지 않습니다(쿨타임 감소는 세트끼리 더해 최대 '+SET_CDR_CAP+'%). 흐린 줄은 발동 조건(치명타 100% 초과·즉사)이 이 게임에 없어 적용되지 않습니다.</span>'));
     /* ★ v5.7: 무엇을 모아야 하는지 보이게 한다 — 구성품과 보유 진행도.
        종전 카드는 효과 문구만 있어서 "그래서 뭘 모으라는 거지"에 답이 없었다. */
     SETS.forEach(s=>{
@@ -8022,7 +8086,12 @@ const MODALS = {
         /* v5.298: 단계별 단독 전투력 배율 — setDamageMul 의 단일 세트 계산과 동일 공식 */
         const mul=((1+(t.dmg||0)/100) * (1/(1-Math.min(0.7,(t.def||0)/100)))).toFixed(2);
         h+=`<div class="sc-tier${hit?' hit':''}"><div class="sc-k">${t.k}세트${hit?' ✓':''} <span style="color:#f0cd82">×${mul}</span></div>`+
-           t.fx.map((x,i)=>(t.live && t.live.indexOf(i)<0) ? `<div class="sc-fx off">${x} <span class="sc-soon">(준비 중 — ×${mul} 미포함)</span></div>` : `<div class="sc-fx">${x}</div>`).join('')+`</div>`;
+           t.fx.map((x,i)=>{
+             const nt=(t.note&&t.note[i])?` <span class="sc-note">(${t.note[i]})</span>`:'';
+             if(t.live && t.live.indexOf(i)<0) return `<div class="sc-fx off">${x} <span class="sc-soon">(발동 조건 없음 — ×${mul} 미포함)</span></div>`;
+             /* v5.372: 전투에는 적용되지만 전투력 배율(×N)에는 들어가지 않는 줄 — 쿨감·응시·광란·주술·강철맹세 */
+             if(t.bfx && t.bfx.indexOf(i)>=0) return `<div class="sc-fx">${x}${nt} <span class="sc-bfx">전투 적용 · 전투력 숫자 별도</span></div>`;
+             return `<div class="sc-fx">${x}${nt}</div>`; }).join('')+`</div>`;
       });
       h+=`<div class="sc-pieces">`+list.map(nm=>{
         const has=(S.equips||[]).some(e=>e&&e.slot===nm);

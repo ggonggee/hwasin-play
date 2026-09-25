@@ -3361,8 +3361,9 @@ function freshBattle(){
    구성원 수가 다른" 교란이 생겼다. 아레나가 하듯 party 함수 자체를 소스로 넘겨(non-null)
    mode 잔존과 무관하게 항상 3인 편성이 나오게 고정한다. */
 const partyFn = ev('party');
-function runSeeded(seed, driver){
+function runSeeded(seed, driver, pre){
   const B = freshBattle();
+  if(pre) pre(ev('S'));       // v5.372(D10): 새 세이브 위에 장비 등을 깐다 — startDungeon(layoutHeroes)보다 먼저여야 세트 효과가 잡힌다
   B.setSeed(seed);            // ★ layoutHeroes()보다 반드시 먼저 — 이후 모든 소비가 이 시드에서 나온다
   B.setPartySource(partyFn);  // non-null 소스 — mode 잔존과 무관하게 항상 party() 3인 경로
   let result = null;
@@ -3507,8 +3508,9 @@ step('4차 4A — 세트 live·장신구 치명·스탯/스킬 탭·절전 경�
   const errs=[], S=ev('S'), SETS=ev('SETS'), live=ev('setLiveFx');
   SETS.forEach(s=>s.tiers.forEach(t=>{ const L=live(t); if(!L.length) errs.push(s.n+' '+t.k+'세트 live 줄 없음');
     if(!(typeof t.dmg==='number'||typeof t.def==='number') && !(s.n==='작열' && t.k===8)) errs.push(s.n+' live 인데 dmg/def 없음');
-    L.forEach(x=>{ if(/쿨타임|무효화|일반 공격 시|초과분|즉사|무작위|받는 치명타/.test(x)) errs.push(s.n+' 미구현 효과가 live: '+x); }); }));
-  SETS.forEach(s=>{ const sm=ev('setFxSummary')(s); if(/쿨타임|무효화|초과분|무작위|받는 치명타/.test(sm)) errs.push('도감 요약이 미적용 효과 '+sm); });
+    /* v5.372(K3 2단계): 쿨감·응시·광란·주술·강철맹세는 구현됐다(setBattleFx — D10). 남은 미구현은 그늘칼의 치명 100% 초과·즉사뿐 */
+    L.forEach(x=>{ if(/초과분|즉사/.test(x)) errs.push(s.n+' 미구현 효과가 live: '+x); }); }));
+  SETS.forEach(s=>{ const sm=ev('setFxSummary')(s); if(/초과분|즉사/.test(sm)) errs.push('도감 요약이 미적용 효과 '+sm); });
   if(!/setLiveFx\(t\)\.slice\(0,2\)/.test(js)) errs.push('세트 발동 카드가 live 줄을 쓰지 않음');
   // 장신구(인장) 치명 가산
   const keep={ eq:S.equips.slice(), st:S.seenTutorial, ht:ev('_heroTab') };
@@ -3591,6 +3593,58 @@ step('D8 · 직업 특성 전투 재현성(마법형·전투형 각각 동일 �
     if(a.detail.rngDrawCount<=0) errs.push(tr+' 난수 소비 0');
   }
   if(errs.length) throw new Error(errs.join(' | '));
+});
+/* ★ v5.372(4차 K3 2단계): 세트 전투 효과(쿨감·응시·광란·주술·강철맹세) — 장비의 순수 함수라 같은 시드면 같은 결과여야 하고(재현성·헤드리스=실시간·전투 중 갱신),
+   실제로 전투에 들어가야 한다(쿨 길이·무효화·주술 순번 관측). 세트가 없는 D1~D9 해시는 그대로여야 한다(위 단계들). */
+step('D10 · 세트 전투 효과 — 순수 함수 · 쿨감 관측 · 재현성 · 헤드리스=실시간 · 전투 중 갱신', ()=>{
+  const errs=[], SP=ev('SET_PIECES'), sbf=ev('setBattleFx');
+  const wear=(S, names)=>{ S.equips=[]; names.forEach(n=>SP[n].forEach(slot=>S.equips.push({ grade:'L', slot, enh:0, equipped:true }))); };
+  // ① 순수 함수 — 세트 없음 ×1 정확 · 단일 세트 · 작열 8(최대값 35, 합산 아님) · 합계 상한 50
+  const S0=ev('S'), keepEq=S0.equips;
+  S0.equips=[]; let f=sbf(); if(f.cdMul!==1 || f.gaze||f.frenzy||f.curse||f.iron) errs.push('세트 없음인데 효과 '+JSON.stringify(f));
+  wear(S0,['광란']); f=sbf(); if(Math.abs(f.cdMul-0.8)>1e-12 || !f.frenzy || f.gaze) errs.push('광란 6 '+JSON.stringify(f));
+  wear(S0,['작열']); f=sbf(); if(Math.abs(f.cdMul-0.65)>1e-12) errs.push('작열 8 쿨감 '+f.cdMul+'(기대 0.65 — 6단계 15% 와 합산하지 않음)');
+  wear(S0,['작열','광란','주술']); f=sbf(); if(Math.abs(f.cdMul-0.5)>1e-12 || !f.curse) errs.push('상한 50% '+JSON.stringify(f));
+  wear(S0,['응시','강철맹세']); f=sbf(); if(!f.gaze || !f.iron || Math.abs(f.cdMul-0.8)>1e-12) errs.push('응시+강철맹세 '+JSON.stringify(f));
+  S0.equips=keepEq;
+  // ② 실전 — 광란+주술(쿨감 40%) 착용 3인 던전: 2차 스킬 쿨(9초)의 최대 관측값 ≤ 9×0.6 · 무효화·주술 순번이 실제로 움직인다
+  const pre=(S)=>wear(S,['광란','주술']);
+  let maxCD1=0, sawNull=false, sawCurse=false, fxNow=null;
+  const probe=(B)=>{ fxNow=B.setFxNow(); let k=0; while(B.inDungeon() && k<D_MAX_TICKS){ B.pumpFrame(0.05); k++;
+      B.setState().forEach(s=>{ maxCD1=Math.max(maxCD1, s.cd[1]); if(s.nul) sawNull=true; if(s.curse) sawCurse=true; }); } };
+  const a=runSeeded(0xC0FFEE, probe, pre);
+  if(!fxNow || Math.abs(fxNow.cdMul-0.6)>1e-12 || !fxNow.frenzy || !fxNow.curse) errs.push('전투 캐시 '+JSON.stringify(fxNow));
+  if(!(maxCD1>0 && maxCD1<=9*0.6+1e-9)) errs.push('2차 스킬 쿨 최대 '+maxCD1.toFixed(3)+'(기대 ≤ 5.4)');
+  if(!(maxCD1>9*0.6-0.2)) errs.push('2차 스킬 쿨이 한 번도 쓰이지 않음 '+maxCD1);
+  if(!sawNull) errs.push('광란 무효화가 한 번도 준비되지 않음');
+  if(!sawCurse) errs.push('주술 추가 발동 순번이 한 번도 움직이지 않음');
+  // ③ 재현성 · 헤드리스=실시간 · 전투 중 갱신 — 세 세트 조합(응시+강철맹세 / 광란+주술 / 작열)
+  for(const names of [['응시','강철맹세'],['광란','주술'],['작열']]){
+    const p=(S)=>wear(S,names), tag=names.join('+');
+    const h1=runSeeded(0xC0FFEE, driverPlain, p), h2=runSeeded(0xC0FFEE, driverPlain, p);
+    if(h1.hash!==h2.hash) errs.push(tag+' 재현성 '+h1.hash+' ≠ '+h2.hash);
+    const rt=runSeeded(0xC0FFEE, driverRealtime60fps, p);
+    if(rt.hash!==h1.hash) errs.push(tag+' 헤드리스 ≠ 실시간 '+JSON.stringify(h1.detail)+' / '+JSON.stringify(rt.detail));
+    const rf=runSeeded(0xC0FFEE, (B)=>{ for(let k=0;k<140 && B.inDungeon();k++) B.pumpFrame(0.05); B.refreshParty(); B.refreshParty();
+      const r=B.runUntilDone(D_MAX_TICKS); if(!r.finished) throw new Error('완주 못 함'); }, p);
+    if(rf.hash!==h1.hash) errs.push(tag+' 전투 중 갱신 뒤 해시 변화 '+JSON.stringify(h1.detail)+' → '+JSON.stringify(rf.detail));
+  }
+  // ④ 투기장(걷는 전투 · 적 치명타가 있는 유일한 곳) — 강철맹세+광란: 재현성 · 60fps = 20Hz · 전투 중 갱신(1·20·45프레임)
+  const aFoes = ev(`HERO_ROSTER.filter(r=>r.grade==='N').slice(0,3).map(r=>({ hid:r.hero_id, job:JOBS.find(j=>j.id===r.class_id)||JOBS[0], grade:r.grade, name:r.name, lvl:5 }))`);
+  const aCfg = { name:'D10투기장', foeCP:1400, kind:'arena', count:3, dur:60, overtime:true, dmgMul:0.5, foeHeroes:aFoes };
+  let aFx=null;
+  const arun=(dt, refreshAt)=>{ const B=freshBattle(); wear(ev('S'),['강철맹세','광란']); B.setSeed(0xC0FFEE); B.setPartySource(partyFn); let result=null;
+    B.startDungeon(Object.assign({}, aCfg, { onEnd:(win,info)=>{ result={ win, dmg:info.dmg, kills:info.kills }; } }));
+    aFx=B.setFxNow(); let f=0; while(B.inDungeon() && f<12000){ B.pumpFrame(dt); f++; if(f===refreshAt) B.refreshParty(); }
+    if(!result) throw new Error('D10 투기장 완주 못 함');
+    return JSON.stringify({ r:result, c:B.rngChecksum(), n:B.rngDrawCount() }); };
+  const ab=arun(0.05,-1);
+  if(!aFx || !aFx.iron || !aFx.frenzy) errs.push('투기장 세트 캐시 '+JSON.stringify(aFx));
+  if(arun(0.05,-1)!==ab) errs.push('투기장 세트 재현성');
+  if(arun(1/60,-1)!==ab) errs.push('투기장 세트 60fps ≠ 20Hz');
+  for(const k of [1,20,45]) if(arun(0.05,k)!==ab){ errs.push('투기장 세트 갱신 '+k+'프레임 뒤 해시 변화'); break; }
+  if(errs.length) throw new Error(errs.join(' | '));
+  console.log(`     광란+주술: 2차 스킬 쿨 최대 ${maxCD1.toFixed(2)}초(기본 9) · 무효화·주술 순번 관측 · 3조합 재현성·실시간·갱신 일치 · 투기장(강철맹세+광란) 일치`);
 });
 step('D2 · 서로 다른 시드 20개 → 서로 다른 해시(중복 0)', ()=>{
   const seeds = Array.from({length:20}, (_,i)=> (0x1000 + i*0x9E3779B1) >>> 0);
