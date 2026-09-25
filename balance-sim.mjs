@@ -43,9 +43,11 @@ const ACTIVE_WINDOWS_PER_DAY = 16;
 const TOWER_CAL = (()=>{ for(const a of process.argv.slice(3)){ const m=/^towercal=([\d.]+)$/.exec(a||''); if(m) return Number(m[1]); } return 2.2; })();
 /* ★ 2026-09-25(워크플로 2차 #2 2단계): 투기장 순위 골드 버프 측정 — arena=N(주당 판 수, 기본 0 = 종전 기준선 그대로), arenawin=P(승률 상수, 기본 0.95 —
    arenawin=real 실측 92.5~93.8%(casual 150/600h·full 200h, 80~160판)에 가깝다. 상수 모드는 빠르고, real 은 정확하다).
+   ⚠ v5.373 재판정: 위 92.5~93.8% 는 0×0 전장(K1 교정 전) 값이다. 교정 전장 실전투는 91.4%(256/280) → 기본값 0.95 → 0.92.
+   상수 모드는 초반 팀이 약한 첫 주를 반영하지 못해 첫 주 효과를 과대평가한다 — 첫 주를 볼 때는 real 을 써라.
    이 버프(최대 +90%, 사냥·골드던전·탑·방치 골드에 곱)가 시뮬에 없어 곡선이 실제보다 낮게 그려질 수 있었다. 실제 전투를 돌리지 않는 근사(승률 상수). */
 const ARENA_N = (()=>{ for(const a of process.argv.slice(3)){ const m=/^arena=(\d+)$/.exec(a||''); if(m) return Number(m[1]); } return 0; })();
-const ARENA_WIN = (()=>{ for(const a of process.argv.slice(3)){ if(a==='arenawin=real') return -1; const m=/^arenawin=([\d.]+)$/.exec(a||''); if(m) return Number(m[1]); } return 0.95; })();
+const ARENA_WIN = (()=>{ for(const a of process.argv.slice(3)){ if(a==='arenawin=real') return -1; const m=/^arenawin=([\d.]+)$/.exec(a||''); if(m) return Number(m[1]); } return 0.92; })();
 /* arenawin=real — 승률 상수 대신 **실제 투기장 전투**(arenaFight → 헤드리스 펌프 → arenaResult 정본)를 N판 돌린다.
    연승 보정(적 CP +8%/연승)·편성 4인·데미지 50% 감소가 전부 실물 그대로 들어간다. 느리다(판당 최대 60초 전투). */
 const arenaTally={ weeks:0, rankSum:0, buffSum:0, fights:0, wins:0 };
@@ -54,9 +56,11 @@ const ORDERS_ON = process.argv.slice(3).some(a=>a==='orders=1');
 const ORDER_RES = (()=>{ for(const a of process.argv.slice(3)){ const m=/^orderres=(\d+)$/.exec(a||''); if(m) return Number(m[1])*1e6; } return 30e6; })();   // 주문 제작 골드 예약선(백만) — 기본 3천만(결정 가호·망치 1묶음 몫은 남긴다)
 const orderTally={ unlockH:null, days:0, delivered:0, crafts:0, goldSpent:0, hammers:0, dice:0, gold:0 };
 /* ★ 2026-09-25(워크플로 2차 #14): guild=1 — 길드 토벌(재의 골렘 단계제) 모델(기본 꺼짐 = 기준선 불변). 하루 2회 참전, 1회 피해 = GUILD_CAL×총전투력.
-   GUILD_CAL 기본 0.17 = 실전투 스윕 중앙값(판당 0.14~0.29 흔들림 · 약탈 활성화 끔 기준 — 켜면 약 0.23~0.31). 풀·보상은 게임 정본 gbossApply 그대로. */
+   GUILD_CAL 기본 0.17 = 실전투 스윕 중앙값(판당 0.14~0.29 흔들림 · 약탈 활성화 끔 기준 — 켜면 약 0.23~0.31). 풀·보상은 게임 정본 gbossApply 그대로.
+   ⚠ v5.373 재판정: 0.17 은 0×0 전장(K1 교정 전) 값. 교정 전장에서 enterGuildRaid 실제 15초 전투로 잰 판당 피해/총CP 중앙값은 0.230~0.247(p10 0.163·p90 0.32~0.36) → 기본 0.23.
+   (단계 표가 지수형이라 피해 ×1.4 여도 곡선은 약 +2단계 — 100일 48단계·기록서 +9 로 결론 동일.) */
 const GUILD_ON = process.argv.slice(3).some(a=>a==='guild=1');
-const GUILD_CAL = (()=>{ for(const a of process.argv.slice(3)){ const m=/^guildcal=([\d.]+)$/.exec(a||''); if(m) return Number(m[1]); } return 0.17; })();
+const GUILD_CAL = (()=>{ for(const a of process.argv.slice(3)){ const m=/^guildcal=([\d.]+)$/.exec(a||''); if(m) return Number(m[1]); } return 0.23; })();
 const guildTally={ curve:[], kills:0, rec:0, coin:0, dice:0, cycKills:{} };
 const OFFCAP_ARG = (()=>{ for(const a of process.argv.slice(3)){ const m=/^offcap=(\d+)$/.exec(a||''); if(m) return Number(m[1]); } return null; })();
 
@@ -492,6 +496,8 @@ function dailyStep(){
    openEnhance 는 실패 중 파괴 분기(50%)에서만 망치를 소모한다.
    시뮬 실측(600h · 상시 보호 정책 · L장비 한정): 위험 강화 개시 약 166h(L 10부위 +10 직후) ·
    부위당 기대 시도 약 26회 · 망치 약 41개 → 약 3.2억 골드(10부위 ≈ 32억 ≈ 한 달 그라인드).
+   ⚠ v5.373 재판정: 위 3.2억은 +20 미도달 부위까지 평균에 넣은 표본 편향. 교정 시뮬·해석해·몬테카를로 20만 회로
+   +10→+20 부위당 평균 4.76억(시도 약 36.6회 · 전설 망치 81.5개 포함) · 10부위 약 47억. (교차: +25 완주 부위당 시도 50.4회 = 해석해 52.0)
    파괴는 상시 보호 정책 기준 0건. CP 기여: 부위 배율 2.2(+10) → 3.4(+20). */
 /* ── +11~20 위험 강화 — 시뮬 내 직접 측정 (v5.229, 남은 과제 '강화 축 시뮬 반영') ──
    종전(2026-09-12)엔 몬테카를로 2만 회 별도 산출(부위당 479M)로 시뮬 밖 처리였다.
