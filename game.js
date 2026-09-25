@@ -2421,6 +2421,46 @@ function waveBanner(n){
   _waveFlashAt=(typeof performance!=='undefined'&&performance.now)?performance.now():Date.now();
   sfx(rec?'legendary':'win');
 }
+/* v5.379(5차 발견 presentation): '처치 비트' — 우두머리 던전·투기장 마지막 처치 순간 결과창이 같은 스텝(1ms 안)에 스크림과 함께 전장을 덮어,
+   보스의 마지막 순간(사망 잔상·불꽃·흔들림)이 한 번도 보이지 않았다(등장 배너는 1.5초 — 비대칭). 표시 전용:
+   · 결과창·보상·save·효과음은 지금처럼 같은 틱에 끝난다(즉시 저장 원칙 v5.306~309) — 창을 0.7초 숨겨 두었다가(kill-hold) 연다.
+   · 전장 캔버스의 마지막 프레임(보스 체력 <1%)을 복사해 멈춘 장면 + 흰 번쩍임 + 금색 띠 + 파편 18개(각도 i×20° — 난수 없음).
+   · Battle(전투 스텝·fx·bRnd)은 건드리지 않는다 — 결정론 해시 무관. 즉시 결과·튜토리얼 중·패배·race(탑·월드보스·레이드)·자동 연전은 띄우지 않는다. */
+let _killHoldT=0;
+function killBeat(title, name){
+  if(_instantRun>0 || !S || !S.seenTutorial) return false;
+  try{
+    const host=$('#stage-wrap'), cv=$('#battle');
+    if(!host || !cv || !host.appendChild || typeof document==='undefined' || !document.createElement) return false;
+    host.querySelectorAll('.kill-beat').forEach(n=>n.remove());
+    const wrap=el('div','kill-beat');
+    const fz=document.createElement('canvas'); fz.className='kb-freeze'; fz.width=cv.width||1; fz.height=cv.height||1;
+    const c2=fz.getContext && fz.getContext('2d'); if(c2 && c2.drawImage) c2.drawImage(cv,0,0);
+    wrap.appendChild(fz);
+    if(fxOn('fxFlash')) wrap.appendChild(el('div','kb-flash'));
+    wrap.appendChild(el('div','kb-vig'));
+    const band=el('div','kb-band', `<div class="kb-line"></div><div class="kb-t"></div><div class="kb-n"></div><div class="kb-line"></div>`);
+    const t=band.querySelector('.kb-t'); if(t) t.textContent=String(title||'');
+    const n=band.querySelector('.kb-n'); if(n) n.textContent=String(name||'');
+    wrap.appendChild(band);
+    const sh=el('div','kb-shards'); for(let i=0;i<18;i++){ const s=el('i'); s.style.setProperty('--a',(i*20)+'deg'); sh.appendChild(s); } wrap.appendChild(sh);
+    host.appendChild(wrap);
+    setTimeout(()=>{ try{ wrap.remove(); }catch(e){} }, 950);
+    return true;
+  }catch(e){ if(typeof console!=='undefined' && console.error) console.error('killBeat 실패:', e); return false; }
+}
+/* 결과창을 숨긴 채 연다(kill-hold) → 0.7초 뒤 드러내며 카드·칩 팝을 다시 재생. 스크림을 먼저 탭하면 즉시 드러낸다(닫지 않는다). */
+function killHoldStart(ms){
+  const r=$('#modal-root'); if(!r) return; r.classList.add('kill-hold');
+  clearTimeout(_killHoldT); _killHoldT=setTimeout(killHoldRelease, ms||700);
+}
+function killHoldRelease(){
+  clearTimeout(_killHoldT); _killHoldT=0;
+  const r=$('#modal-root'); if(!r || !r.classList.contains('kill-hold')) return false;
+  r.classList.remove('kill-hold');
+  try{ const b=$('#modalBody'); if(b && b.querySelectorAll) b.querySelectorAll('.rc-anim,.dg-pop').forEach(nd=>{ const c=nd.classList.contains('rc-anim')?'rc-anim':'dg-pop'; nd.classList.remove(c); void nd.offsetWidth; nd.classList.add(c); }); }catch(e){}
+  return true;
+}
 function bossBanner(name, col){
   if(_instantRun>0) return;   // 즉시 결과 중 — 이미 끝난 싸움의 경고 배너(+지연 효과음)를 띄우지 않는다
   const host=$('#stage-wrap'); if(!host) return;
@@ -5835,6 +5875,7 @@ function openModal(key, arg){   // ★ B3/G-45: arg 전달 (예: openModal('equi
      v5.123 이 제작 결과 팝업 한 곳만 호출부에서 closeSub() 로 막았고 나머지 4곳은 열려 있었다.
      호출부마다 막는 대신 여기서 조건 없이 닫는다 — 같은 키 하위 화면 새로고침은 바로 위에서 이미 return 했다. */
   closeSub();
+  if(_killHoldT || $('#modal-root').classList.contains('kill-hold')){ clearTimeout(_killHoldT); _killHoldT=0; $('#modal-root').classList.remove('kill-hold'); }   // v5.379: 다른 화면은 숨기지 않는다
   const body = $('#modalBody');
   const same = (currentModal === key);
   const keep = same ? body.scrollTop : 0;
@@ -5851,7 +5892,7 @@ function openModal(key, arg){   // ★ B3/G-45: arg 전달 (예: openModal('equi
   if(!same) tutorialProgress(key);
 }
 let _introActive=false, _introSkip=null;
-function closeModal(){ closeSub(); $('#modal-root').classList.remove('on'); currentModal=null; if(_introActive){ _introActive=false; const sk=_introSkip; _introSkip=null; if(sk) sk(); startGuidedTutorial(); } tutFingerTick();
+function closeModal(){ closeSub(); $('#modal-root').classList.remove('on'); $('#modal-root').classList.remove('kill-hold'); clearTimeout(_killHoldT); /* v5.379: 처치 비트 숨김이 다음 화면에 남지 않게 */ currentModal=null; if(_introActive){ _introActive=false; const sk=_introSkip; _introSkip=null; if(sk) sk(); startGuidedTutorial(); } tutFingerTick();
   /* 대기 중이던 전멸 분석을 띄운다. 250ms 사이 다른 화면이 열리면(closeModal(); openModal(X) 패턴 — 이 파일에 흔하다) 버리지 말고
      다시 대기시켜 그 화면을 닫을 때 띄운다(코드리뷰 2026-09-25 발견: 종전엔 여기서 조용히 유실됐다 — queueWipeAdvice 와 대칭). */
   if(_wipePending!==null){ const t=_wipePending; _wipePending=null; setTimeout(()=>{ if(!currentModal) showWipeAdvice(t); else if(_wipePending===null) _wipePending=t; }, 250); } }
@@ -10531,7 +10572,10 @@ function arenaResult(win, foeName, foeCP, foeTier){
   // ★ v4.8: 투기장 결과창은 '*3초 뒤…*' 안내 아래에 버튼이 없도록 설계한다(던전은 G-80 에서 이미 제거, 여기만 누락됐었다).
   //   자동 연전 중일 때만 상태 표시를 남긴다.
   if(S.arenaAuto) b.appendChild(el('div','center small mut','자동 연전 중…'));
+  /* v5.379 처치 비트: 수동 입장 승리만 — 자동 연전은 매 판 0.7초가 반복되면 피로하다(검증 권고) */
+  const _beat = win && !S.arenaAuto && killBeat('⚔ 승리', `vs ${foeName}`);
   $('#modal-root').classList.add('on'); currentModal='arenaResult'; refreshHUD();
+  if(_beat) killHoldStart(700);
   setTimeout(()=>{ if(currentModal!=='arenaResult') return;
     /* ★ v5.231: 튜토리얼 중엔 자동 연전을 끊는다 — 입장권이 40초 자동 충전(상한 30)이라
        연전이 사실상 무한히 이어지는데, 전투가 계속 걸려 있으면 tutPoll 이 미션 완료 보상
@@ -10548,7 +10592,7 @@ function arenaResult(win, foeName, foeCP, foeTier){
     const craftDue = !!(S.craft && Date.now()>=S.craft.endAt);
     if(S.arenaAuto && craftDue){ S.arenaAuto=false; toast('제작 완료 · 자동 연전을 멈췄습니다'); closeModal(); }
     else if(S.arenaAuto && S.ticket>0){ S.ticket--; refreshHUD(); arenaFight(); }
-    else { if(S.arenaAuto) toast('입장권 소진 · 자동 연전 종료'); openModal('arena'); } }, 3000);
+    else { if(S.arenaAuto) toast('입장권 소진 · 자동 연전 종료'); openModal('arena'); } }, 3000+(_beat?700:0));
 }
 
 /* ------- 던전 실행 ------- */
@@ -10786,13 +10830,15 @@ function showDungeonResult(cfg, win, stats){
   }
   // ★ B5/G-80: [확인] 버튼과 3초 자동퇴장이 병존하던 구조 → 버튼 제거, 안내 텍스트만 남긴다.
   b.appendChild(el('div','center small mut','*3초 뒤 자동으로 물러납니다*'));
+  const _beat = win && !cfg.race && cfg.kind==='boss' && killBeat('⚔ 우두머리 처치', cfg.name);   // v5.379 처치 비트(표시 전용)
   $('#modal-root').classList.add('on'); currentModal='dgResult';
+  if(_beat) killHoldStart(700);
   setTimeout(()=>{ if(currentModal!=='dgResult') return;
     if(cfg.autoNext && cfg.autoNext()) return;   // ★ B5/G-67: 골드던전 '자동 입장' 연전
     /* ★ 2026-09-25(워크플로 #11): 들어온 콘텐츠 화면으로 복귀(연속 입장 2탭 절감) — 길잡이 중이거나 목록 밖이면 종전대로 홈 */
     if(cfg._back && MODALS[cfg._back] && !Battle.inDungeon()){ const par=DG_BACK_PARENT[cfg._back];
       if(par){ openModal(par); openSub(cfg._back); } else openModal(cfg._back); return; }
-    closeModal(); }, 3000);
+    closeModal(); }, 3000+(_beat?700:0));   // 처치 비트만큼 늦춰 결과를 읽는 3초(G-80)를 지킨다
   refreshHUD();
 }
 
@@ -10995,7 +11041,7 @@ function wire(){
   const nmc=$('#namecap'); if(nmc) nmc.onclick=()=>{ sfx('tap'); $('#sidemenu')&&$('#sidemenu').classList.add('hidden'); startPowerSave(); };
   syncAutoBat();
   $('#modalClose').onclick=closeModal;
-  $('#scrim').onclick=closeModal;
+  $('#scrim').onclick=()=>{ if(killHoldRelease()) return; closeModal(); };   // v5.379: 처치 비트 중 첫 탭은 결과창을 닫지 않고 바로 드러낸다
   // ★ v4.9: 사이드메뉴와 콘텐츠 아이콘열을 함께 여닫는다(둘은 한 덩어리로 뜬다).
   // ★ v5.293: content-rail 은 퀘스트·길드·마을이 드로어로 이동하며 제거됐다(대표 요청).
   // 조회 코드조차 남기면 verify [E](없는 DOM id 조회 검사)에 걸린다 — 참조를 완전히 뗀다.

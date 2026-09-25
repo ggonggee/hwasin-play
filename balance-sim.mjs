@@ -290,6 +290,39 @@ function craftNow(grade, catKey, item){
   ev('craftAutoCheck')();
   return true;
 }
+/* ★ v5.379(5차 발견 ceiling): benchset=1 — '세트 조각은 착용자와 무관하게 계정 전체로 센다'(setPieceCount)를 아는 이용자 정책.
+   리더 제작이 끝난 뒤(재료 준비된 업그레이드 후보 0)에만, 아무도 입지 않은 세트 조각을 **벤치 영웅(리더 제외)의 빈 부위**에 +0 으로 제작·장착한다.
+   세트 순서 = 지금 조각이 많은 세트(완성 가까운)부터. 골드 예약선은 주문과 같은 ORDER_RES(결정 가호·망치 몫은 남긴다). 창당 최대 3개.
+   기본 꺼짐 = 기준선 바이트 불변. 목적: 계정 전체 집계(A 유지·노출 / B 상한·출전 3인만 — 대표 결재) 판단용 '아는 이용자' 곡선. */
+const BENCHSET = process.argv.slice(3).some(a=>a==='benchset=1');
+const benchTally={ made:0, fail:0, first:null };
+function benchSetStep(){
+  if(!BENCHSET) return 0;
+  if(upgradeCandidates().some(u=>u.recOK)) return 0;
+  const S=ev('S'), SP=ev('SET_PIECES'), skey=ev('slotKeyOf'), lead=leaderId();
+  const worn=new Set(S.equips.filter(e=>e.equipped).map(e=>e.slot));
+  const bench=ev('ownedHeroes')().filter(h=>h.hero_id!==lead);
+  const order=Object.keys(SP).map(n=>({ n, c:ev('setPieceCount')(n), max:SP[n].length })).filter(x=>x.c<x.max).sort((a,b)=>b.c-a.c);
+  let made=0;
+  for(const s of order){
+    for(const nm of SP[s.n]){
+      if(made>=3) return made;
+      if(worn.has(nm)) continue;
+      const part=skey(nm);
+      const h=bench.find(b=>!S.equips.some(e=>e.equipped && e.heroId===b.hero_id && skey(e.slot)===part));
+      if(!h) continue;
+      const loc=ev('forgeLocate')(nm); if(!loc) continue;
+      const s2=ev('FORGE_SLOTS')[loc.slotIdx], it=(s2.items&&s2.items[loc.grade]||[])[loc.itemIdx];
+      if(!it || !ev('recipeOk')(it.recipe)) continue;
+      const cost=ev('craftParams')(loc.grade, s2.k, it.n).gold; if(S.gold < cost+ORDER_RES) continue;
+      const n0=S.equips.length; craftNow(loc.grade, s2.k, it);
+      const mk=S.equips[S.equips.length-1];
+      if(S.equips.length>n0 && mk && mk.slot===nm && !mk.equipped){ equip(mk, h.hero_id); worn.add(nm); made++; benchTally.made++; if(benchTally.first===null) benchTally.first=(simSec/3600).toFixed(1); }
+      else benchTally.fail++;
+    }
+  }
+  return made;
+}
 /* 장착 — itemDetail 의 onYes 와 같은 규칙: 같은 영웅 같은 부위 기존 장비 파괴 */
 function equip(item, heroId){
   /* ★ v5.228: 게임 본체(itemDetail onYes)와 동일하게 slotKeyOf 부위 기준 교체. */
@@ -843,6 +876,7 @@ while(simSec < MAX_HOURS*3600 && windows<51200){   // ★ v5.257: 창 상한 512
     c=bestCraftable();
   }
   if(crafts>0) did+=`${crafts}제작·장착 @${tier.n}`;
+  { const bs=benchSetStep(); if(bs>0) did+=` 벤치세트+${bs}`; }   // v5.379 benchset=1 일 때만
   { const gl=goldLvStep(); if(gl>0) did+=` 골드레벨+${gl}`; }   // #4 ② goldlv=P 일 때만
   const ups=enhanceStep();
   if(ups>0) did+=` 강화+${ups}`;
@@ -979,6 +1013,7 @@ log(`\n총 시뮬: ${(simSec/3600).toFixed(1)}h · 창 ${windows}회 · 최종 C
     const ck=Object.values(guildTally.cycKills), z=ck.filter(n=>n===0).length, one=ck.filter(n=>n===1).length, many=ck.filter(n=>n>1).length;
     log(`[진단] 길드 토벌(#14, cal ${GUILD_CAL}): ${[3,7,14,30,60,100].map(pick).filter(Boolean).join(' · ')} · 처치 ${guildTally.kills} · 주기 ${ck.length}개(0처치 ${z}·1처치 ${one}·2+처치 ${many}) · 기록서 +${guildTally.rec} · 길드코인 +${guildTally.coin} · 주사위 +${guildTally.dice}`); }
   if(ORDERS_ON) log(`[진단] 대장간 주문(#3): 해금 ${orderTally.unlockH===null?'없음':orderTally.unlockH+'h'} · ${orderTally.days}일 · 납품 ${orderTally.delivered}건 · 주문 제작 ${orderTally.crafts}회(골드 ${(orderTally.goldSpent/1e6).toFixed(0)}M) · 전설 망치 +${orderTally.hammers} · 주사위 +${orderTally.dice} · 골드 +${(orderTally.gold/1e6).toFixed(0)}M`);
+  if(BENCHSET) log(`[진단] 벤치 세트(benchset=1): 제작·장착 ${benchTally.made} · 실패 ${benchTally.fail} · 첫 장착 ${benchTally.first??'-'}h · 세트 배율 ×${ev('setDamageMul')().toFixed(3)} · 발동(6+) ${ev('activeSets')().filter(x=>x.c>=6).map(x=>x.n+' '+x.c).join(', ')||'없음'}`);
   if(ARENA_N>0) log(`[진단] 투기장(#2 측정): 주당 ${ARENA_N}판·승률 ${ARENA_WIN<0?`실전투 ${arenaTally.wins}/${arenaTally.fights}=${arenaTally.fights?(arenaTally.wins/arenaTally.fights*100).toFixed(1):0}%`:ARENA_WIN} · ${arenaTally.weeks}주 평균 순위 ${arenaTally.weeks?Math.round(arenaTally.rankSum/arenaTally.weeks):0}위 · 평균 버프 +${arenaTally.weeks?Math.round(arenaTally.buffSum/arenaTally.weeks):0}%`);
   log(`[진단] 영웅 강화(#12): 총 ${enhTally.ups}단계 ·`, ev('ownedHeroes')().map(h=>`${h.name.slice(0,5)}+${ev('heroEnhLv')(h.hero_id)}`).join(' · '));
   log('[진단] 결정 가호: '+buffTally.n+'회('+(buffTally.gold/1e6).toFixed(0)+'M) · 골드 보유 '+Math.floor(S.gold));

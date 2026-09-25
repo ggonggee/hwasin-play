@@ -3325,6 +3325,40 @@ step('5차 return — 정산 뒤 제작 결과 · 실패 기록 · 의뢰 자동
   }
   if(errs.length) throw new Error(errs.join(' | '));
 });
+/* ★ v5.379(5차 발견 presentation): 처치 비트 — 우두머리 던전 승리·투기장 수동 승리만 결과창을 0.7초 숨기고(kill-hold) 멈춘 장면·띠를 띄운다.
+   보상·결과창 구성은 같은 틱(숨김만) · 즉시 결과·튜토리얼·race·패배는 제외 · 스크림 첫 탭은 닫지 않고 드러내기 · 다른 화면을 열면 숨김 해제. */
+step('5차 presentation — 처치 비트(표시 전용·제외 조건·스크림 첫 탭)', ()=>{
+  const errs=[], S=ev('S'), root=ev("$('#modal-root')");
+  const keep={ st:S.seenTutorial, gold:S.gold };
+  const clear=()=>{ ev('closeModal')(); root.classList.remove('kill-hold'); };
+  try{
+    S.seenTutorial=true; clear();
+    let paid=0; const cfg=(o)=>Object.assign({ name:'시험 우두머리', kind:'boss', reward:()=>{ paid++; } }, o||{});
+    // 승리 · 우두머리 → 숨김 + 보상은 같은 틱
+    ev('showDungeonResult')(cfg(), true, { dmg:1 });
+    if(!root.classList.contains('kill-hold')) errs.push('우두머리 승리인데 처치 비트 숨김 없음');
+    if(paid!==1) errs.push('보상이 같은 틱에 지급되지 않음 '+paid);
+    if(ev('currentModal')!=='dgResult') errs.push('결과창 상태가 아님');
+    // 스크림 첫 탭 = 드러내기(닫지 않음), 두 번째 = 닫기
+    ev("$('#scrim')").onclick();
+    if(root.classList.contains('kill-hold') || ev('currentModal')!=='dgResult') errs.push('스크림 첫 탭이 결과창을 닫았거나 숨김이 남음');
+    ev("$('#scrim')").onclick(); if(ev('currentModal')!==null) errs.push('스크림 두 번째 탭에 닫히지 않음');
+    // 다른 화면을 열면 숨김 해제
+    ev('showDungeonResult')(cfg(), true, { dmg:1 }); ev('openModal')('hero');
+    if(root.classList.contains('kill-hold')) errs.push('다른 화면이 숨김 상태로 열림');
+    clear();
+    // 제외: race · 패배 · 즉시 결과 · 튜토리얼 중
+    ev('showDungeonResult')(cfg({ race:true }), true, { dmg:1 }); if(root.classList.contains('kill-hold')) errs.push('race 에 처치 비트'); clear();
+    ev('showDungeonResult')(cfg(), false, { dmg:1 }); if(root.classList.contains('kill-hold')) errs.push('패배에 처치 비트'); clear();
+    ev('showDungeonResult')(cfg({ kind:'mobs' }), true, { dmg:1 }); if(root.classList.contains('kill-hold')) errs.push('일반 몹 던전에 처치 비트'); clear();
+    ev('_instantRun=1'); ev('showDungeonResult')(cfg(), true, { dmg:1 }); ev('_instantRun=0');
+    if(root.classList.contains('kill-hold')) errs.push('즉시 결과에 처치 비트'); clear();
+    S.seenTutorial=false; if(ev('killBeat')('⚔','x')) errs.push('튜토리얼 중 처치 비트'); S.seenTutorial=true;
+    if(!/3000\+\(_beat\?700:0\)/.test(js) || (js.match(/3000\+\(_beat\?700:0\)/g)||[]).length!==2) errs.push('결과창·투기장 자동 퇴장이 비트만큼 늦춰지지 않음');
+    if(!/const _beat = win && !S\.arenaAuto && killBeat/.test(js)) errs.push('투기장 자동 연전 제외 없음');
+  } finally { clear(); S.seenTutorial=keep.st; S.gold=keep.gold; }
+  if(errs.length) throw new Error(errs.join(' | '));
+});
 /* ★ 2026-09-24 회귀: 다중 창 세이브 덮어쓰기. 두 창이 세이브 하나를 번갈아 써서 새 창의 진행이 옛 창의
    자동저장으로 사라졌다(라이브: 999,999,999 → 6.5초 뒤 3,347). load 가 주도권을 잡고, 주도권을 잃은 창의
    save() 는 아무것도 쓰지 않고 잠기는지 본다. */

@@ -1745,6 +1745,29 @@ body.fx-noflash .wave-banner .wb-band{ animation:none; }
   animation:bbName 1.4s ease-out forwards; }
 @keyframes bbName{ 0%{ transform:scale(1.5); opacity:0; } 16%{ transform:scale(1); opacity:1; } 100%{ transform:scale(1); } }
 .boss-banner .bb-line{ height:2px; width:72%; margin:3px auto; background:linear-gradient(90deg, transparent, #ff5a3c, transparent); }
+/* v5.379: 처치 비트(game.js killBeat) — 우두머리·투기장 마지막 처치 0.9초. 멈춘 마지막 프레임(푸시인·채도↓) + 흰 번쩍임 + 금색 띠 + 파편 18.
+   전장(#stage-wrap) 안 z8(등장 배너와 같은 층). 그동안 결과창은 #modal-root.kill-hold 로 숨긴다(스크림 투명 · .modal 가시성만 — transform·animation 은 덮지 않는다, HANDOFF 3-4). */
+.kill-beat{ position:absolute; inset:0; z-index:8; pointer-events:none; overflow:hidden; }
+.kill-beat .kb-freeze{ position:absolute; inset:0; width:100%; height:100%; transform-origin:62% 45%; animation:kbPush .9s cubic-bezier(.2,.8,.3,1) forwards; }
+@keyframes kbPush{ 0%{ transform:scale(1); filter:saturate(1) brightness(1); } 70%{ transform:scale(1.07); filter:saturate(.55) brightness(.9); opacity:1; } 100%{ transform:scale(1.08); filter:saturate(.5) brightness(.85); opacity:0; } }
+.kill-beat .kb-flash{ position:absolute; inset:0; background:#fff; opacity:0; animation:kbFlash .18s ease-out 1; }
+@keyframes kbFlash{ 0%{ opacity:.55; } 100%{ opacity:0; } }
+.kill-beat .kb-vig{ position:absolute; inset:0; box-shadow:inset 0 0 80px 26px rgba(255,190,70,.5); animation:bbVig .9s ease-out forwards; }
+.kill-beat .kb-band{ position:absolute; left:0; right:0; top:34%; padding:6px 0 7px; text-align:center;
+  background:linear-gradient(90deg, transparent, rgba(30,18,4,.82) 14%, rgba(30,18,4,.82) 86%, transparent);
+  transform-origin:50% 50%; animation:bbBand .9s cubic-bezier(.2,.9,.3,1) forwards; }
+.kill-beat .kb-t{ font-size:var(--fs-xs); font-weight:800; letter-spacing:.3em; color:#ffe7a8; }
+.kill-beat .kb-n{ margin-top:1px; font-size:24px; font-weight:900; letter-spacing:.06em; color:#ffd36a;
+  text-shadow:0 0 2px #000, 0 2px 0 #000, -1px 0 0 #000, 1px 0 0 #000, 0 0 14px rgba(255,200,90,.6); animation:bbName .9s ease-out forwards; }
+.kill-beat .kb-line{ height:2px; width:72%; margin:3px auto; background:linear-gradient(90deg, transparent, #ffd36a, transparent); }
+.kill-beat .kb-shards{ position:absolute; left:62%; top:45%; width:0; height:0; }
+.kill-beat .kb-shards i{ position:absolute; left:-3px; top:-3px; width:6px; height:6px; border-radius:1px; background:#ffd36a; box-shadow:0 0 6px rgba(255,211,106,.9);
+  transform:rotate(var(--a)) translateX(0); opacity:0; animation:kbShard .6s ease-out forwards; }
+@keyframes kbShard{ 0%{ transform:rotate(var(--a)) translateX(0) scale(1); opacity:1; } 100%{ transform:rotate(var(--a)) translateX(120px) scale(.4); opacity:0; } }
+#modal-root.kill-hold .scrim{ opacity:0; }
+#modal-root.kill-hold .modal{ visibility:hidden; }
+body.fx-noflash .kill-beat .kb-flash{ display:none; }
+@media (prefers-reduced-motion: reduce){ .kill-beat .kb-freeze{ animation:none; opacity:0; } .kill-beat .kb-shards{ display:none; } .kill-beat .kb-band{ animation:none; } }
 
 /* ★ 2026-09-24: 다중 창 잠금 화면 (game.js loseTab). 저장을 멈춘 창이 계속 플레이되는 것처럼 보이면
    이용자는 여기서 한 진행이 사라지는 걸 나중에야 안다 — 그래서 화면 전체를 덮어 조작 자체를 막는다.
