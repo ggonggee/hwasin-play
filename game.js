@@ -5834,6 +5834,28 @@ function wipeRemedies(lead){
       try{ v=heroPower(lead); } finally { S.equips.splice(S.equips.indexOf(fake),1); }
       out.push({ ic:'⚒️', t:`빈 부위 ${empty}곳 — 장비 제작·착용 (1점당)`, d:v-base, p:pct(v-base), cost:'대장간', can:true,
         go:()=>{ closeModal(); openModal('forge'); } }); } }
+  /* ④ 세트 완성(v5.375 — 4차 K2 후속): 세트는 중반 최대 레버(실측: 응시 2조각만 채워도 리더 +67~70%)인데 이 패널의 수단은 레벨·강화·빈 부위뿐이었다.
+     다음 세트 단계까지 2조각 이내인 세트마다, 빠진 조각을 그 조각 등급 +0 으로 리더에게 입혔다고 가정한다 — equipItem 정본이라 같은 부위 기존 장비 파괴까지 반영되고,
+     빠진 조각이 여럿이면 가능한 조합을 모두 재서 가장 이로운 것을 고른다. ⚠ S.equips 를 finally 로 원상 복원(가짜 조각은 새 객체라 배열만 되돌리면 된다 — equipPreview 와 같은 원칙). */
+  { let best=null;
+    const wornNames=new Set(S.equips.filter(e=>e && e.equipped).map(e=>e.slot));
+    const combos=(arr,k)=>k===1 ? arr.map(x=>[x]) : arr.flatMap((x,i)=>arr.slice(i+1).map(y=>[x,y]));
+    for(const s of SETS){
+      const cnt=setPieceCount(s.n); if(cnt<1) continue;
+      const next=s.tiers.find(t=>t.k>cnt); if(!next) continue;
+      const gap=next.k-cnt; if(gap>2) continue;
+      const missAll=(SET_PIECES[s.n]||[]).filter(nm=>!wornNames.has(nm)); if(missAll.length<gap) continue;
+      for(const miss of combos(missAll, gap)){
+        const eq0=S.equips; let v=base;
+        try{ S.equips=eq0.slice();
+          for(const nm of miss){ const loc=forgeLocate(nm); const f={ grade:(loc&&loc.grade)||'N', slot:nm, enh:0, equipped:false, _qa:1 }; S.equips.push(f); equipItem(f, lead.hero_id); }
+          v=heroPower(lead); }
+        finally { S.equips=eq0; }
+        if(!best || v-base > best.d) best={ s, next, miss, d:v-base };
+      }
+    }
+    if(best) out.push({ ic:'🔗', t:`${best.s.n} ${best.next.k}세트 — ${best.miss.join('·')} 제작·착용`, d:best.d, p:pct(best.d), cost:`대장간 · ${best.miss.length}조각`, can:true,
+      go:()=>{ closeModal(); openModal('forge', best.miss[0]); } }); }
   return out.filter(r=>r.d>0).sort((a,b)=>b.d-a.d).slice(0,3);
 }
 function showWipeAdvice(tier){

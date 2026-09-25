@@ -3200,7 +3200,16 @@ step('전멸 분석 패널 — 가정 계산 무부작용·렌더', ()=>{
   ev('showWipeAdvice')(5);
   if(ev('currentModal')!=='wipeAdvice') errs.push('패널 미표시');
   if(!collectText(ev("document.getElementById('modalBody')")).includes('권장')) errs.push('권장 비교 문구 없음');
-  ev('closeModal')(); S.equips=keepEq;
+  ev('closeModal')();
+  /* v5.375(4차 K2 후속): ④ 세트 완성 — 응시 4/6 착용(리더)이면 '응시 6세트 — 2조각' 수단이 뜨고, 가정 계산 뒤 장비·배열 참조가 그대로 */
+  { const SP=ev('SET_PIECES'); S.equips=SP['응시'].slice(0,4).map(nm=>({ grade:'E', slot:nm, enh:5, equipped:true, heroId:lead.hero_id }));
+    const snap2=JSON.stringify(S.equips), ref2=S.equips, cp2=ev('heroPower')(lead);
+    const rs2=ev('wipeRemedies')(lead), setR=rs2.find(r=>/응시 6세트/.test(r.t));
+    if(!setR) errs.push('세트 완성 수단 없음 '+JSON.stringify(rs2.map(r=>r.t)));
+    else { if(!(setR.d>0)) errs.push('세트 완성 전투력 증가 0 이하'); if(!/2조각/.test(setR.cost)) errs.push('세트 완성 조각 수 표기 '+setR.cost); }
+    if(JSON.stringify(S.equips)!==snap2 || S.equips!==ref2 || ev('heroPower')(lead)!==cp2) errs.push('세트 완성 가정 계산 뒤 장비가 원상 복원되지 않음');
+    if(S.gold!==g0) errs.push('세트 완성 계산이 골드를 바꿈'); }
+  S.equips=keepEq;
   if(errs.length) throw new Error(errs.join(' | '));
 });
 /* ★ 2026-09-24 회귀: 다중 창 세이브 덮어쓰기. 두 창이 세이브 하나를 번갈아 써서 새 창의 진행이 옛 창의
